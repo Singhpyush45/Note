@@ -1,7 +1,10 @@
 package com.appname.notes
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -14,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /** Runs on a real emulator/device: real rendering, real DataStore file, real back handling. */
+@OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 class AppSmokeTest {
 
@@ -42,10 +46,14 @@ class AppSmokeTest {
 
         composeRule.onNodeWithTag("nav_settings").performClick()
         composeRule.onNodeWithText(dark).performClick()
-        composeRule.onNodeWithText(dark).assertIsSelected()
+        waitUntilSelected(dark) // saved on a background thread, then shown
 
         // Restore the default so test order doesn't matter.
         composeRule.onNodeWithText(system).performClick()
-        composeRule.onNodeWithText(system).assertIsSelected()
+        waitUntilSelected(system)
+    }
+
+    private fun waitUntilSelected(text: String) {
+        composeRule.waitUntilExactlyOneExists(hasText(text) and isSelected(), timeoutMillis = 5_000)
     }
 }

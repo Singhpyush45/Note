@@ -67,6 +67,8 @@ val java21Launcher = project.extensions.getByType<JavaToolchainService>().launch
 }
 tasks.withType<Test>().configureEach {
     javaLauncher.set(java21Launcher)
+    // Robolectric's API 36 sandbox reflects into JDK internals.
+    jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED", "--add-opens=java.base/java.io=ALL-UNNAMED")
 }
 
 dependencies {

@@ -1,7 +1,10 @@
 package com.appname.notes
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -19,6 +22,7 @@ import org.robolectric.annotation.Config
  * Whole-app tests on a simulated device (fast, no emulator). Runs on the minimum (26) and the newest
  * Robolectric-supported (36) API levels.
  */
+@OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [26, 36])
 class AppNavigationRobolectricTest {
@@ -65,12 +69,16 @@ class AppNavigationRobolectricTest {
     fun themeChoice_persistsAcrossRecreation() {
         composeRule.onNodeWithTag("nav_settings").performClick()
         composeRule.onNodeWithText(string(R.string.settings_theme_dark)).performClick()
-        composeRule.onNodeWithText(string(R.string.settings_theme_dark)).assertIsSelected()
+        // The radio reflects what was *saved*; the DataStore write finishes on a background thread.
+        waitUntilSelected(string(R.string.settings_theme_dark))
 
         composeRule.activityRule.scenario.recreate()
 
-        composeRule.onNodeWithText(string(R.string.settings_theme_dark)).assertIsSelected()
+        waitUntilSelected(string(R.string.settings_theme_dark))
     }
+
+    private fun waitUntilSelected(text: String) =
+        composeRule.waitUntilExactlyOneExists(hasText(text) and isSelected(), timeoutMillis = 5_000)
 
     private fun pressBack() {
         composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
