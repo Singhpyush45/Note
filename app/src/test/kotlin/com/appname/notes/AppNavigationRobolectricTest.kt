@@ -1,0 +1,79 @@
+package com.appname.notes
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.appname.notes.feature.home.HomeTestTags
+import com.appname.notes.feature.settings.SettingsTestTags
+import com.google.common.truth.Truth.assertThat
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+
+/**
+ * Whole-app tests on a simulated device (fast, no emulator). Runs on the minimum (26) and the newest
+ * Robolectric-supported (36) API levels.
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [26, 36])
+class AppNavigationRobolectricTest {
+
+    @get:Rule
+    val composeRule = createAndroidComposeRule<MainActivity>()
+
+    private fun string(id: Int) = composeRule.activity.getString(id)
+
+    @Test
+    fun launch_showsHomeWithEmptyState() {
+        composeRule.onNodeWithTag(HomeTestTags.SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.home_empty_title)).assertIsDisplayed()
+        composeRule.onNodeWithTag("nav_home").assertIsSelected()
+    }
+
+    @Test
+    fun settingsTab_opensSettings_andBackReturnsHome() {
+        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag("nav_settings").assertIsSelected()
+
+        pressBack()
+
+        composeRule.onNodeWithTag(HomeTestTags.SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag("nav_home").assertIsSelected()
+        assertThat(composeRule.activity.isFinishing).isFalse()
+    }
+
+    @Test
+    fun backFromHome_leavesTheApp() {
+        pressBack()
+        assertThat(composeRule.activity.isFinishing).isTrue()
+    }
+
+    @Test
+    fun backStack_survivesActivityRecreation() {
+        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.activityRule.scenario.recreate()
+        composeRule.onNodeWithTag(SettingsTestTags.SCREEN).assertIsDisplayed()
+    }
+
+    @Test
+    fun themeChoice_persistsAcrossRecreation() {
+        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithText(string(R.string.settings_theme_dark)).performClick()
+        composeRule.onNodeWithText(string(R.string.settings_theme_dark)).assertIsSelected()
+
+        composeRule.activityRule.scenario.recreate()
+
+        composeRule.onNodeWithText(string(R.string.settings_theme_dark)).assertIsSelected()
+    }
+
+    private fun pressBack() {
+        composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.waitForIdle()
+    }
+}
