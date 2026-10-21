@@ -63,14 +63,22 @@ Evidence: GitHub Actions on `main`; screenshots on the `ci-output` branch → `s
 ## Tests (CI, clean checkout)
 | Suite | Tests |
 |---|---|
-| JVM + Robolectric (all modules) | _see final CI run_ |
-| Emulator API 35 — in-app instrumented (incl. real Jetpack Ink: pixel check, hold → shape) | _see final CI run_ |
+| JVM + Robolectric (all modules) | 248, 0 failures (85 new handwriting tests in `:core:ink`, database, app) |
+| Emulator API 35 — in-app instrumented (incl. real Jetpack Ink: pixel check, hold → shape) | 4 |
 | Emulator API 35 — e2e lifecycle (incl. handwriting survives process death) | 3 |
 | Release (R8) smoke | 1 |
-| Lint | 0 errors |
+| Lint | 0 errors, 0 warnings; 0 compiler warnings |
 
 Mutation checks during development: deliberately breaking undo and the codec made the tests fail, so
 they test what they claim.
+
+## Bug found in Jetpack Ink 1.0.0 (worked around)
+The handwriting process-death e2e test found a real crash: drawing a stroke and pressing Home at once
+crashes the app on Ink's render thread (`IllegalStateException: Attempt to draw after renderer has been
+closed` in `CanvasInProgressStrokesRenderHelperV33`). Workaround: `InkCrashGuard` absorbs only that
+exception on Ink's render thread (any other crash still crashes), and the canvas creates a fresh Ink
+layer when it becomes visible again. No ink is lost either way (strokes are saved on pen-up). The e2e test
+now passes; remove the workaround once an Ink release fixes it.
 
 ## Known limitations (deliberate, with follow-up)
 - **Real-device latency and feel** (NFR-03) not measured yet — needs the owner's stylus device.
