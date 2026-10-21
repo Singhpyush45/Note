@@ -69,7 +69,9 @@ class SettingsViewModelTest {
     }
 
     private suspend fun app.cash.turbine.TurbineTestContext<SettingsUiState>.skipUntilReady() {
-        while (awaitItem() !is SettingsUiState.Ready) Unit
+        while (awaitItem() !is SettingsUiState.Ready) {
+            // skip Loading
+        }
     }
 
     private suspend fun app.cash.turbine.TurbineTestContext<SettingsUiState>.awaitReady(): SettingsUiState.Ready =

@@ -102,6 +102,14 @@ def main():
          f"status={status}\nreports={len(files)} tests={totals['tests']} failures={totals['failures']} "
          f"errors={totals['errors']} skipped={totals['skipped']} lintErrors={len(lint)}")
 
+    try:
+        warnings = sorted({l for l in open(log_path, encoding="utf-8", errors="replace").read().splitlines()
+                           if l.startswith("w: ")})
+    except OSError:
+        warnings = []
+    if warnings:
+        emit("warning", f"{label}: compiler warnings ({len(warnings)})", "\n".join(warnings[:80]))
+
     budget = MAX_ERRORS
     if failure_text and budget:
         emit("error", f"{label}: Gradle failure", failure_text)

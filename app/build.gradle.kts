@@ -61,6 +61,15 @@ kotlin {
     jvmToolchain(17)
 }
 
+// Robolectric's Android 16 (API 36) sandbox needs Java 21 to *run* tests; bytecode still targets 17.
+tasks.withType<Test>().configureEach {
+    javaLauncher.set(
+        extensions.getByType<JavaToolchainService>().launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        },
+    )
+}
+
 dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:designsystem"))
