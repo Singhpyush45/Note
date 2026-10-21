@@ -35,6 +35,14 @@ jobs:
           set -o pipefail
           ./gradlew assembleDebug assembleRelease :core:common:test :core:domain:test testDebugUnitTest lintDebug --continue --warning-mode all 2>&1 | tee build.log
 
+      - name: Check database schema is committed
+        run: |
+          if [ -n "$(git status --porcelain core/database/schemas)" ]; then
+            echo "::error title=Room schema not committed::The build generated a new or changed Room schema. Commit core/database/schemas (it is published to the ci-output branch)."
+            git status --porcelain core/database/schemas
+            exit 1
+          fi
+
       - name: Report results
         if: always()
         run: python3 .github/scripts/report.py build build.log "**/build/test-results/testDebugUnitTest/**/*.xml" "core/*/build/test-results/test/**/*.xml"

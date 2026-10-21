@@ -1,0 +1,200 @@
+package com.appname.notes.feature.library
+
+import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.appname.notes.R
+import com.appname.notes.core.common.id.IdGenerator
+import com.appname.notes.core.common.result.AppResult
+import com.appname.notes.core.domain.markdown.Markdown
+import com.appname.notes.core.domain.model.NoteCollection
+import com.appname.notes.core.domain.model.NoteId
+import com.appname.notes.core.domain.model.NoteSort
+import com.appname.notes.core.domain.model.NoteSummary
+import com.appname.notes.core.domain.model.Notebook
+import com.appname.notes.core.domain.model.NotebookId
+import com.appname.notes.core.domain.model.Tag
+import com.appname.notes.core.domain.model.TagId
+import com.appname.notes.core.domain.repository.NoteRepository
+import com.appname.notes.core.domain.repository.NotebookRepository
+import com.appname.notes.core.domain.repository.TagRepository
+import com.appname.notes.core.files.DocumentFiles
+import com.appname.notes.core.settings.SettingsRepository
+import com.appname.notes.ui.common.UserMessage
+import com.appname.notes.ui.common.toUserMessage
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+data class LibraryUiState(
+    val collection: NoteCollection = NoteCollection.All,
+    /** Title of the current notebook/tag collection, or null for the built-in ones. */
+    val collectionName: String? = null,
+    val sort: NoteSort = NoteSort.MODIFIED,
+    val pinned: List<NoteSummary> = emptyList(),
+    val others: List<NoteSummary> = emptyList(),
+    val notebooks: List<Notebook> = emptyList(),
+    val tags: List<Tag> = emptyList(),
+    val loading: Boolean = true,
+    val message: UserMessage? = null,
+) {
+    val isEmpty: Boolean get() = !loading && pinned.isEmpty() && others.isEmpty()
+    val canCreate: Boolean get() = collection != NoteCollection.Archive && collection != NoteCollection.Trash
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+@HiltViewModel
+class LibraryViewModel @Inject constructor(
+    private val notes: NoteRepository,
+    notebooks: NotebookRepository,
+    tags: TagRepository,
+    private val settings: SettingsRepository,
+    private val files: DocumentFiles,
+    private val ids: IdGenerator,
+    private val savedState: SavedStateHandle,
+) : ViewModel() {
+
+    // The chosen collection survives rotation and process death via SavedStateHandle.
+    private val collection = MutableStateFlow(decode(savedState.get<String>(KEY_COLLECTION)))
+    private val message = MutableStateFlow<UserMessage?>(null)
+
+    private val noteList = combine(collection, settings.library) { c, lib -> c to lib.sort }
+        .flatMapLatest { (c, sort) -> notes.observeNotes(c, sort).map { Triple(c, sort, it) } }
+
+    val uiState: StateFlow<LibraryUiState> = combine(
+        noteList,
+        notebooks.observeNotebooks(),
+        tags.observeTags(),
+        message,
+    ) { (c, sort, list), books, tagList, msg ->
+        val showPinnedSection = c != NoteCollection.Trash
+        LibraryUiState(
+            collection = c,
+            collectionName = when (c) {
+                is NoteCollection.InNotebook -> books.firstOrNull { it.id == c.id }?.title
+                is NoteCollection.WithTag -> tagList.firstOrNull { it.id == c.id }?.name
+                else -> null
+            },
+            sort = sort,
+            pinned = if (showPinnedSection) list.filter { it.isPinned } else emptyList(),
+            others = if (showPinnedSection) list.filterNot { it.isPinned } else list,
+            notebooks = books,
+            tags = tagList,
+            loading = false,
+            message = msg,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    fun selectCollection(value: NoteCollection) {
+        collection.value = value
+        savedState[KEY_COLLECTION] = encode(value)
+    }
+
+    /** If the shown notebook/tag gets deleted, fall back to All notes. */
+    fun onCollectionMissing() = selectCollection(NoteCollection.All)
+
+    fun setSort(sort: NoteSort) {
+        viewModelScope.launch { settings.setLibrarySort(sort).reportFailure() }
+    }
+
+    /** Creates a note in the current notebook (if any) and returns its id, or null on failure. */
+    suspend fun createNote(): NoteId? {
+        val notebook = (collection.value as? NoteCollection.InNotebook)?.id
+        return when (val result = notes.createNote(notebook)) {
+            is AppResult.Success -> {
+                (collection.value as? NoteCollection.WithTag)?.let { notes.setTags(result.value, setOf(it.id)) }
+                result.value
+            }
+            is AppResult.Failure -> { message.value = result.error.toUserMessage(); null }
+        }
+    }
+
+    fun setPinned(id: NoteId, pinned: Boolean) = launchAction { notes.setPinned(setOf(id), pinned) }
+
+    fun setFavourite(id: NoteId, favourite: Boolean) = launchAction { notes.setFavourite(setOf(id), favourite) }
+
+    fun setArchived(id: NoteId, archived: Boolean) = launchAction(
+        UserMessage(if (archived) R.string.msg_archived else R.string.msg_unarchived, undo = { setArchived(id, !archived) }),
+    ) { notes.setArchived(setOf(id), archived) }
+
+    fun moveToTrash(id: NoteId) = launchAction(
+        UserMessage(R.string.msg_trashed, undo = { restore(id) }),
+    ) { notes.moveToTrash(setOf(id)) }
+
+    fun restore(id: NoteId) = launchAction(UserMessage(R.string.msg_restored)) { notes.restoreFromTrash(setOf(id)) }
+
+    fun deleteForever(id: NoteId) = launchAction(UserMessage(R.string.msg_deleted)) { notes.deletePermanently(setOf(id)) }
+
+    fun emptyTrash() = launchAction(UserMessage(R.string.msg_trash_emptied)) { notes.emptyTrash() }
+
+    fun duplicate(id: NoteId) = launchAction(UserMessage(R.string.msg_duplicated)) { notes.duplicate(id) }
+
+    fun moveToNotebook(id: NoteId, notebook: NotebookId?) =
+        launchAction(UserMessage(R.string.msg_moved)) { notes.moveToNotebook(setOf(id), notebook) }
+
+    /** Imports a Markdown/text file as a new note; returns the new note's id. */
+    suspend fun import(uri: Uri): NoteId? {
+        val picked = when (val read = files.readText(uri)) {
+            is AppResult.Success -> read.value
+            is AppResult.Failure -> { message.value = UserMessage(R.string.msg_import_failed); return null }
+        }
+        val parsed = Markdown.import(picked.text, picked.displayName, ids::newId)
+        val notebook = (collection.value as? NoteCollection.InNotebook)?.id
+        return when (val created = notes.createNote(parsed.title, parsed.document, notebook)) {
+            is AppResult.Success -> {
+                message.value = UserMessage(R.string.msg_imported, listOf(parsed.title.ifBlank { picked.displayName }))
+                created.value
+            }
+            is AppResult.Failure -> { message.value = created.error.toUserMessage(); null }
+        }
+    }
+
+    fun messageShown() {
+        message.value = null
+    }
+
+    private fun launchAction(success: UserMessage? = null, action: suspend () -> AppResult<*>) {
+        viewModelScope.launch {
+            when (val result = action()) {
+                is AppResult.Success -> if (success != null) message.value = success
+                is AppResult.Failure -> message.value = result.error.toUserMessage()
+            }
+        }
+    }
+
+    private fun AppResult<*>.reportFailure() {
+        if (this is AppResult.Failure) message.value = error.toUserMessage()
+    }
+
+    companion object {
+        private const val KEY_COLLECTION = "collection"
+
+        fun encode(c: NoteCollection): String = when (c) {
+            NoteCollection.All -> "all"
+            NoteCollection.Favourites -> "favourites"
+            NoteCollection.Archive -> "archive"
+            NoteCollection.Trash -> "trash"
+            is NoteCollection.InNotebook -> "notebook:${c.id.value}"
+            is NoteCollection.WithTag -> "tag:${c.id.value}"
+        }
+
+        fun decode(s: String?): NoteCollection = when {
+            s == null -> NoteCollection.All
+            s == "favourites" -> NoteCollection.Favourites
+            s == "archive" -> NoteCollection.Archive
+            s == "trash" -> NoteCollection.Trash
+            s.startsWith("notebook:") -> NoteCollection.InNotebook(NotebookId(s.removePrefix("notebook:")))
+            s.startsWith("tag:") -> NoteCollection.WithTag(TagId(s.removePrefix("tag:")))
+            else -> NoteCollection.All
+        }
+    }
+}

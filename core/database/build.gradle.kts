@@ -44,7 +44,7 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     api(project(":core:domain"))
-    implementation(libs.room.runtime)
+    api(libs.room.runtime) // NotesDatabase (a RoomDatabase) is part of this module's public API
     ksp(libs.room.compiler)
     implementation(libs.kotlinx.coroutines.android)
 
