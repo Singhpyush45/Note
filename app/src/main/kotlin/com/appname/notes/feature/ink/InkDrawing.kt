@@ -141,36 +141,36 @@ internal class InkRenderer {
         canvas.drawRect(r.left + shadowPx, r.top + shadowPx, r.right + shadowPx, r.bottom + shadowPx, shadowPaint)
         canvas.drawRect(r, paperPaint)
         canvas.withMatrix(pageToScreen) { drawTemplate(this, width, height, template) }
-        }
+    }
 
-        private fun drawTemplate(canvas: Canvas, w: Float, h: Float, template: PageTemplate) {
-            when (template) {
-                PageTemplate.BLANK -> Unit
-                PageTemplate.LINED -> {
-                    val s = PageTemplate.LINE_SPACING
-                    var y = s * 3
-                    while (y < h - s / 2) {
-                        canvas.drawLine(0f, y, w, y, rulePaint)
-                        y += s
-                    }
-                    canvas.drawLine(LINED_MARGIN, 0f, LINED_MARGIN, h, marginPaint)
+    private fun drawTemplate(canvas: Canvas, w: Float, h: Float, template: PageTemplate) {
+        when (template) {
+            PageTemplate.BLANK -> Unit
+            PageTemplate.LINED -> {
+                val s = PageTemplate.LINE_SPACING
+                var y = s * 3
+                while (y < h - s / 2) {
+                    canvas.drawLine(0f, y, w, y, rulePaint)
+                    y += s
                 }
-                PageTemplate.GRID -> {
-                    val s = PageTemplate.GRID_SPACING
+                canvas.drawLine(LINED_MARGIN, 0f, LINED_MARGIN, h, marginPaint)
+            }
+            PageTemplate.GRID -> {
+                val s = PageTemplate.GRID_SPACING
+                var x = s
+                while (x < w) { canvas.drawLine(x, 0f, x, h, rulePaint); x += s }
+                var y = s
+                while (y < h) { canvas.drawLine(0f, y, w, y, rulePaint); y += s }
+            }
+            PageTemplate.DOTTED -> {
+                val s = PageTemplate.GRID_SPACING
+                var y = s
+                while (y < h) {
                     var x = s
-                    while (x < w) { canvas.drawLine(x, 0f, x, h, rulePaint); x += s }
-                    var y = s
-                    while (y < h) { canvas.drawLine(0f, y, w, y, rulePaint); y += s }
+                    while (x < w) { canvas.drawCircle(x, y, 1.1f, dotPaint); x += s }
+                    y += s
                 }
-                PageTemplate.DOTTED -> {
-                    val s = PageTemplate.GRID_SPACING
-                    var y = s
-                    while (y < h) {
-                        var x = s
-                        while (x < w) { canvas.drawCircle(x, y, 1.1f, dotPaint); x += s }
-                        y += s
-                    }
-                }
+            }
         }
     }
 
@@ -189,21 +189,21 @@ internal class InkRenderer {
         itemTransform: Matrix? = null,
     ) {
         canvas.withMatrix(pageToScreen) {
-        clipRect(0f, 0f, width, height)
-        // Highlighter first so writing stays crisp on top of it.
-        for (pass in 0..1) {
-            for (item in items) {
-                val isHighlighter = item.brush.tool == InkTool.HIGHLIGHTER
-                if ((pass == 0) != isHighlighter || item.id in hidden) continue
-                if (itemTransform != null && item.id in transformed) {
-                    combined.set(pageToScreen)
-                    combined.preConcat(itemTransform)
-                    withMatrix(itemTransform) { drawItem(this, item, combined) }
-                } else {
-                    drawItem(this, item, pageToScreen)
+            clipRect(0f, 0f, width, height)
+            // Highlighter first so writing stays crisp on top of it.
+            for (pass in 0..1) {
+                for (item in items) {
+                    val isHighlighter = item.brush.tool == InkTool.HIGHLIGHTER
+                    if ((pass == 0) != isHighlighter || item.id in hidden) continue
+                    if (itemTransform != null && item.id in transformed) {
+                        combined.set(pageToScreen)
+                        combined.preConcat(itemTransform)
+                        withMatrix(itemTransform) { drawItem(this, item, combined) }
+                    } else {
+                        drawItem(this, item, pageToScreen)
+                    }
                 }
             }
-        }
         }
     }
 
