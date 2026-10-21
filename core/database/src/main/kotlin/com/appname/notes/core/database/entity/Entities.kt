@@ -50,6 +50,8 @@ data class NoteEntity(
     val contentJson: String,
     /** Plain-text projection of the document, indexed for search. */
     val plainText: String,
+    /** Card preview with list markers (see NoteDocument.preview). */
+    val preview: String,
     val noteType: String,
     val isPinned: Boolean,
     val isFavourite: Boolean,

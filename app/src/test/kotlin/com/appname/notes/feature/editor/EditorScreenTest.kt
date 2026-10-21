@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
@@ -101,6 +102,15 @@ class EditorScreenTest {
         composeRule.waitForIdle()
         assertThat(c.state.paragraphs.single().checked).isTrue()
         assertThat(c.state.text).isEqualTo("buy milk") // the box isn't part of the text
+    }
+
+    @Test
+    fun screenReaderActionTicksTheCurrentChecklistItem() {
+        val c = controller(EditorState("call mum", listOf(ParagraphMeta("p0", BlockKind.CHECKLIST))))
+        show(c)
+        composeRule.onNodeWithTag(EditorTestTags.BODY).performCustomAccessibilityActionWithLabel(string(R.string.checkbox_toggle))
+        composeRule.waitForIdle()
+        assertThat(c.state.paragraphs.single().checked).isTrue()
     }
 
     @Test

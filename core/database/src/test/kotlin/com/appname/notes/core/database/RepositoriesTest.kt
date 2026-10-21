@@ -290,6 +290,18 @@ class RepositoriesTest {
     }
 
     @Test
+    fun listPreviewShowsChecklistMarkers() = runTest {
+        val doc = NoteDocument(
+            blocks = listOf(
+                TextBlock(ids.newId(), BlockKind.CHECKLIST, RichText("Milk"), checked = true),
+                TextBlock(ids.newId(), BlockKind.CHECKLIST, RichText("Eggs")),
+            ),
+        )
+        notes.createNote("Groceries", doc, null)
+        assertThat(all().single().preview).isEqualTo("☑ Milk\n☐ Eggs")
+    }
+
+    @Test
     fun listUpdatesLiveWhenNotesChange() = runTest {
         val flow = notes.observeNotes(NoteCollection.All, NoteSort.MODIFIED)
         assertThat(flow.first()).isEmpty()

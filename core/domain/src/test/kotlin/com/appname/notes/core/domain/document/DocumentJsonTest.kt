@@ -52,6 +52,21 @@ class DocumentJsonTest {
     }
 
     @Test
+    fun `preview keeps list markers and skips empty lines`() {
+        val d = NoteDocument(
+            blocks = listOf(
+                TextBlock("1", BlockKind.CHECKLIST, RichText("Milk"), checked = true),
+                TextBlock("2", BlockKind.CHECKLIST, RichText("Eggs")),
+                TextBlock("3", BlockKind.PARAGRAPH, RichText("   ")),
+                TextBlock("4", BlockKind.NUMBERED, RichText("first")),
+                TextBlock("5", BlockKind.NUMBERED, RichText("second")),
+                TextBlock("6", BlockKind.BULLET, RichText("dot")),
+            ),
+        )
+        assertThat(d.preview()).isEqualTo("☑ Milk\n☐ Eggs\n1. first\n2. second\n• dot")
+    }
+
+    @Test
     fun `plain text and blank detection`() {
         assertThat(doc.toPlainText()).isEqualTo("Lecture 4\nRevise chain rule\nsee notes")
         assertThat(NoteDocument.empty { "x" }.isBlank()).isTrue()

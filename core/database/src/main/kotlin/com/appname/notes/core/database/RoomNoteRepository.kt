@@ -11,6 +11,7 @@ import com.appname.notes.core.domain.document.DocumentJson
 import com.appname.notes.core.domain.document.NoteDocument
 import com.appname.notes.core.domain.document.TextBlock
 import com.appname.notes.core.domain.document.isBlank
+import com.appname.notes.core.domain.document.preview
 import com.appname.notes.core.domain.document.toPlainText
 import com.appname.notes.core.domain.model.ModifiedWithin
 import com.appname.notes.core.domain.model.Note
@@ -75,6 +76,7 @@ class RoomNoteRepository(
                     title = title,
                     contentJson = DocumentJson.encode(document),
                     plainText = document.toPlainText(),
+                    preview = document.preview(),
                     noteType = NoteType.TEXT.name,
                     isPinned = false,
                     isFavourite = false,
@@ -96,7 +98,7 @@ class RoomNoteRepository(
             when {
                 current == null || current.deletedAt != null -> -1
                 current.title == title && current.contentJson == json -> 0 // nothing changed: keep modified time
-                else -> dao.updateContent(id.value, title, json, document.toPlainText(), clock.now().toEpochMilli())
+                else -> dao.updateContent(id.value, title, json, document.toPlainText(), document.preview(), clock.now().toEpochMilli())
             }
         }) {
             is AppResult.Failure -> result

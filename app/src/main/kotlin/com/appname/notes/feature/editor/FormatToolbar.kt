@@ -61,6 +61,7 @@ fun FormatToolbar(controller: EditorController, modifier: Modifier = Modifier) {
     val kind = controller.currentKind
     val linkUrl = controller.currentLinkUrl
     var showLinkDialog by rememberSaveable { mutableStateOf(false) }
+    val toolbarLabel = stringResource(R.string.fmt_toolbar)
     val uriHandler = LocalUriHandler.current
 
     Surface(tonalElevation = 3.dp, modifier = modifier.fillMaxWidth()) {
@@ -68,7 +69,8 @@ fun FormatToolbar(controller: EditorController, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 4.dp)
-                .testTag(EditorTestTags.TOOLBAR),
+                .testTag(EditorTestTags.TOOLBAR)
+                .semantics { contentDescription = toolbarLabel },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             StyleButton(Icons.Outlined.FormatBold, R.string.fmt_bold, SpanType.BOLD in active) { controller.toggleStyle(SpanType.BOLD) }

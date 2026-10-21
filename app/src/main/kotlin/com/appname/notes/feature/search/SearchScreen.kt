@@ -245,7 +245,7 @@ private fun SearchResultRow(hit: SearchHit, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            highlighted(hit.snippet, highlight),
+            highlighted(hit.snippet.replace('\n', ' '), highlight),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 3,

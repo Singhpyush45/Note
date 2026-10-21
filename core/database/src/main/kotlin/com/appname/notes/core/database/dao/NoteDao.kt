@@ -30,7 +30,7 @@ abstract class NoteDao {
     @Transaction
     @Query(
         """
-        SELECT n.id, n.title, substr(n.plainText, 1, 300) AS preview, n.noteType, n.notebookId,
+        SELECT n.id, n.title, n.preview, n.noteType, n.notebookId,
                nb.title AS notebookTitle, n.isPinned, n.isFavourite, n.isArchived, n.trashedAt,
                n.createdAt, n.updatedAt
         FROM notes n
@@ -70,12 +70,12 @@ abstract class NoteDao {
 
     @Query(
         """
-        UPDATE notes SET title = :title, contentJson = :contentJson, plainText = :plainText,
+        UPDATE notes SET title = :title, contentJson = :contentJson, plainText = :plainText, preview = :preview,
                updatedAt = :now, revision = revision + 1
         WHERE id = :id AND deletedAt IS NULL
         """,
     )
-    abstract suspend fun updateContent(id: String, title: String, contentJson: String, plainText: String, now: Long): Int
+    abstract suspend fun updateContent(id: String, title: String, contentJson: String, plainText: String, preview: String, now: Long): Int
 
     @Query("UPDATE notes SET isPinned = :pinned, revision = revision + 1 WHERE id IN (:ids) AND deletedAt IS NULL")
     abstract suspend fun setPinned(ids: List<String>, pinned: Boolean): Int
@@ -97,7 +97,7 @@ abstract class NoteDao {
 
     @Query(
         """
-        UPDATE notes SET title = '', contentJson = '{}', plainText = '', isPinned = 0, isFavourite = 0,
+        UPDATE notes SET title = '', contentJson = '{}', plainText = '', preview = '', isPinned = 0, isFavourite = 0,
                trashedAt = NULL, notebookId = NULL, deletedAt = :now, revision = revision + 1
         WHERE id IN (:ids) AND deletedAt IS NULL
         """,
@@ -153,7 +153,7 @@ abstract class NoteDao {
     @Transaction
     @Query(
         """
-        SELECT n.id, n.title, substr(n.plainText, 1, 300) AS preview, n.noteType, n.notebookId,
+        SELECT n.id, n.title, n.preview, n.noteType, n.notebookId,
                nb.title AS notebookTitle, n.isPinned, n.isFavourite, n.isArchived, n.trashedAt,
                n.createdAt, n.updatedAt,
                snippet(notes_fts, char(2), char(3), '…', -1, 12) AS snippet

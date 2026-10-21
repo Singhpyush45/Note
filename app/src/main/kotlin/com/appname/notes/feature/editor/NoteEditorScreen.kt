@@ -75,7 +75,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.ImeAction
@@ -87,6 +95,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
 import com.appname.notes.core.designsystem.component.EmptyState
 import com.appname.notes.core.designsystem.theme.AppTheme
+import com.appname.notes.core.domain.document.BlockKind
 import com.appname.notes.core.domain.markdown.ExportResult
 import com.appname.notes.core.domain.markdown.LostFeature
 import com.appname.notes.core.domain.model.NoteId
@@ -331,6 +340,7 @@ private fun EditorContent(controller: EditorController, readOnly: ReadOnlyReason
     val latestTransformation by rememberUpdatedState(transformation)
     val latestState by rememberUpdatedState(state)
     val bodyLabel = stringResource(R.string.editor_body_label)
+    val toggleLabel = stringResource(R.string.checkbox_toggle)
     val colors = MaterialTheme.colorScheme
 
     Column(
@@ -395,18 +405,35 @@ private fun EditorContent(controller: EditorController, readOnly: ReadOnlyReason
                 .heightIn(min = 240.dp)
                 .focusRequester(bodyFocus)
                 .testTag(EditorTestTags.BODY)
-                .semantics { contentDescription = bodyLabel }
+                .semantics {
+                    contentDescription = bodyLabel
+                    // TalkBack users can't aim at the small box: offer "Toggle checkbox" in the actions menu.
+                    if (readOnly == null && state.paragraphs[state.lineOf(state.selection.min)].kind == BlockKind.CHECKLIST) {
+                        customActions = listOf(
+                            CustomAccessibilityAction(toggleLabel) {
+                                controller.toggleChecked(controller.state.lineOf(controller.state.selection.min))
+                                true
+                            },
+                        )
+                    }
+                }
+                // Keyboard users: Ctrl+Enter ticks the checklist item under the cursor.
+                .onPreviewKeyEvent { event ->
+                    val toggle = readOnly == null && event.type == KeyEventType.KeyDown && event.key == Key.Enter && event.isCtrlPressed
+                    if (toggle) controller.toggleChecked(controller.state.lineOf(controller.state.selection.min))
+                    toggle
+                }
                 .checkboxTaps(
                     enabled = readOnly == null,
                     layout = { layout },
                     decorations = { latestTransformation.decorations },
-                    isChecklist = { line -> latestState.paragraphs.getOrNull(line)?.kind == com.appname.notes.core.domain.document.BlockKind.CHECKLIST },
+                    isChecklist = { line -> latestState.paragraphs.getOrNull(line)?.kind == BlockKind.CHECKLIST },
                     onToggle = controller::toggleChecked,
                 ),
             decorationBox = { inner ->
                 Box {
                     if (state.text.isEmpty() && state.paragraphs.size == 1 &&
-                        state.paragraphs[0].kind == com.appname.notes.core.domain.document.BlockKind.PARAGRAPH
+                        state.paragraphs[0].kind == BlockKind.PARAGRAPH
                     ) {
                         Text(bodyHint, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant.copy(alpha = 0.6f))
                     }
