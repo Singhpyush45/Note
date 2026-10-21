@@ -14,10 +14,11 @@ placeholder and the package `com.appname.notes`.
 | 1 | Foundation: theme, navigation, DI, settings, logging, CI | Done — see [`docs/phase-1-report.md`](docs/phase-1-report.md) |
 | 2 | Core notes: editor, notebooks, tags, autosave, search, Markdown, phone + tablet layouts | Done — see [`docs/phase-2-report.md`](docs/phase-2-report.md) |
 | 3 | Handwriting (ink) + draw-and-hold shape correction | Done on CI; real-device check pending — see [`docs/phase-3-report.md`](docs/phase-3-report.md) |
-| 4 | PDF import and annotation | Next |
+| 4 | PDF import, annotation, export | Done on CI; real-device check pending — see [`docs/phase-4-report.md`](docs/phase-4-report.md) |
+| 5 | Capture: attachments, scanner/OCR, audio, reminders | Next |
 
 ## Tech stack
-Kotlin · Jetpack Compose (Material 3, adaptive list-detail) · Navigation 3 · Hilt · Room (FTS4) · DataStore · Jetpack Ink · GitHub Actions CI.
+Kotlin · Jetpack Compose (Material 3, adaptive list-detail) · Navigation 3 · Hilt · Room (FTS4) · DataStore · Jetpack Ink · Android PdfRenderer + PdfBox-Android · GitHub Actions CI.
 Exact versions: [`gradle/libs.versions.toml`](gradle/libs.versions.toml) and [`docs/dependency-review.md`](docs/dependency-review.md).
 
 ## Project layout

@@ -8,7 +8,7 @@ Maps SRS §16 to concrete tools. All layers run in CI on every push (ADR-0001).
 | Data | JUnit4 + real DataStore/Room on temp files | JVM / Robolectric | Settings persistence; later DAOs, FTS, migrations, tombstones, transactions |
 | UI (fast) | Compose UI test on Robolectric | JVM, simulated API 26 + 36 | Navigation, screens, accessibility semantics, state restoration; ink flows with synthetic stylus/finger/pinch events (fallback renderer) |
 | Instrumented | Compose UI test + AndroidJUnitRunner | Emulator API 35 in CI; owner's device | Launch smoke, recreation, theme; real Jetpack Ink: stroke pixels land under the pen, hold → shape |
-| End-to-end lifecycle | UiAutomator in `:e2e` (separate process) | Emulator API 35 in CI | Real process death (`am kill`) and force-stop, for text and handwriting; later: PDF, permissions |
+| End-to-end lifecycle | UiAutomator in `:e2e` (separate process) | Emulator API 35 in CI | Real process death (`am kill`) and force-stop, for text, handwriting and a PDF opened from another app; later: permissions |
 | Screenshots | Robolectric native graphics | JVM | Phone + tablet, light + dark, published to `ci-output` branch |
 | Static | Android Lint | CI | Accessibility, API-level misuse, resource issues |
 | Performance | Macrobenchmark / baseline profiles | Phase 8 (earlier for ink/PDF spikes) | Startup, scrolling, search at 10k notes, ink latency |
