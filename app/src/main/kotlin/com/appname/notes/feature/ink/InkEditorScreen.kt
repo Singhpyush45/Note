@@ -402,10 +402,12 @@ private fun InkToolbar(
                         }
                     }
                     EditorTool.LASSO -> if (ui.hasSelection) {
+                        // Actions first so they stay on screen on phones; the colour row may scroll.
+                        IconButton(onClick = onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
                         IconButton(onClick = onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
                         IconButton(onClick = onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }
+                        Spacer(Modifier.width(8.dp))
                         InkColors.forEach { s -> ColorDot(s, selected = false, onClick = { onRecolorSelection(s.argb) }) }
-                        IconButton(onClick = onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
                     }
                 }
             }
