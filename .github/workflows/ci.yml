@@ -100,7 +100,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Pre-build APKs
-        run: ./gradlew assembleDebug assembleDebugAndroidTest assembleRelease
+        run: ./gradlew assembleDebug assembleDebugAndroidTest assembleRelease :e2e:assembleDebug
 
       - name: Run on emulator (API 35)
         uses: reactivecircus/android-emulator-runner@v2
@@ -114,7 +114,7 @@ jobs:
 
       - name: Report results
         if: always()
-        run: python3 .github/scripts/report.py instrumented instrumented.log "app/build/outputs/androidTest-results/connected/**/*.xml"
+        run: python3 .github/scripts/report.py instrumented instrumented.log "**/build/outputs/androidTest-results/connected/**/*.xml"
 
       - name: Upload reports
         if: always()
@@ -122,6 +122,6 @@ jobs:
         with:
           name: instrumented-reports
           path: |
-            app/build/reports/androidTests/
+            **/build/reports/androidTests/
             instrumented.log
           retention-days: 7

@@ -11,6 +11,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.core.designsystem.theme.AppTheme
@@ -18,6 +22,7 @@ import com.appname.notes.core.settings.ThemeMode
 import com.appname.notes.navigation.NotesApp
 import dagger.hilt.android.AndroidEntryPoint
 
+@OptIn(ExperimentalComposeUiApi::class)
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -44,7 +49,9 @@ class MainActivity : ComponentActivity() {
             }
 
             AppTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
-                NotesApp()
+                // Exposes test tags as resource ids so UiAutomator tests (which run in another process,
+                // e.g. the process-death tests in :e2e) can find screens and fields.
+                NotesApp(Modifier.semantics { testTagsAsResourceId = true })
             }
         }
     }

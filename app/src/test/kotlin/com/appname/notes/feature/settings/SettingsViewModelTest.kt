@@ -23,7 +23,7 @@ class SettingsViewModelTest {
 
     @Before
     fun setUp() {
-        viewModel = SettingsViewModel(repository)
+        viewModel = SettingsViewModel(repository) { com.appname.notes.core.common.result.AppResult.Success(Unit) }
     }
 
     @Test
@@ -65,6 +65,17 @@ class SettingsViewModelTest {
 
             viewModel.onSaveErrorShown()
             assertThat(awaitReady().showSaveError).isFalse()
+        }
+    }
+
+    @Test
+    fun `rebuilding the search index shows a confirmation once`() = runTest {
+        viewModel.uiState.test {
+            skipUntilReady()
+            viewModel.onRebuildSearchIndex()
+            assertThat(awaitReady().showIndexRebuilt).isTrue()
+            viewModel.onIndexRebuiltShown()
+            assertThat(awaitReady().showIndexRebuilt).isFalse()
         }
     }
 

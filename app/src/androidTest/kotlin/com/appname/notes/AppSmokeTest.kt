@@ -10,7 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.appname.notes.feature.home.HomeTestTags
+import com.appname.notes.feature.library.LibraryTestTags
 import com.appname.notes.feature.settings.SettingsTestTags
 import org.junit.Rule
 import org.junit.Test
@@ -26,7 +26,7 @@ class AppSmokeTest {
 
     @Test
     fun navigateToSettings_recreate_andBack() {
-        composeRule.onNodeWithTag(HomeTestTags.SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag(LibraryTestTags.SCREEN).assertIsDisplayed()
 
         composeRule.onNodeWithTag("nav_settings").performClick()
         composeRule.onNodeWithTag(SettingsTestTags.SCREEN).assertIsDisplayed()
@@ -35,7 +35,7 @@ class AppSmokeTest {
         composeRule.onNodeWithTag(SettingsTestTags.SCREEN).assertIsDisplayed()
 
         composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
-        composeRule.onNodeWithTag(HomeTestTags.SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag(LibraryTestTags.SCREEN).assertIsDisplayed()
         composeRule.onNodeWithTag("nav_home").assertIsSelected()
     }
 

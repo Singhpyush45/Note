@@ -11,6 +11,7 @@ import com.appname.notes.core.database.RoomTagRepository
 import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.TagRepository
+import com.appname.notes.feature.settings.SearchIndexRebuilder
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -47,6 +48,10 @@ object DataModule {
     @Singleton
     fun provideNoteRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): NoteRepository =
         RoomNoteRepository(db, clock, ids, logger)
+
+    @Provides
+    fun provideSearchIndexRebuilder(notes: NoteRepository): SearchIndexRebuilder =
+        SearchIndexRebuilder { notes.rebuildSearchIndex() }
 
     @Provides
     @Singleton

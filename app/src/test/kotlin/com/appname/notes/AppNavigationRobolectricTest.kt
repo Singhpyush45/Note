@@ -10,7 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.appname.notes.feature.home.HomeTestTags
+import com.appname.notes.feature.library.LibraryTestTags
 import com.appname.notes.feature.settings.SettingsTestTags
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -34,8 +34,8 @@ class AppNavigationRobolectricTest {
 
     @Test
     fun launch_showsHomeWithEmptyState() {
-        composeRule.onNodeWithTag(HomeTestTags.SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText(string(R.string.home_empty_title)).assertIsDisplayed()
+        composeRule.onNodeWithTag(LibraryTestTags.SCREEN).assertIsDisplayed()
+        composeRule.waitUntilExactlyOneExists(hasText(string(R.string.home_empty_title)), timeoutMillis = 5_000)
         composeRule.onNodeWithTag("nav_home").assertIsSelected()
     }
 
@@ -47,7 +47,7 @@ class AppNavigationRobolectricTest {
 
         pressBack()
 
-        composeRule.onNodeWithTag(HomeTestTags.SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag(LibraryTestTags.SCREEN).assertIsDisplayed()
         composeRule.onNodeWithTag("nav_home").assertIsSelected()
         assertThat(composeRule.activity.isFinishing).isFalse()
     }

@@ -1,5 +1,6 @@
 package com.appname.notes.core.designsystem.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -95,6 +96,22 @@ fun SettingsRadioRow(
         horizontalArrangement = Arrangement.spacedBy(spacing.lg),
     ) {
         RadioButton(selected = selected, onClick = null)
+        RowText(title = title, summary = summary, enabled = true, modifier = Modifier.weight(1f))
+    }
+}
+
+/** A row that performs an action when tapped (e.g. "Rebuild search index"). */
+@Composable
+fun SettingsActionRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier, summary: String? = null) {
+    val spacing = AppTheme.spacing
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = spacing.minTouchTarget + spacing.sm)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = spacing.lg, vertical = spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         RowText(title = title, summary = summary, enabled = true, modifier = Modifier.weight(1f))
     }
 }

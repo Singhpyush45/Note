@@ -76,4 +76,45 @@ class TopLevelNavigationTest {
         stack.navigateToTopLevel(TopLevelDestination.SETTINGS)
         assertThat(stack).containsExactly(HomeKey, SettingsKey).inOrder()
     }
+
+    @Test
+    fun `opening a note replaces an editor already on top`() {
+        val stack = mutableListOf<NavKey>(HomeKey)
+        stack.openNote("a")
+        stack.openNote("b")
+        assertThat(stack).containsExactly(HomeKey, NoteEditorKey("b")).inOrder()
+    }
+
+    @Test
+    fun `opening a note from search keeps search underneath`() {
+        val stack = mutableListOf<NavKey>(HomeKey, SearchKey)
+        stack.openNote("a")
+        assertThat(stack).containsExactly(HomeKey, SearchKey, NoteEditorKey("a")).inOrder()
+        assertThat(stack.currentTopLevel()).isEqualTo(TopLevelDestination.HOME)
+    }
+
+    @Test
+    fun `pop never removes the root`() {
+        val stack = mutableListOf<NavKey>(HomeKey, SearchKey)
+        assertThat(stack.pop()).isTrue()
+        assertThat(stack.pop()).isFalse()
+        assertThat(stack).containsExactly(HomeKey)
+    }
+
+    @Test
+    fun `closing a note removes only that editor`() {
+        val stack = mutableListOf<NavKey>(HomeKey, NoteEditorKey("a"))
+        stack.closeNote("a")
+        assertThat(stack).containsExactly(HomeKey)
+        stack.closeNote("zzz")
+        assertThat(stack).containsExactly(HomeKey)
+    }
+
+    @Test
+    fun `push does not duplicate the screen on top`() {
+        val stack = mutableListOf<NavKey>(HomeKey)
+        stack.push(NotebooksKey)
+        stack.push(NotebooksKey)
+        assertThat(stack).containsExactly(HomeKey, NotebooksKey).inOrder()
+    }
 }

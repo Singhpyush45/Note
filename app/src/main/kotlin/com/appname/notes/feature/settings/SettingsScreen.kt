@@ -27,6 +27,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.BuildConfig
 import com.appname.notes.R
+import com.appname.notes.core.designsystem.component.SettingsActionRow
 import com.appname.notes.core.designsystem.component.SettingsInfoRow
 import com.appname.notes.core.designsystem.component.SettingsRadioGroup
 import com.appname.notes.core.designsystem.component.SettingsRadioRow
@@ -46,6 +47,8 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         onThemeModeSelected = viewModel::onThemeModeSelected,
         onDynamicColorChanged = viewModel::onDynamicColorChanged,
         onSaveErrorShown = viewModel::onSaveErrorShown,
+        onRebuildSearchIndex = viewModel::onRebuildSearchIndex,
+        onIndexRebuiltShown = viewModel::onIndexRebuiltShown,
     )
 }
 
@@ -57,15 +60,25 @@ fun SettingsScreen(
     onDynamicColorChanged: (Boolean) -> Unit,
     onSaveErrorShown: () -> Unit,
     modifier: Modifier = Modifier,
+    onRebuildSearchIndex: () -> Unit = {},
+    onIndexRebuiltShown: () -> Unit = {},
     dynamicColorSupported: Boolean = supportsDynamicColor(),
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val saveErrorMessage = stringResource(R.string.settings_save_failed)
+    val rebuiltMessage = stringResource(R.string.settings_rebuild_index_done)
     val showSaveError = (uiState as? SettingsUiState.Ready)?.showSaveError == true
+    val showRebuilt = (uiState as? SettingsUiState.Ready)?.showIndexRebuilt == true
     LaunchedEffect(showSaveError) {
         if (showSaveError) {
             snackbarHostState.showSnackbar(saveErrorMessage)
             onSaveErrorShown()
+        }
+    }
+    LaunchedEffect(showRebuilt) {
+        if (showRebuilt) {
+            snackbarHostState.showSnackbar(rebuiltMessage)
+            onIndexRebuiltShown()
         }
     }
 
@@ -89,6 +102,7 @@ fun SettingsScreen(
                     dynamicColorSupported = dynamicColorSupported,
                     onThemeModeSelected = onThemeModeSelected,
                     onDynamicColorChanged = onDynamicColorChanged,
+                    onRebuildSearchIndex = onRebuildSearchIndex,
                 )
             }
         }
@@ -101,6 +115,7 @@ private fun SettingsList(
     dynamicColorSupported: Boolean,
     onThemeModeSelected: (ThemeMode) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
+    onRebuildSearchIndex: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier
@@ -147,6 +162,16 @@ private fun SettingsList(
             SettingsInfoRow(
                 title = stringResource(R.string.settings_storage),
                 value = stringResource(R.string.settings_storage_value),
+            )
+        }
+
+        item { HorizontalDivider() }
+        item { SettingsSectionHeader(stringResource(R.string.settings_section_maintenance)) }
+        item {
+            SettingsActionRow(
+                title = stringResource(R.string.settings_rebuild_index),
+                summary = stringResource(R.string.settings_rebuild_index_summary),
+                onClick = onRebuildSearchIndex,
             )
         }
 

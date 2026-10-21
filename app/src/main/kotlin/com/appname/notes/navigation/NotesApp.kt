@@ -1,32 +1,72 @@
 package com.appname.notes.navigation
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
+import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import com.appname.notes.feature.home.HomeScreen
+import androidx.window.core.layout.WindowSizeClass
+import com.appname.notes.R
+import com.appname.notes.core.domain.model.NoteId
+import com.appname.notes.feature.editor.NoteEditorRoute
+import com.appname.notes.feature.editor.NoteEditorViewModel
+import com.appname.notes.feature.library.LibraryRoute
+import com.appname.notes.feature.organize.NotebooksRoute
+import com.appname.notes.feature.organize.TagsRoute
+import com.appname.notes.feature.search.SearchRoute
 import com.appname.notes.feature.settings.SettingsRoute
 
 /**
- * App shell: adaptive navigation (bottom bar on phones, rail on tablets — chosen automatically from the
- * window size) around the screen [NavDisplay] shows for the top of the back stack.
+ * App shell. Phones: one screen at a time with a bottom bar (hidden while editing to give the note the
+ * whole screen). Tablets/landscape: navigation rail plus a list–detail layout — the library or search
+ * results on the left and the open note on the right (SRS 8.1).
  */
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun NotesApp(modifier: Modifier = Modifier) {
     // Saved across rotation and process death because every key is @Serializable.
     val backStack = rememberNavBackStack(HomeKey)
     val currentTopLevel = backStack.currentTopLevel()
+    val adaptiveInfo = currentWindowAdaptiveInfo()
+    val isWide = adaptiveInfo.windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
+    val editingFullScreen = !isWide && backStack.lastOrNull() !in topLevelKeys
+
+    val listDetail = rememberListDetailSceneStrategy<NavKey>()
+    val openNote: (NoteId) -> Unit = { backStack.openNote(it.value) }
+    val selectedNoteId = (backStack.lastOrNull() as? NoteEditorKey)?.noteId
 
     NavigationSuiteScaffold(
         modifier = modifier,
+        layoutType = if (editingFullScreen) {
+            NavigationSuiteType.None
+        } else {
+            NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo)
+        },
         navigationSuiteItems = {
             TopLevelDestination.entries.forEach { destination ->
                 val selected = destination == currentTopLevel
@@ -47,15 +87,59 @@ fun NotesApp(modifier: Modifier = Modifier) {
     ) {
         NavDisplay(
             backStack = backStack,
-            onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+            onBack = { backStack.pop() },
+            sceneStrategy = listDetail,
             entryDecorators = listOf(
                 rememberSaveableStateHolderNavEntryDecorator(), // keeps scroll/text state per screen
                 rememberViewModelStoreNavEntryDecorator(), // each screen gets its own ViewModels
             ),
             entryProvider = entryProvider {
-                entry<HomeKey> { HomeScreen() }
+                entry<HomeKey>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { DetailPlaceholder() })) {
+                    LibraryRoute(
+                        onOpenNote = openNote,
+                        onOpenSearch = { backStack.push(SearchKey) },
+                        onManageNotebooks = { backStack.push(NotebooksKey) },
+                        onManageTags = { backStack.push(TagsKey) },
+                        selectedNoteId = selectedNoteId,
+                    )
+                }
+                entry<SearchKey>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { DetailPlaceholder() })) {
+                    SearchRoute(onBack = { backStack.pop() }, onOpenNote = openNote)
+                }
+                entry<NoteEditorKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
+                    val viewModel = hiltViewModel<NoteEditorViewModel, NoteEditorViewModel.Factory>(
+                        creationCallback = { factory -> factory.create(NoteId(key.noteId)) },
+                    )
+                    NoteEditorRoute(
+                        viewModel = viewModel,
+                        onClose = { backStack.closeNote(key.noteId) },
+                        onOpenNote = openNote,
+                    )
+                }
+                entry<NotebooksKey> { NotebooksRoute(onBack = { backStack.pop() }) }
+                entry<TagsKey> { TagsRoute(onBack = { backStack.pop() }) }
                 entry<SettingsKey> { SettingsRoute() }
             },
+        )
+    }
+}
+
+private val topLevelKeys: Set<NavKey> = TopLevelDestination.entries.map { it.key }.toSet()
+
+/** Shown in the detail pane on tablets until a note is opened. */
+@Composable
+private fun DetailPlaceholder() {
+    Column(
+        Modifier.fillMaxSize().testTag("detail_placeholder"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(Icons.Outlined.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(48.dp))
+        Text(
+            stringResource(R.string.select_note_placeholder),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(16.dp),
         )
     }
 }

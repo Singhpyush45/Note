@@ -23,7 +23,14 @@ sealed interface SettingsUiState {
         val appearance: AppearanceSettings,
         /** True after a save failed, until the screen has shown the message. */
         val showSaveError: Boolean = false,
+        /** True after the search index was rebuilt, until the screen has shown the confirmation. */
+        val showIndexRebuilt: Boolean = false,
     ) : SettingsUiState
+}
+
+/** Rebuilds the full-text search index (SRS 12.1). A tiny interface so tests don't need a database. */
+fun interface SearchIndexRebuilder {
+    suspend fun rebuild(): AppResult<Unit>
 }
 
 /**
@@ -33,13 +40,15 @@ sealed interface SettingsUiState {
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
+    private val indexRebuilder: SearchIndexRebuilder,
 ) : ViewModel() {
 
     private val saveFailed = MutableStateFlow(false)
+    private val indexRebuilt = MutableStateFlow(false)
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(repository.appearance, saveFailed) { appearance, failed ->
-            SettingsUiState.Ready(appearance, showSaveError = failed)
+        combine(repository.appearance, saveFailed, indexRebuilt) { appearance, failed, rebuilt ->
+            SettingsUiState.Ready(appearance, showSaveError = failed, showIndexRebuilt = rebuilt)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -56,6 +65,19 @@ class SettingsViewModel @Inject constructor(
 
     fun onSaveErrorShown() {
         saveFailed.value = false
+    }
+
+    fun onRebuildSearchIndex() {
+        viewModelScope.launch {
+            when (indexRebuilder.rebuild()) {
+                is AppResult.Success -> indexRebuilt.value = true
+                is AppResult.Failure -> saveFailed.value = true
+            }
+        }
+    }
+
+    fun onIndexRebuiltShown() {
+        indexRebuilt.value = false
     }
 
     private fun handle(result: AppResult<Unit>) {
