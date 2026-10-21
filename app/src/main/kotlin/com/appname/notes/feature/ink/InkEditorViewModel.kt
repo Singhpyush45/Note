@@ -10,6 +10,18 @@ import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.repository.InkPageInfo
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
+import com.appname.notes.core.domain.repository.PdfDocumentInfo
+import com.appname.notes.core.domain.repository.PdfRepository
+import com.appname.notes.core.domain.model.NoteType
+import com.appname.notes.core.common.coroutines.DispatcherProvider
+import com.appname.notes.core.common.logging.AppLogger
+import com.appname.notes.feature.pdf.PdfAnnotationWriter
+import com.appname.notes.feature.pdf.PdfFileStore
+import com.appname.notes.feature.pdf.PdfPageRenderer
+import android.content.Context
+import android.net.Uri
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.withContext
 import com.appname.notes.core.ink.edit.InkSession
 import com.appname.notes.core.ink.edit.PageEdit
 import com.appname.notes.core.ink.edit.PageItems
@@ -62,6 +74,11 @@ data class InkEditorUi(
     val version: Long = 0,
     /** One-shot request for the canvas to show a page (after adding one). */
     val scrollRequest: ScrollRequest? = null,
+    /** A PDF note: pages come from the document (no adding/deleting), export is available. */
+    val isPdf: Boolean = false,
+    /** The PDF file can't be displayed (missing or damaged). The ink is still there. */
+    val pdfFailed: Boolean = false,
+    val exporting: Boolean = false,
 )
 
 data class ScrollRequest(val page: Int, val id: Long = System.nanoTime())
@@ -71,7 +88,7 @@ sealed interface InkLoad {
     data object NotFound : InkLoad
 
     /** [session] and [controller] live as long as this ViewModel (they survive rotation). */
-    data class Ready(val session: InkSession, val controller: InkInputController) : InkLoad
+    data class Ready(val session: InkSession, val controller: InkInputController, val pdf: PdfPageRenderer? = null) : InkLoad
 }
 
 /**
@@ -91,6 +108,12 @@ class InkEditorViewModel @AssistedInject constructor(
     private val settings: SettingsRepository,
     private val ids: IdGenerator,
     @param:ApplicationScope private val appScope: CoroutineScope,
+    private val pdfRepository: PdfRepository,
+    private val pdfFiles: PdfFileStore,
+    private val pdfWriter: PdfAnnotationWriter,
+    private val dispatchers: DispatcherProvider,
+    private val logger: AppLogger,
+    @param:ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -175,8 +198,17 @@ class InkEditorViewModel @AssistedInject constructor(
             return
         }
         val session = InkSession(
-            pages.map { InkSession.Page(it.info.id, it.info.template, it.info.width, it.info.height, PageItems.of(it.items)) },
+            pages.map {
+                InkSession.Page(it.info.id, it.info.template, it.info.width, it.info.height, PageItems.of(it.items), it.info.pdfPageIndex)
+            },
         )
+        val pdfDocument = if (note.type == NoteType.PDF) (pdfRepository.document(noteId) as? AppResult.Success)?.value else null
+        val pdfRenderer = pdfDocument?.let { doc ->
+            PdfPageRenderer(appContext, pdfFiles.file(doc.fileName), logger).also { r ->
+                r.onFailed = { _ui.update { ui -> ui.copy(pdfFailed = true) } }
+            }
+        }
+        this.pdfDocument = pdfDocument
         val readOnly = when {
             pages.any { it.readOnly } -> ReadOnlyReason.NEWER_VERSION
             note.trashedAt != null -> ReadOnlyReason.IN_TRASH
@@ -188,8 +220,8 @@ class InkEditorViewModel @AssistedInject constructor(
         }
         session.onEdit = { edit -> enqueue(Op.Commit(edit)) }
         session.onChanged = { refresh() }
-        _ui.update { it.copy(title = note.title, readOnly = readOnly) }
-        _load.value = InkLoad.Ready(session, controller)
+        _ui.update { it.copy(title = note.title, readOnly = readOnly, isPdf = note.type == NoteType.PDF, pdfFailed = note.type == NoteType.PDF && pdfRenderer == null) }
+        _load.value = InkLoad.Ready(session, controller, pdfRenderer)
         refresh()
     }
 
@@ -271,6 +303,44 @@ class InkEditorViewModel @AssistedInject constructor(
     override fun onCleared() {
         // Let the worker finish what's queued, then stop.
         queue.close()
+        (_load.value as? InkLoad.Ready)?.pdf?.close()
+    }
+
+    private var pdfDocument: PdfDocumentInfo? = null
+
+    /** Suggested file name for "Export annotated PDF". */
+    fun exportFileName(): String = "${_ui.value.title.ifBlank { pdfDocument?.displayName?.removeSuffix(".pdf") ?: "PDF" }} (annotated).pdf"
+
+    /**
+     * Writes a copy of the PDF with the ink drawn in (SRS 7.3) to [target]. The stored original is only read.
+     * Runs in the app scope so it finishes even if the screen closes.
+     */
+    fun exportPdf(target: Uri) {
+        val doc = pdfDocument ?: return
+        val s = session() ?: return
+        // Snapshot on the main thread: page lists are immutable.
+        val ink = s.pages.mapNotNull { p -> p.pdfPageIndex?.let { it to p.items.items } }.toMap()
+        _ui.update { it.copy(exporting = true) }
+        appScope.launch {
+            val ok = withContext(dispatchers.io) {
+                try {
+                    val out = appContext.contentResolver.openOutputStream(target, "wt") ?: return@withContext false
+                    out.use { pdfWriter.writeAnnotatedCopy(pdfFiles.file(doc.fileName), ink, it) }
+                    true
+                } catch (e: java.io.IOException) {
+                    logger.warn(TAG, "PDF export failed", e)
+                    false
+                } catch (e: SecurityException) {
+                    logger.warn(TAG, "PDF export not permitted", e)
+                    false
+                } catch (e: RuntimeException) { // a PDF PdfBox can't rewrite
+                    logger.warn(TAG, "PDF export failed", e)
+                    false
+                }
+            }
+            _ui.update { it.copy(exporting = false) }
+            _message.value = UserMessage(if (ok) R.string.pdf_exported else R.string.pdf_export_failed)
+        }
     }
 
     // ---------------------------------------------------------------- canvas callbacks
@@ -377,7 +447,7 @@ class InkEditorViewModel @AssistedInject constructor(
 
     fun addPage() {
         val s = session() ?: return
-        if (_ui.value.readOnly != null) return
+        if (_ui.value.readOnly != null || _ui.value.isPdf) return
         val index = (_ui.value.currentPage + 1).coerceAtMost(s.pages.size)
         val template = _ui.value.currentTemplate
         val result = CompletableDeferred<AppResult<InkPageInfo>>()
@@ -397,7 +467,7 @@ class InkEditorViewModel @AssistedInject constructor(
 
     fun deleteCurrentPage() {
         val s = session() ?: return
-        if (_ui.value.readOnly != null || s.pages.size <= 1) return
+        if (_ui.value.readOnly != null || _ui.value.isPdf || s.pages.size <= 1) return
         val page = s.pages.getOrNull(_ui.value.currentPage) ?: return
         val result = CompletableDeferred<AppResult<Unit>>()
         enqueue(Op.DeletePage(page.id, result))
@@ -412,7 +482,7 @@ class InkEditorViewModel @AssistedInject constructor(
 
     fun setTemplate(template: PageTemplate) {
         val s = session() ?: return
-        if (_ui.value.readOnly != null) return
+        if (_ui.value.readOnly != null || _ui.value.isPdf) return
         val page = s.pages.getOrNull(_ui.value.currentPage) ?: return
         s.setTemplate(page.id, template)
         enqueue(Op.SetTemplate(page.id, template))
@@ -450,6 +520,7 @@ class InkEditorViewModel @AssistedInject constructor(
     )
 
     private companion object {
+        const val TAG = "InkEditor"
         const val MAX_ATTEMPTS = 6
         const val FIRST_RETRY_MS = 500L
         const val MAX_RETRY_MS = 5_000L

@@ -1,5 +1,9 @@
 package com.appname.notes.feature.library
 
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.zIndex
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -92,6 +96,8 @@ object LibraryTestTags {
     const val COLLECTION_BUTTON = "collection_button"
     const val SEARCH = "action_search"
     const val GRID = "notes_grid"
+    const val IMPORT_PDF = "action_import_pdf"
+    const val IMPORTING_PDF = "importing_pdf"
 }
 
 @Composable
@@ -108,6 +114,11 @@ fun LibraryRoute(
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch { viewModel.import(uri)?.let { onOpenNote(it, NoteType.TEXT) } }
     }
+    // The system file picker grants read access to the one file picked; no storage permission needed.
+    val importPdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch { viewModel.importPdf(uri)?.let { onOpenNote(it, NoteType.PDF) } }
+    }
+    val importingPdf by viewModel.importingPdf.collectAsStateWithLifecycle()
     // A notebook/tag shown here was deleted elsewhere: go back to All notes.
     LaunchedEffect(state.collection, state.loading, state.collectionName) {
         val c = state.collection
@@ -126,6 +137,8 @@ fun LibraryRoute(
         onSelectCollection = viewModel::selectCollection,
         onSort = viewModel::setSort,
         onImport = { importLauncher.launch(arrayOf("text/markdown", "text/x-markdown", "text/plain", "application/octet-stream")) },
+        onImportPdf = { importPdfLauncher.launch(arrayOf("application/pdf")) },
+        importingPdf = importingPdf,
         onManageNotebooks = onManageNotebooks,
         onManageTags = onManageTags,
         actions = NoteActions(
@@ -173,6 +186,8 @@ fun LibraryScreen(
     onManageTags: () -> Unit,
     actions: NoteActions,
     onMessageShown: () -> Unit,
+    onImportPdf: () -> Unit = {},
+    importingPdf: Boolean = false,
 ) {
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(state.message, snackbar, onMessageShown)
@@ -184,6 +199,7 @@ fun LibraryScreen(
     var confirmEmptyTrash by rememberSaveable { mutableStateOf(false) }
 
     val title = collectionTitle(state)
+    val importingDescription = stringResource(R.string.pdf_importing)
     val inTrash = state.collection == NoteCollection.Trash
 
     Scaffold(
@@ -212,6 +228,7 @@ fun LibraryScreen(
                     OverflowMenu(
                         inTrash = inTrash,
                         onImport = onImport,
+                        onImportPdf = onImportPdf,
                         onEmptyTrash = { confirmEmptyTrash = true },
                         onManageNotebooks = onManageNotebooks,
                         onManageTags = onManageTags,
@@ -239,6 +256,12 @@ fun LibraryScreen(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
+            if (importingPdf) {
+                LinearProgressIndicator(
+                    Modifier.fillMaxWidth().align(Alignment.TopCenter).zIndex(1f).testTag(LibraryTestTags.IMPORTING_PDF)
+                        .semantics { contentDescription = importingDescription },
+                )
+            }
             when {
                 state.loading -> Unit
                 state.isEmpty -> EmptyCollection(state.collection, Modifier.align(Alignment.Center))
@@ -428,6 +451,7 @@ private fun SortMenu(current: NoteSort, onSort: (NoteSort) -> Unit) {
 private fun OverflowMenu(
     inTrash: Boolean,
     onImport: () -> Unit,
+    onImportPdf: () -> Unit,
     onEmptyTrash: () -> Unit,
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
@@ -447,6 +471,12 @@ private fun OverflowMenu(
                 text = { Text(stringResource(R.string.library_import)) },
                 leadingIcon = { Icon(Icons.Outlined.FileOpen, null) },
                 onClick = { open = false; onImport() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.pdf_import)) },
+                leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, null) },
+                onClick = { open = false; onImportPdf() },
+                modifier = Modifier.testTag(LibraryTestTags.IMPORT_PDF),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.library_manage_notebooks)) },

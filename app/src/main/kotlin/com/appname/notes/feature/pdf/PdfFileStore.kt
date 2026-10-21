@@ -34,6 +34,8 @@ class PdfFileStore(
     context: Context,
     private val writer: PdfAnnotationWriter,
     private val logger: AppLogger,
+    /** Files newer than this may belong to an import still in progress, so cleanup leaves them alone. */
+    private val importGraceMs: Long = IMPORT_GRACE_MS,
 ) {
     private val resolver: ContentResolver = context.contentResolver
     val dir: File = File(context.filesDir, DIR).apply { mkdirs() }
@@ -69,14 +71,18 @@ class PdfFileStore(
         }
     }
 
-    /** Deletes stored PDFs no note refers to any more (after permanent deletes) and leftovers of failed imports. */
+    /**
+     * Deletes stored PDFs no note refers to any more (after permanent deletes) and leftovers of failed imports.
+     *
+     * An import writes "x.pdf.part", renames it to "x.pdf" and only then creates the note, so for a moment a
+     * new file is unreferenced. Recent files are therefore kept; they are removed by a later cleanup if still unused.
+     */
     fun deleteUnreferenced(referenced: Set<String>): Int {
         var deleted = 0
-        val staleBefore = System.currentTimeMillis() - PART_FILE_MAX_AGE_MS
+        val staleBefore = System.currentTimeMillis() - importGraceMs
         dir.listFiles()?.forEach { f ->
-            // A ".part" file may be an import in progress: only leftovers older than that are removed.
-            val inProgress = f.name.endsWith(".part") && f.lastModified() > staleBefore
-            if (f.name !in referenced && !inProgress && f.delete()) deleted++
+            val maybeInProgress = f.lastModified() > staleBefore
+            if (f.name !in referenced && !maybeInProgress && f.delete()) deleted++
         }
         return deleted
     }
@@ -153,6 +159,6 @@ class PdfFileStore(
         const val DIR = "pdfs"
         const val TAG = "PdfFileStore"
         const val MAX_BYTES = 300L * 1024 * 1024
-        const val PART_FILE_MAX_AGE_MS = 10 * 60 * 1000L
+        const val IMPORT_GRACE_MS = 10 * 60 * 1000L
     }
 }

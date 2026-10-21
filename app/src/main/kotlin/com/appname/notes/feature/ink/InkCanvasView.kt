@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.os.Build
@@ -31,6 +32,7 @@ import com.appname.notes.core.ink.input.Sample
 import com.appname.notes.core.ink.layout.PageStack
 import com.appname.notes.core.ink.layout.Viewport
 import com.appname.notes.core.ink.layout.ViewportRules
+import com.appname.notes.feature.pdf.PdfPageRenderer
 import kotlin.math.PI
 import kotlin.math.hypot
 
@@ -75,6 +77,16 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     var backgroundArgb: Int = 0xFFEEF0F2.toInt()
         set(value) {
             field = value
+            surface.invalidate()
+        }
+
+    /** Renders the PDF pages under the ink (PDF notes only). */
+    var pdf: PdfPageRenderer? = null
+        set(value) {
+            if (field === value) return
+            field?.onUpdate = null
+            field = value
+            value?.onUpdate = { surface.invalidate() }
             surface.invalidate()
         }
 
@@ -645,6 +657,35 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         private val shadow = 1.5f * density
         private val selectionRect = RectF()
         private val selectionOutline = RectF()
+        private val pageRect = RectF()
+        private val visibleUnits = RectF()
+        private val tileRect = RectF()
+        private val inverse = Matrix()
+        private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+
+        /** The PDF page under page [page]: best cached bitmap now, plus a sharp detail tile when zoomed in. */
+        private fun drawPdfPage(canvas: Canvas, page: InkSession.Page, m: Matrix, scale: Float) {
+            val r = pdf ?: return
+            val index = page.pdfPageIndex ?: return
+            pageRect.set(0f, 0f, page.width, page.height)
+            m.mapRect(pageRect)
+            val longSide = maxOf(pageRect.width(), pageRect.height()).toInt()
+            r.page(index, longSide, page.height / page.width)?.let { canvas.drawBitmap(it, null, pageRect, bitmapPaint) }
+            if (!r.needsDetail(longSide)) return
+            // The part of this page that is on screen, in page units.
+            visibleUnits.set(0f, 0f, width.toFloat(), height.toFloat())
+            if (!visibleUnits.intersect(pageRect)) return
+            val w = visibleUnits.width().toInt()
+            val h = visibleUnits.height().toInt()
+            m.invert(inverse)
+            inverse.mapRect(visibleUnits)
+            r.requestTile(index, visibleUnits, scale, w, h)
+            r.tile(index)?.let { t ->
+                tileRect.set(t.rect)
+                m.mapRect(tileRect)
+                canvas.drawBitmap(t.bitmap, null, tileRect, bitmapPaint)
+            }
+        }
 
         override fun onDraw(canvas: Canvas) {
             canvas.drawColor(backgroundArgb)
@@ -658,6 +699,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 val page = s.pages.getOrNull(i) ?: continue
                 val m = pageToScreen(i, v)
                 renderer.drawPaper(canvas, page.width, page.height, page.template, m, shadow)
+                drawPdfPage(canvas, page, m, v.scale.toFloat())
                 val editing = selection != null && selection.pageId == page.id && liveMatrix != null
                 renderer.drawInk(
                     canvas,

@@ -5,6 +5,9 @@ import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.PdfRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.TagRepository
+import com.appname.notes.feature.pdf.PdfAnnotationWriter
+import com.appname.notes.feature.pdf.PdfFileStore
+import com.appname.notes.feature.pdf.PdfImporter
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -21,4 +24,7 @@ interface AppDataEntryPoint {
     fun tags(): TagRepository
     fun ink(): InkRepository
     fun pdf(): PdfRepository
+    fun pdfImporter(): PdfImporter
+    fun pdfFiles(): PdfFileStore
+    fun pdfWriter(): PdfAnnotationWriter
 }

@@ -18,6 +18,7 @@ import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneSt
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,9 +52,20 @@ import com.appname.notes.feature.settings.SettingsRoute
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun NotesApp(modifier: Modifier = Modifier) {
+fun NotesApp(
+    modifier: Modifier = Modifier,
+    /** A note to open now (e.g. a PDF shared from another app); [onOpenNoteRequestHandled] is called after. */
+    openNoteRequest: String? = null,
+    onOpenNoteRequestHandled: () -> Unit = {},
+) {
     // Saved across rotation and process death because every key is @Serializable.
     val backStack = rememberNavBackStack(HomeKey)
+    LaunchedEffect(openNoteRequest) {
+        if (openNoteRequest != null) {
+            backStack.openNote(openNoteRequest, NoteType.PDF)
+            onOpenNoteRequestHandled()
+        }
+    }
     val currentTopLevel = backStack.currentTopLevel()
     val adaptiveInfo = currentWindowAdaptiveInfoV2()
     val isWide = adaptiveInfo.windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)

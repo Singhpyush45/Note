@@ -21,6 +21,8 @@ class InkSession(pages: List<Page>, historyLimit: Int = UndoHistory.DEFAULT_LIMI
         val width: Float,
         val height: Float,
         val items: PageItems,
+        /** For PDF notes: the PDF page shown under the ink. */
+        val pdfPageIndex: Int? = null,
     )
 
     /** Called after every applied change (including undo/redo), in order. */

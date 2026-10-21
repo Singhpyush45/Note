@@ -35,6 +35,10 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.appname.notes.feature.pdf.PdfPageRenderer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.HorizontalDivider
@@ -95,6 +99,9 @@ object InkTestTags {
     const val CANVAS = "ink_canvas"
     const val TOOLBAR = "ink_toolbar"
     const val PAGE_INDICATOR = "ink_page_indicator"
+    const val EXPORT_PDF = "ink_export_pdf"
+    const val EXPORT_PROGRESS = "ink_export_progress"
+    const val PDF_FAILED = "ink_pdf_failed"
     fun tool(tool: EditorTool) = "ink_tool_${tool.name.lowercase()}"
 }
 
@@ -109,6 +116,10 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
 
     var renaming by rememberSaveable { mutableStateOf(false) }
     var confirmDeletePage by remember { mutableStateOf(false) }
+    // "Export annotated PDF": the system "save as" screen picks where the copy goes (no storage permission needed).
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null) viewModel.exportPdf(uri)
+    }
 
     Scaffold(
         modifier = Modifier.testTag(InkTestTags.SCREEN),
@@ -126,6 +137,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 onDeletePage = { confirmDeletePage = true },
                 onTemplate = viewModel::setTemplate,
                 onTrash = { scope.launch { if (viewModel.moveToTrash()) onClose() } },
+                onExportPdf = { exportLauncher.launch(viewModel.exportFileName()) },
             )
         },
         bottomBar = {
@@ -155,7 +167,24 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                     modifier = Modifier.align(Alignment.Center),
                 )
                 is InkLoad.Ready -> {
-                    InkCanvas(l.session, l.controller, ui, viewModel)
+                    InkCanvas(l.session, l.controller, l.pdf, ui, viewModel)
+                    if (ui.exporting) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter).testTag(InkTestTags.EXPORT_PROGRESS))
+                    }
+                    if (ui.pdfFailed) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.align(Alignment.TopCenter).padding(12.dp).testTag(InkTestTags.PDF_FAILED),
+                        ) {
+                            Text(
+                                stringResource(R.string.pdf_cant_display),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                    }
                     ui.readOnly?.let { reason ->
                         Surface(
                             color = MaterialTheme.colorScheme.secondaryContainer,
@@ -207,7 +236,13 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
 }
 
 @Composable
-private fun InkCanvas(session: InkSession, controller: InkInputController, ui: InkEditorUi, viewModel: InkEditorViewModel) {
+private fun InkCanvas(
+    session: InkSession,
+    controller: InkInputController,
+    pdf: PdfPageRenderer?,
+    ui: InkEditorUi,
+    viewModel: InkEditorViewModel,
+) {
     val background = MaterialTheme.colorScheme.surfaceContainerHigh.toArgb()
     val description = stringResource(R.string.ink_canvas_description, ui.currentPage + 1, ui.pageCount.coerceAtLeast(1))
     AndroidView(
@@ -228,6 +263,7 @@ private fun InkCanvas(session: InkSession, controller: InkInputController, ui: I
             view.fingerDraws = ui.fingerDraws
             view.backgroundArgb = background
             view.contentDescription = description
+            view.pdf = pdf
             view.bind(session, controller)
             ui.scrollRequest?.let {
                 view.scrollToPage(it.page)
@@ -251,6 +287,7 @@ private fun InkTopBar(
     onDeletePage: () -> Unit,
     onTemplate: (PageTemplate) -> Unit,
     onTrash: () -> Unit,
+    onExportPdf: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     var templates by remember { mutableStateOf(false) }
@@ -280,13 +317,25 @@ private fun InkTopBar(
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         if (editable) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
+                        }
+                        if (ui.isPdf) {
+                            // Exporting only reads the note, so it works for read-only notes too.
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.pdf_export)) },
+                                enabled = !ui.exporting && !ui.pdfFailed,
+                                onClick = { menu = false; onExportPdf() },
+                                modifier = Modifier.testTag(InkTestTags.EXPORT_PDF),
+                            )
+                        }
+                        if (editable && !ui.isPdf) {
+                            // A PDF's pages come from the document, so they can't be added, deleted or re-templated.
                             DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_add)) }, onClick = { menu = false; onAddPage() })
                             DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_template)) }, onClick = { menu = false; templates = true })
                             if (ui.pageCount > 1) {
                                 DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_delete)) }, onClick = { menu = false; onDeletePage() })
                             }
-                            HorizontalDivider()
                         }
+                        if (editable || ui.isPdf) HorizontalDivider()
                         if (ui.readOnly != ReadOnlyReason.IN_TRASH) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.note_trash)) }, onClick = { menu = false; onTrash() })
                         }

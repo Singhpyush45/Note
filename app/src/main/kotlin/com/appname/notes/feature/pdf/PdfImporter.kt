@@ -1,12 +1,24 @@
 package com.appname.notes.feature.pdf
 
 import android.net.Uri
+import androidx.annotation.StringRes
+import com.appname.notes.R
 import com.appname.notes.core.common.coroutines.DispatcherProvider
 import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.model.NotebookId
 import com.appname.notes.core.domain.repository.PdfRepository
 import kotlinx.coroutines.withContext
+
+/** The message shown when an import fails. */
+val PdfImportError.messageRes: Int
+    @StringRes get() = when (this) {
+        PdfImportError.NOT_A_PDF -> R.string.pdf_import_not_pdf
+        PdfImportError.PASSWORD_PROTECTED -> R.string.pdf_import_password
+        PdfImportError.TOO_LARGE -> R.string.pdf_import_too_large
+        PdfImportError.EMPTY -> R.string.pdf_import_empty
+        PdfImportError.STORAGE -> R.string.pdf_import_storage
+    }
 
 sealed interface PdfImport {
     data class Created(val noteId: NoteId) : PdfImport

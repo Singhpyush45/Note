@@ -7,6 +7,7 @@ import com.appname.notes.core.domain.repository.PdfRepository
 import com.appname.notes.feature.pdf.PdfAnnotationWriter
 import com.appname.notes.feature.pdf.PdfFileStore
 import com.appname.notes.feature.pdf.PdfImporter
+import com.appname.notes.feature.pdf.PdfThumbnails
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -31,4 +32,9 @@ object PdfModule {
     @Singleton
     fun provideImporter(store: PdfFileStore, pdf: PdfRepository, dispatchers: DispatcherProvider) =
         PdfImporter(store, pdf, dispatchers)
+
+    @Provides
+    @Singleton
+    fun provideThumbnails(pdf: PdfRepository, store: PdfFileStore, dispatchers: DispatcherProvider, logger: AppLogger) =
+        PdfThumbnails(pdf, store, dispatchers, logger)
 }

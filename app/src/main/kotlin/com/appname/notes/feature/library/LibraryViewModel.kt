@@ -3,6 +3,10 @@ package com.appname.notes.feature.library
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import com.appname.notes.feature.pdf.PdfImport
+import com.appname.notes.feature.pdf.PdfImporter
+import com.appname.notes.feature.pdf.PdfThumbnails
+import com.appname.notes.feature.pdf.messageRes
 import androidx.lifecycle.viewModelScope
 import com.appname.notes.R
 import com.appname.notes.core.common.id.IdGenerator
@@ -65,6 +69,8 @@ class LibraryViewModel @Inject constructor(
     private val files: DocumentFiles,
     private val ids: IdGenerator,
     private val savedState: SavedStateHandle,
+    private val pdfImporter: PdfImporter,
+    private val pdfThumbnails: PdfThumbnails,
 ) : ViewModel() {
 
     // The chosen collection survives rotation and process death via SavedStateHandle.
@@ -132,7 +138,8 @@ class LibraryViewModel @Inject constructor(
         val key = "${note.id.value}@${note.updatedAt.toEpochMilli()}"
         synchronized(thumbnails) { thumbnails[key] }?.let { return it }
         val page = (ink.firstPage(note.id) as? AppResult.Success)?.value ?: return null
-        val thumb = InkThumbnail(page.info.width, page.info.height, page.info.template, page.items)
+        val pdfPage = page.info.pdfPageIndex?.let { pdfThumbnails.render(note.id, it) }
+        val thumb = InkThumbnail(page.info.width, page.info.height, page.info.template, page.items, pdfPage)
         synchronized(thumbnails) { thumbnails[key] = thumb }
         return thumb
     }
@@ -172,11 +179,37 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun deleteForever(id: NoteId) {
-        launchAction(UserMessage(R.string.msg_deleted)) { notes.deletePermanently(setOf(id)) }
+        launchAction(UserMessage(R.string.msg_deleted)) { notes.deletePermanently(setOf(id)).also { cleanUpPdfFiles() } }
     }
 
     fun emptyTrash() {
-        launchAction(UserMessage(R.string.msg_trash_emptied)) { notes.emptyTrash() }
+        launchAction(UserMessage(R.string.msg_trash_emptied)) { notes.emptyTrash().also { cleanUpPdfFiles() } }
+    }
+
+    /** Deleted PDF notes leave their file behind (duplicates may share it); remove files nothing uses now. */
+    private suspend fun cleanUpPdfFiles() {
+        pdfImporter.cleanUp()
+    }
+
+    private val _importingPdf = MutableStateFlow(false)
+    val importingPdf: StateFlow<Boolean> = _importingPdf
+
+    /** Imports a PDF as a new note in the shown notebook (SRS 7.1); returns its id, or null with a message. */
+    suspend fun importPdf(uri: Uri): NoteId? {
+        if (_importingPdf.value) return null
+        _importingPdf.value = true
+        try {
+            val notebook = (collection.value as? NoteCollection.InNotebook)?.id
+            return when (val r = pdfImporter.import(uri, notebook)) {
+                is PdfImport.Created -> {
+                    (collection.value as? NoteCollection.WithTag)?.let { notes.setTags(r.noteId, setOf(it.id)) }
+                    r.noteId
+                }
+                is PdfImport.Failed -> { message.value = UserMessage(r.error.messageRes); null }
+            }
+        } finally {
+            _importingPdf.value = false
+        }
     }
 
     fun duplicate(id: NoteId) {

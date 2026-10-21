@@ -1,6 +1,8 @@
 package com.appname.notes.ui.common
 
+import android.graphics.Bitmap
 import android.graphics.Paint
+import android.graphics.RectF
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.aspectRatio
@@ -25,9 +27,16 @@ import com.appname.notes.feature.ink.InkPaints
 import com.appname.notes.feature.ink.InkPaths
 
 /** What a library card needs to draw a handwritten note's first page. */
-class InkThumbnail(val width: Float, val height: Float, val template: PageTemplate, val items: List<InkItem>) {
-    /** Shows the page from the top down to just below its ink (at least a third of the page). */
-    val shownHeight: Float = run {
+class InkThumbnail(
+    val width: Float,
+    val height: Float,
+    val template: PageTemplate,
+    val items: List<InkItem>,
+    /** For PDF notes: the PDF page under the ink, drawn over the whole page. */
+    val pdfPage: Bitmap? = null,
+) {
+    /** Shows the page from the top down to just below its ink (at least a third of the page); a PDF page whole. */
+    val shownHeight: Float = if (pdfPage != null) height else run {
         val bottom = items.maxOfOrNull { it.bounds().bottom.toFloat() } ?: 0f
         (bottom + 24f).coerceIn(height / 3, height)
     }
@@ -41,6 +50,8 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
     val ratio = if (t == null) 1.6f else (t.width / t.shownHeight).coerceIn(0.6f, 2.5f)
     val outline = MaterialTheme.colorScheme.outlineVariant
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
+    val bitmapPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
+    val pageRect = remember { RectF() }
     Canvas(
         modifier
             .fillMaxWidth()
@@ -56,13 +67,14 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
             val canvas = c.nativeCanvas
             canvas.withScale(scale, scale) {
                 clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
+                thumbnail.pdfPage?.let { pageRect.set(0f, 0f, thumbnail.width, thumbnail.height); drawBitmap(it, null, pageRect, bitmapPaint) }
                 for (pass in 0..1) {
                     for (item in thumbnail.items) {
                         if ((pass == 0) != (item.brush.tool == InkTool.HIGHLIGHTER)) continue
                         paint.set(InkPaints.inkPaint(item.brush))
                         InkPaths.drawItem(this, item, paint)
                     }
-            }
+                }
             }
         }
     }

@@ -242,4 +242,17 @@
     <string name="settings_finger_auto_summary">Fingers draw until you use a stylus, then they scroll and zoom</string>
     <string name="settings_finger_draw">Fingers always draw</string>
     <string name="settings_finger_scroll">Fingers only scroll and zoom</string>
+    <!-- PDF (Phase 4) -->
+    <string name="pdf_export">Export annotated PDF</string>
+    <string name="pdf_exported">Annotated PDF saved. The original is unchanged.</string>
+    <string name="pdf_export_failed">Couldn\'t export the PDF. Your notes are safe; please try again.</string>
+    <string name="pdf_cant_display">This PDF couldn\'t be displayed. Your handwriting on it is safe.</string>
+    <string name="pdf_untitled">PDF</string>
+    <string name="pdf_import">Import PDF</string>
+    <string name="pdf_importing">Importing PDF…</string>
+    <string name="pdf_import_not_pdf">That file isn\'t a PDF this app can open.</string>
+    <string name="pdf_import_password">Password-protected PDFs can\'t be imported yet.</string>
+    <string name="pdf_import_too_large">That PDF is too large (the limit is 300 MB).</string>
+    <string name="pdf_import_empty">That PDF has no pages.</string>
+    <string name="pdf_import_storage">Couldn\'t save the PDF. Check that there is free space and try again.</string>
 </resources>

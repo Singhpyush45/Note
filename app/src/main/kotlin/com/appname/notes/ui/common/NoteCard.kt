@@ -53,9 +53,16 @@ fun NoteCard(
     inkThumbnail: (suspend (NoteSummary) -> InkThumbnail?)? = null,
 ) {
     val spacing = AppTheme.spacing
-    val isInk = note.type == NoteType.INK
+    // PDF notes are ink pages over the document's pages: same thumbnail, with the PDF page under the ink.
+    val isInk = note.type == NoteType.INK || note.type == NoteType.PDF
     val firstLine = note.preview.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
-    val untitled = stringResource(if (isInk) R.string.ink_untitled else R.string.untitled)
+    val untitled = stringResource(
+        when (note.type) {
+            NoteType.INK -> R.string.ink_untitled
+            NoteType.PDF -> R.string.pdf_untitled
+            NoteType.TEXT -> R.string.untitled
+        },
+    )
     val heading = note.title.ifBlank { firstLine }.ifBlank { untitled }
     val body = if (note.title.isBlank()) note.preview.substringAfter(firstLine).trim() else note.preview
     OutlinedCard(

@@ -1,6 +1,13 @@
 package com.appname.notes
 
+import android.content.ContentResolver
+import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.IntentCompat
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -32,6 +39,8 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen() // must run before super.onCreate
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { viewModel.uiState.value is MainUiState.Loading }
+        // Only a fresh start: after rotation or process death the intent was already handled.
+        if (savedInstanceState == null) handleIncoming(intent)
 
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -51,9 +60,42 @@ class MainActivity : ComponentActivity() {
             AppTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 // Exposes test tags as resource ids so UiAutomator tests (which run in another process,
                 // e.g. the process-death tests in :e2e) can find screens and fields.
-                NotesApp(Modifier.semantics { testTagsAsResourceId = true })
+                val sharedPdf by viewModel.sharedPdf.collectAsStateWithLifecycle()
+                val context = LocalContext.current
+                LaunchedEffect(sharedPdf) {
+                    when (val s = sharedPdf) {
+                        SharedPdf.Importing -> Toast.makeText(context, R.string.pdf_importing, Toast.LENGTH_SHORT).show()
+                        is SharedPdf.Failed -> {
+                            Toast.makeText(context, s.message, Toast.LENGTH_LONG).show()
+                            viewModel.sharedPdfHandled()
+                        }
+                        is SharedPdf.Opened, null -> Unit
+                    }
+                }
+                NotesApp(
+                    Modifier.semantics { testTagsAsResourceId = true },
+                    openNoteRequest = (sharedPdf as? SharedPdf.Opened)?.noteId,
+                    onOpenNoteRequestHandled = viewModel::sharedPdfHandled,
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIncoming(intent)
+    }
+
+    /** "Open with" (VIEW) or "Share" (SEND) of a PDF from another app: import it as a new note (SRS 7.1). */
+    private fun handleIncoming(intent: Intent?) {
+        val uri = when (intent?.action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+            else -> null
+        } ?: return
+        // Only content the sender granted us; file:// paths can't be read on current Android anyway.
+        if (uri.scheme != ContentResolver.SCHEME_CONTENT) return
+        viewModel.importShared(uri)
     }
 
     private companion object {
