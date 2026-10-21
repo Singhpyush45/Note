@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -358,9 +359,9 @@ private fun InkToolbar(
                 ToolButton(EditorTool.LASSO, InkIcons.Lasso, R.string.ink_tool_lasso, tools.tool, onTool)
             }
             Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).height(48.dp),
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).height(52.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 when (tools.tool) {
                     EditorTool.PEN, EditorTool.MARKER, EditorTool.HIGHLIGHTER -> {
@@ -386,7 +387,7 @@ private fun InkToolbar(
                                     selected = tools.eraserMode == mode,
                                     onClick = { onEraserMode(mode) },
                                     shape = SegmentedButtonDefaults.itemShape(i, EraserMode.entries.size),
-                                    modifier = Modifier.semantics { contentDescription = description },
+                                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = description },
                                 ) {
                                     Text(
                                         stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area),
@@ -430,7 +431,7 @@ private fun ColorDot(swatch: Swatch, selected: Boolean, onClick: () -> Unit) {
     val ring = MaterialTheme.colorScheme.primary
     Box(
         Modifier
-            .size(40.dp)
+            .size(48.dp)
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = name
@@ -455,7 +456,7 @@ private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, on
     val colors = MaterialTheme.colorScheme
     Box(
         Modifier
-            .size(40.dp)
+            .size(48.dp)
             .clickable(onClick = onClick)
             .then(if (selected) Modifier.background(colors.secondaryContainer, CircleShape) else Modifier)
             .semantics {

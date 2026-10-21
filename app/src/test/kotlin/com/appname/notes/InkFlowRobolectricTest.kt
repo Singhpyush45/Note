@@ -8,6 +8,10 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -271,6 +275,33 @@ class InkFlowRobolectricTest {
         stroke(line(200f, 500f, 200f, 300f), tool = MotionEvent.TOOL_TYPE_FINGER)
         composeRule.waitForIdle()
         assertThat(items()).hasSize(2) // the finger scrolled instead of drawing
+    }
+
+    /** SRS 8.2: every toolbar control has a label for TalkBack and a touch target of at least 48 dp. */
+    @Test
+    fun toolbarControlsAreLabelledAndBigEnough() {
+        openNewInkNote()
+        val density = composeRule.activity.resources.displayMetrics.density
+        for (tool in EditorTool.entries) {
+            composeRule.onNodeWithTag(InkTestTags.tool(tool)).performClick()
+            if (tool == EditorTool.LASSO) { // selection actions appear only with a selection
+                stroke(line(100f, 220f, 200f, 220f), tool = MotionEvent.TOOL_TYPE_STYLUS)
+                composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.LASSO)).performClick()
+                stroke(listOf(80f to 190f, 230f to 190f, 230f to 250f, 80f to 250f, 80f to 192f))
+                waitAdvancing { exists(hasContentDescription(string(R.string.ink_selection_delete))) }
+            }
+            val controls = composeRule.onAllNodes(hasClickAction() and hasAnyAncestor(hasTestTag(InkTestTags.TOOLBAR))).fetchSemanticsNodes()
+            assertThat(controls).isNotEmpty()
+            for (node in controls) {
+                val label = node.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+                    ?: node.config.getOrNull(SemanticsProperties.Text)?.joinToString()
+                    ?: node.children.firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() }
+                assertThat(label).isNotEmpty()
+                val w = node.boundsInRoot.width / density
+                val h = node.boundsInRoot.height / density
+                assertThat(minOf(w, h)).isAtLeast(47.5f)
+            }
+        }
     }
 
     @Test

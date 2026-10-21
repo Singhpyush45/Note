@@ -91,7 +91,17 @@ class LifecycleE2ETest {
 
     /** The handwriting canvas is a classic Android View: found by its accessibility description, not a test tag. */
     private fun findCanvas(): UiObject2 =
-        checkNotNull(device.wait(Until.findObject(By.descStartsWith("Handwriting page")), TIMEOUT_MS)) { "No handwriting canvas" }
+        checkNotNull(device.wait(Until.findObject(By.descStartsWith("Handwriting page")), TIMEOUT_MS)) { "No handwriting canvas. ${diagnostics()}" }
+
+    /** What the screen shows and any crash, so a failure explains itself in the CI report. */
+    private fun diagnostics(): String {
+        val shown = device.findObjects(By.pkg(PACKAGE)).mapNotNull { o ->
+            listOfNotNull(o.resourceName, o.text, o.contentDescription).joinToString("/").takeIf { it.isNotBlank() }
+        }.distinct().take(40)
+        val crash = device.executeShellCommand("logcat -d -b crash").lines().take(40).joinToString("\n")
+        val pkg = device.currentPackageName
+        return "Foreground: $pkg. On screen: $shown. Crash log: $crash"
+    }
 
     /** Counts dark pixels in a narrow band around screen row [y] between [x0] and [x1]. */
     private fun darkPixelsAlong(y: Int, x0: Int, x1: Int): Int {
@@ -118,7 +128,7 @@ class LifecycleE2ETest {
     }
 
     private fun find(resourceId: String): UiObject2 =
-        checkNotNull(device.wait(Until.findObject(By.res(resourceId)), TIMEOUT_MS)) { "No view with id $resourceId" }
+        checkNotNull(device.wait(Until.findObject(By.res(resourceId)), TIMEOUT_MS)) { "No view with id $resourceId. ${diagnostics()}" }
 
     private fun typeInto(field: UiObject2, text: String) {
         field.click()

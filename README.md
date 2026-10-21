@@ -13,10 +13,11 @@ placeholder and the package `com.appname.notes`.
 | 0 | Discovery, plan, ADRs | Done — see [`docs/phase-0-plan.md`](docs/phase-0-plan.md) |
 | 1 | Foundation: theme, navigation, DI, settings, logging, CI | Done — see [`docs/phase-1-report.md`](docs/phase-1-report.md) |
 | 2 | Core notes: editor, notebooks, tags, autosave, search, Markdown, phone + tablet layouts | Done — see [`docs/phase-2-report.md`](docs/phase-2-report.md) |
-| 3 | Handwriting (ink) + draw-and-hold shape correction | Next |
+| 3 | Handwriting (ink) + draw-and-hold shape correction | Done on CI; real-device check pending — see [`docs/phase-3-report.md`](docs/phase-3-report.md) |
+| 4 | PDF import and annotation | Next |
 
 ## Tech stack
-Kotlin · Jetpack Compose (Material 3, adaptive list-detail) · Navigation 3 · Hilt · Room (FTS4) · DataStore · GitHub Actions CI.
+Kotlin · Jetpack Compose (Material 3, adaptive list-detail) · Navigation 3 · Hilt · Room (FTS4) · DataStore · Jetpack Ink · GitHub Actions CI.
 Exact versions: [`gradle/libs.versions.toml`](gradle/libs.versions.toml) and [`docs/dependency-review.md`](docs/dependency-review.md).
 
 ## Project layout
@@ -25,6 +26,7 @@ app/                 Android app: features, navigation, DI, data
 core/common/         Pure Kotlin: results/errors, IDs, clock, logging + redaction
 core/designsystem/   Theme, tokens and shared Compose components
 core/domain/         Pure Kotlin: note model, block document, editor engine, Markdown, repository contracts
+core/ink/            Pure Kotlin: handwriting model, storage format, shape recogniser, erasers, lasso, undo, input logic
 core/database/       Room database, full-text search, repository implementations (+ committed schemas)
 e2e/                 UiAutomator lifecycle tests (process death, force-stop) in their own process
 docs/                Plan, ADRs (docs/adr), test strategy, dependency review
