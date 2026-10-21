@@ -23,7 +23,7 @@ Maps SRS §16 to concrete tools. All layers run in CI on every push (ADR-0001).
 
 ## Commands (local, Android Studio terminal)
 ```
-./gradlew :core:common:test :core:domain:test testDebugUnitTest   # unit + Robolectric
+./gradlew :core:common:test :core:domain:test :core:ink:test testDebugUnitTest   # unit + Robolectric
 ./gradlew lintDebug                   # lint
 ./gradlew connectedDebugAndroidTest   # needs emulator or phone connected
 ./gradlew :e2e:connectedCheck         # process death / force-stop (UiAutomator, own process)

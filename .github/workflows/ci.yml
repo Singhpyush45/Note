@@ -33,7 +33,7 @@ jobs:
         id: gradle
         run: |
           set -o pipefail
-          ./gradlew assembleDebug assembleRelease :core:common:test :core:domain:test testDebugUnitTest lintDebug --continue --warning-mode all 2>&1 | tee build.log
+          ./gradlew assembleDebug assembleRelease :core:common:test :core:domain:test :core:ink:test testDebugUnitTest lintDebug --continue --warning-mode all 2>&1 | tee build.log
 
       - name: Check database schema is committed
         run: |

@@ -36,7 +36,7 @@ docs/                Plan, ADRs (docs/adr), test strategy, dependency review
 **Command line:**
 ```
 ./gradlew assembleDebug                  # build app/build/outputs/apk/debug/app-debug.apk
-./gradlew :core:common:test :core:domain:test testDebugUnitTest   # unit + Robolectric tests
+./gradlew :core:common:test :core:domain:test :core:ink:test testDebugUnitTest   # unit + Robolectric tests
 ./gradlew lintDebug                      # Android Lint
 ./gradlew connectedDebugAndroidTest      # instrumented tests (device/emulator connected)
 ./gradlew :e2e:connectedCheck            # process-death / force-stop tests
