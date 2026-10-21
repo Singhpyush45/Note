@@ -39,7 +39,7 @@ class InkEditTest {
 
     @Test
     fun `shape correction is two undo steps - undo brings the stroke back`() {
-        val history = InkHistory()
+        val history = UndoHistory.forInk()
         var page = PageItems.EMPTY
         val stroke = TestInk.stroke(TestInk.points(0 to 0, 100 to 0), z = page.nextZ)
         fun commit(e: InkEdit) { page = page.apply(e)!!; history.record(e) }
@@ -57,7 +57,7 @@ class InkEditTest {
     fun `random edits undo back to the start and redo forward again`() {
         val rng = Random(9)
         repeat(20) {
-            val history = InkHistory(limit = 1000)
+            val history = UndoHistory.forInk(limit = 1000)
             var page = PageItems.EMPTY
             val states = mutableListOf(page.items)
             repeat(150) {
@@ -97,7 +97,7 @@ class InkEditTest {
 
     @Test
     fun `history limit forgets oldest, new change clears redo`() {
-        val h = InkHistory(limit = 3)
+        val h = UndoHistory.forInk(limit = 3)
         val edits = List(5) { InkEdit.add(TestInk.stroke(TestInk.points(0 to 0))) }
         edits.forEach(h::record)
         repeat(3) { assertTrue(h.undo() != null) }
@@ -107,5 +107,14 @@ class InkEditTest {
         assertFalse(h.canRedo)
         h.record(InkEdit(emptyList(), emptyList())) // empty edits aren't recorded
         assertNull(h.redo())
+    }
+
+    @Test
+    fun `page history undoes on the right page`() {
+        val h = UndoHistory.forPages()
+        val s = TestInk.stroke(TestInk.points(0 to 0))
+        h.record(PageEdit("p2", InkEdit.add(s)))
+        assertEquals(PageEdit("p2", InkEdit.remove(listOf(s))), h.undo())
+        assertEquals(PageEdit("p2", InkEdit.add(s)), h.redo())
     }
 }

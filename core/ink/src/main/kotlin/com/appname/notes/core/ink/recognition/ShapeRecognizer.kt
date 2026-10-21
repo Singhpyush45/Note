@@ -135,6 +135,9 @@ object ShapeRecognizer {
         }
     }
 
+    /** Snaps the direction start → end to 45° steps when within [LINE_SNAP_DEG]; the start stays put. */
+    fun snapAngle(start: Vec, end: Vec): Pair<Vec, Vec> = snapSegment(start, end, pivotAtStart = true)
+
     const val LINE_SNAP_DEG = 4.0
     const val RECT_SNAP_DEG = 7.0
     const val ELLIPSE_SNAP_DEG = 8.0

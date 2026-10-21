@@ -68,34 +68,43 @@ data class InkEdit(val removed: List<InkItem>, val added: List<InkItem>) {
     }
 }
 
+/** An [InkEdit] on a specific page: what the editor's undo history stores. */
+data class PageEdit(val pageId: String, val edit: InkEdit) {
+    fun inverse() = PageEdit(pageId, edit.inverse())
+}
+
 /**
  * Undo/redo stacks with a size limit (oldest changes are forgotten first).
- * Like two `std::deque<InkEdit>`.
+ * Generic like a C++ template `UndoHistory<E>`: [invert] says how to undo one entry.
  */
-class InkHistory(private val limit: Int = DEFAULT_LIMIT) {
-    private val undoStack = ArrayDeque<InkEdit>()
-    private val redoStack = ArrayDeque<InkEdit>()
+class UndoHistory<E : Any>(
+    private val limit: Int = DEFAULT_LIMIT,
+    private val isEmpty: (E) -> Boolean = { false },
+    private val invert: (E) -> E,
+) {
+    private val undoStack = ArrayDeque<E>()
+    private val redoStack = ArrayDeque<E>()
 
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
 
-    /** Records an edit that was just applied. A new change makes redo impossible. */
-    fun record(edit: InkEdit) {
-        if (edit.isEmpty) return
+    /** Records a change that was just applied. A new change makes redo impossible. */
+    fun record(edit: E) {
+        if (isEmpty(edit)) return
         undoStack.addLast(edit)
         while (undoStack.size > limit) undoStack.removeFirst()
         redoStack.clear()
     }
 
-    /** Returns the edit to apply to undo the last change, or null. */
-    fun undo(): InkEdit? {
+    /** Returns what to apply to undo the last change, or null. */
+    fun undo(): E? {
         val e = undoStack.removeLastOrNull() ?: return null
         redoStack.addLast(e)
-        return e.inverse()
+        return invert(e)
     }
 
-    /** Returns the edit to apply to redo the last undone change, or null. */
-    fun redo(): InkEdit? {
+    /** Returns what to apply to redo the last undone change, or null. */
+    fun redo(): E? {
         val e = redoStack.removeLastOrNull() ?: return null
         undoStack.addLast(e)
         return e
@@ -108,5 +117,10 @@ class InkHistory(private val limit: Int = DEFAULT_LIMIT) {
 
     companion object {
         const val DEFAULT_LIMIT = 200
+
+        fun forInk(limit: Int = DEFAULT_LIMIT) = UndoHistory<InkEdit>(limit, InkEdit::isEmpty, InkEdit::inverse)
+
+        fun forPages(limit: Int = DEFAULT_LIMIT) =
+            UndoHistory<PageEdit>(limit, { it.edit.isEmpty }, PageEdit::inverse)
     }
 }
