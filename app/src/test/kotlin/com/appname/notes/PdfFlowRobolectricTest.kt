@@ -21,6 +21,8 @@ import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.repository.InkPageContent
 import com.appname.notes.core.domain.repository.PdfDocumentInfo
+import com.appname.notes.core.ink.model.ShapeItem
+import com.appname.notes.core.ink.model.ShapeKind
 import com.appname.notes.di.AppDataEntryPoint
 import com.appname.notes.feature.ink.InkCanvasView
 import com.appname.notes.feature.ink.InkTestTags
@@ -155,5 +157,85 @@ class PdfFlowRobolectricTest {
         composeRule.onNodeWithTag(InkTestTags.pageCell(2)).performClick()
         waitAdvancing { exists(hasText("3 / 4"), unmerged = true) }
         assertThat(exists(hasTestTag(InkTestTags.PAGES_DIALOG))).isFalse()
+    }
+
+    /**
+     * INK-SH-07: zoom a PDF page, correct a shape there, and it is stored in page coordinates, so it stays
+     * anchored to the page at any zoom (export alignment of shapes is checked on the emulator, PdfDeviceTest).
+     */
+    @Test
+    fun shapeCorrectedWhileZoomedIsAnchoredToThePage() {
+        val id = createPdfNoteWithMissingFile(List(2) { 794f to 1123f })
+        openNote(id)
+        // Reference: a 280 px line at the normal zoom.
+        pen(line(60f, 200f, 340f, 200f))
+        waitAdvancing { pages(id)[0].items.size == 1 }
+        val unitsPerPxBefore = (pages(id)[0].items.single().bounds().width) / 280.0
+
+        pinch(from = 50f, to = 100f, centerX = 200f, centerY = 400f) // 2× zoom
+        pen(rectangle(100f, 300f, 300f, 450f), holdMillis = 700)
+        waitAdvancing { pages(id)[0].items.any { it is ShapeItem } }
+        val shape = pages(id)[0].items.filterIsInstance<ShapeItem>().single()
+        assertThat(shape.kind).isEqualTo(ShapeKind.RECTANGLE)
+        // 200 px drawn at 2× = half as many page units as at 1×.
+        assertThat(shape.bounds().width / (200 * unitsPerPxBefore)).isWithin(0.05).of(0.5)
+        assertThat(pages(id)[1].items).isEmpty() // on the page it was drawn on
+
+        // Reopen: same geometry on the same page, whatever the zoom now.
+        composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        openNote(id)
+        assertThat(pages(id)[0].items.filterIsInstance<ShapeItem>().single()).isEqualTo(shape)
+    }
+
+    private fun line(x0: Float, y0: Float, x1: Float, y1: Float, n: Int = 25) =
+        List(n) { i -> val f = i / (n - 1f); (x0 + (x1 - x0) * f) to (y0 + (y1 - y0) * f) }
+
+    private fun rectangle(x0: Float, y0: Float, x1: Float, y1: Float): List<Pair<Float, Float>> =
+        line(x0, y0, x1, y0) + line(x1, y0, x1, y1).drop(1) + line(x1, y1, x0, y1).drop(1) + line(x0, y1, x0, y0).drop(1)
+
+    /** One stylus stroke through the canvas, MOVEs 8 ms apart, then optionally held still at the end. */
+    private fun pen(points: List<Pair<Float, Float>>, holdMillis: Long = 0) {
+        composeRule.runOnUiThread {
+            val view = findCanvas(composeRule.activity.window.decorView)!!
+            val down = SystemClock.uptimeMillis()
+            var t = down
+            val props = MotionEvent.PointerProperties().apply { this.id = 0; toolType = MotionEvent.TOOL_TYPE_STYLUS }
+            fun send(action: Int, p: Pair<Float, Float>) {
+                val c = MotionEvent.PointerCoords().apply { x = p.first; y = p.second; pressure = 0.6f }
+                val e = MotionEvent.obtain(down, t, action, 1, arrayOf(props), arrayOf(c), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS, 0)
+                view.dispatchTouchEvent(e)
+                e.recycle()
+            }
+            send(MotionEvent.ACTION_DOWN, points.first())
+            for (p in points.drop(1)) { t += 8; send(MotionEvent.ACTION_MOVE, p) }
+            var held = 0L
+            while (held < holdMillis) { t += 50; held += 50; send(MotionEvent.ACTION_MOVE, points.last()) }
+            t += 8
+            send(MotionEvent.ACTION_UP, points.last())
+        }
+        composeRule.waitForIdle()
+    }
+
+    /** Two fingers moving apart from ±[from] to ±[to] px around the centre (2× zoom for 50 → 100). */
+    private fun pinch(from: Float, to: Float, centerX: Float, centerY: Float) {
+        composeRule.runOnUiThread {
+            val view = findCanvas(composeRule.activity.window.decorView)!!
+            val down = SystemClock.uptimeMillis()
+            var t = down
+            val props = Array(2) { i -> MotionEvent.PointerProperties().apply { this.id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
+            fun send(action: Int, count: Int, half: Float) {
+                val coords = Array(count) { i -> MotionEvent.PointerCoords().apply { x = centerX + (if (i == 0) -half else half); y = centerY } }
+                val e = MotionEvent.obtain(down, t, action, count, props.copyOf(count).requireNoNulls(), coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+                view.dispatchTouchEvent(e)
+                e.recycle()
+            }
+            val second = 1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT
+            send(MotionEvent.ACTION_DOWN, 1, from)
+            t += 8; send(MotionEvent.ACTION_POINTER_DOWN or second, 2, from)
+            for (k in 1..10) { t += 8; send(MotionEvent.ACTION_MOVE, 2, from + (to - from) * k / 10) }
+            t += 8; send(MotionEvent.ACTION_POINTER_UP or second, 2, to)
+            t += 8; send(MotionEvent.ACTION_UP, 1, to)
+        }
+        composeRule.waitForIdle()
     }
 }
