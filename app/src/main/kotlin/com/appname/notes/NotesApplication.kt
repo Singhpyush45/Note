@@ -2,6 +2,7 @@ package com.appname.notes
 
 import android.app.Application
 import android.os.StrictMode
+import com.appname.notes.feature.ink.InkCrashGuard
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
@@ -10,6 +11,7 @@ class NotesApplication : Application() {
     override fun onCreate() {
         if (BuildConfig.DEBUG) enableStrictMode()
         super.onCreate()
+        InkCrashGuard.install()
     }
 
     /**

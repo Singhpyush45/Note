@@ -91,26 +91,55 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     private val renderer = InkRenderer()
     private val surface = Surface(context)
-    private val inProgress: InProgressStrokesView? = if (InkEngine.available) InProgressStrokesView(context) else null
+    /**
+     * Jetpack Ink's live-stroke layer. Replaced with a fresh one each time the window becomes visible
+     * again: Ink 1.0's render thread can die when the app is backgrounded right after a stroke (see
+     * [InkCrashGuard]), and a new view brings a new render thread. Saved ink is drawn by [surface] and
+     * is unaffected.
+     */
+    private var inProgress: InProgressStrokesView? = null
 
     init {
         addView(surface, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        inProgress?.let { ink ->
-            addView(ink, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-            ink.addFinishedStrokesListener(
-                object : InProgressStrokesFinishedListener {
-                    override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
-                        // Our page already has the stroke (applied on pen-up); stop Ink drawing its copy.
-                        surface.invalidate()
-                        ink.removeFinishedStrokes(strokes.keys)
-                    }
-                },
-            )
-        }
+        if (InkEngine.available) attachInkLayer()
         isFocusable = true
         isFocusableInTouchMode = true
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
+
+    private fun attachInkLayer() {
+        val ink = InProgressStrokesView(context)
+        ink.addFinishedStrokesListener(
+            object : InProgressStrokesFinishedListener {
+                override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
+                    // Our page already has the stroke (applied on pen-up); stop Ink drawing its copy.
+                    surface.invalidate()
+                    ink.removeFinishedStrokes(strokes.keys)
+                }
+            },
+        )
+        addView(ink, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        inProgress = ink
+    }
+
+    private var hiddenSinceAttach = false
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) {
+            hiddenSinceAttach = true
+        } else if (hiddenSinceAttach && InkEngine.available) {
+            hiddenSinceAttach = false
+            cancelGesture(null)
+            inProgress?.let { removeView(it) }
+            attachInkLayer()
+        }
+    }
+
+    /** The canvas restores itself from the ViewModel; children (incl. Ink's internal views) keep no saved state. */
+    override fun dispatchSaveInstanceState(container: android.util.SparseArray<android.os.Parcelable>) = dispatchFreezeSelfOnly(container)
+
+    override fun dispatchRestoreInstanceState(container: android.util.SparseArray<android.os.Parcelable>) = dispatchThawSelfOnly(container)
 
     /** Connects the view to the open note. Safe to call again with the same objects. */
     fun bind(session: InkSession, controller: InkInputController) {
