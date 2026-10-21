@@ -284,7 +284,8 @@ class InkFlowRobolectricTest {
         val density = composeRule.activity.resources.displayMetrics.density
         for (tool in EditorTool.entries) {
             composeRule.onNodeWithTag(InkTestTags.tool(tool)).performClick()
-            if (tool == EditorTool.LASSO) { // selection actions appear only with a selection
+            if (tool == EditorTool.LASSO) { // selection actions appear only with a selection: write, then lasso it
+                composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PEN)).performClick()
                 stroke(line(100f, 220f, 200f, 220f), tool = MotionEvent.TOOL_TYPE_STYLUS)
                 composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.LASSO)).performClick()
                 stroke(listOf(80f to 190f, 230f to 190f, 230f to 250f, 80f to 250f, 80f to 192f))
