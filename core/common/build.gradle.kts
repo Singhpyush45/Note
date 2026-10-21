@@ -1,6 +1,7 @@
 // Pure Kotlin module: no Android imports allowed, so everything here is testable on a plain JVM (NFR-10).
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.android.lint) // lets Android Lint analyze this module too
 }
 
 kotlin {

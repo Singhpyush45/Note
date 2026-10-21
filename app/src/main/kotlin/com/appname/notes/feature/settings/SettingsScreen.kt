@@ -105,7 +105,8 @@ private fun SettingsList(
     LazyColumn(
         modifier = Modifier
             .widthIn(max = AppTheme.spacing.maxContentWidth)
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .testTag(SettingsTestTags.LIST),
     ) {
         item { SettingsSectionHeader(stringResource(R.string.settings_section_appearance)) }
         item {
@@ -165,6 +166,7 @@ private fun ThemeMode.labelRes(): Int = when (this) {
 
 object SettingsTestTags {
     const val SCREEN = "screen_settings"
+    const val LIST = "settings_list"
 }
 
 @Preview(showBackground = true)

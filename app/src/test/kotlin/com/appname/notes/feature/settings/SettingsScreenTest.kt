@@ -1,6 +1,10 @@
 package com.appname.notes.feature.settings
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -90,7 +94,11 @@ class SettingsScreenTest {
     @Test
     fun privacyAndVersionInfo_areVisible() {
         show(SettingsUiState.Ready(AppearanceSettings()))
-        composeRule.onNodeWithText(string(R.string.settings_storage_value)).assertExists()
-        composeRule.onNodeWithText(string(R.string.settings_version)).assertExists()
+        // Lazy lists only compose what's on screen, so scroll each item into view first (also proves it's reachable).
+        val list = composeRule.onNodeWithTag(SettingsTestTags.LIST)
+        list.performScrollToNode(hasText(string(R.string.settings_storage_value)))
+        composeRule.onNodeWithText(string(R.string.settings_storage_value)).assertIsDisplayed()
+        list.performScrollToNode(hasText(string(R.string.settings_version)))
+        composeRule.onNodeWithText(string(R.string.settings_version)).assertIsDisplayed()
     }
 }
