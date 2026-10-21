@@ -11,8 +11,8 @@ placeholder and the package `com.appname.notes`.
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Discovery, plan, ADRs | Done — see [`docs/phase-0-plan.md`](docs/phase-0-plan.md) |
-| 1 | Foundation: theme, navigation, DI, settings, logging, CI | In progress |
-| 2 | Core notes | Next |
+| 1 | Foundation: theme, navigation, DI, settings, logging, CI | Done — see [`docs/phase-1-report.md`](docs/phase-1-report.md) |
+| 2 | Core notes: editor, notebooks, tags, autosave, search, export | Next (waiting for ADR-0007 confirmation) |
 
 ## Tech stack
 Kotlin · Jetpack Compose (Material 3) · Navigation 3 · Hilt · DataStore · (Room from Phase 2) · GitHub Actions CI.

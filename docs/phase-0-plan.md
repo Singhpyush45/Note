@@ -64,15 +64,17 @@ Compose UI  →  ViewModel  →  Use case / domain  →  Repository interface  �
 
 ## 6. Phase 1 acceptance checklist
 
-- [ ] `./gradlew assembleDebug assembleRelease` succeeds from a clean checkout in CI.
-- [ ] App launches with splash screen, edge-to-edge, no theme flash.
-- [ ] Adaptive navigation: bottom bar on phones, navigation rail on wide screens.
-- [ ] Home ⇄ Settings navigation works; system Back behaves correctly; back stack survives rotation and process death.
-- [ ] Theme mode (System/Light/Dark) and dynamic colour (Android 12+) persist across restarts.
-- [ ] No disk/network I/O on the main thread (StrictMode logs in debug builds).
-- [ ] Logger redacts emails, tokens, secrets and long digit runs (unit-tested).
-- [ ] All interactive elements have accessibility labels/roles and ≥48dp touch targets.
-- [ ] Unit, Robolectric, instrumented and lint checks green.
+All items passed — see `phase-1-report.md`.
+
+- [x] `./gradlew assembleDebug assembleRelease` succeeds from a clean checkout in CI.
+- [x] App launches with splash screen, edge-to-edge, no theme flash.
+- [x] Adaptive navigation: bottom bar on phones, navigation rail on wide screens.
+- [x] Home ⇄ Settings navigation works; system Back behaves correctly; back stack survives rotation and process death.
+- [x] Theme mode (System/Light/Dark) and dynamic colour (Android 12+) persist across restarts.
+- [x] No disk/network I/O on the main thread (StrictMode logs in debug builds).
+- [x] Logger redacts emails, tokens, secrets and long digit runs (unit-tested).
+- [x] All interactive elements have accessibility labels/roles and ≥48dp touch targets.
+- [x] Unit, Robolectric, instrumented and lint checks green.
 
 ## 7. Open decisions for the owner
 
