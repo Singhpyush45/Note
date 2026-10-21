@@ -12,6 +12,7 @@ kotlin {
 
 dependencies {
     api(project(":core:common"))
+    api(project(":core:ink"))
     api(libs.kotlinx.serialization.json)
     api(libs.kotlinx.coroutines.core)
 

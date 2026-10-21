@@ -9,8 +9,12 @@ import java.time.Instant
 
 @JvmInline value class TagId(val value: String)
 
-/** What a note mainly is. Phase 2 has only text; ink and PDF notes arrive in Phases 3–4. */
-enum class NoteType { TEXT }
+/**
+ * What a note mainly is. Stored by name: never rename an entry. PDF notes arrive in Phase 4.
+ * - TEXT: block document (ADR-0007).
+ * - INK: handwritten pages (ADR-0009); its title is still searchable text.
+ */
+enum class NoteType { TEXT, INK }
 
 data class Notebook(
     val id: NotebookId,

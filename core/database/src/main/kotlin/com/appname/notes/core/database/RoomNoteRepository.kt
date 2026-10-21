@@ -109,8 +109,12 @@ class RoomNoteRepository(
 
     override suspend fun discardIfBlank(id: NoteId): Boolean {
         val note = dao.getNote(id.value) ?: return false
-        val document = decodeDocument(note.note.contentJson, note.note.id, logger)
-        val blank = note.note.title.isBlank() && document.isBlank() && note.tags.isEmpty()
+        val contentBlank = when (note.note.noteType.toNoteType()) {
+            NoteType.TEXT -> decodeDocument(note.note.contentJson, note.note.id, logger).isBlank()
+            // A handwritten note is blank when it has no ink at all (pages alone don't count).
+            NoteType.INK -> db.inkDao().itemCount(note.note.id) == 0
+        }
+        val blank = note.note.title.isBlank() && contentBlank && note.tags.isEmpty()
         if (blank) storageCall(logger, "Discard empty note") { dao.deleteUnusedNote(id.value) }
         return blank
     }
@@ -121,6 +125,7 @@ class RoomNoteRepository(
     }
 
     private suspend fun copyOf(source: com.appname.notes.core.database.entity.NoteWithTags): NoteId {
+        if (source.note.noteType.toNoteType() == NoteType.INK) return copyOfInkNote(source)
         val document = decodeDocument(source.note.contentJson, source.note.id, logger)
         // Fresh block IDs so the copy is independent for future per-block sync.
         val copyDocument = document.copy(blocks = document.blocks.map { if (it is TextBlock) it.copy(id = ids.newId()) else it })
@@ -137,6 +142,19 @@ class RoomNoteRepository(
                 revision = 1,
             ),
             source.tags.map { it.id },
+        )
+        return NoteId(newId)
+    }
+
+    private suspend fun copyOfInkNote(source: com.appname.notes.core.database.entity.NoteWithTags): NoteId {
+        val now = clock.now().toEpochMilli()
+        val newId = ids.newId()
+        val (pages, items) = copyInk(db, source.note.id, newId, ids, now)
+        db.inkDao().insertCopy(
+            source.note.copy(id = newId, isPinned = false, createdAt = now, updatedAt = now, trashedAt = null, revision = 1),
+            source.tags.map { it.id },
+            pages,
+            items,
         )
         return NoteId(newId)
     }

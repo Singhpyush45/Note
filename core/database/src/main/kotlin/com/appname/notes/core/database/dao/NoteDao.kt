@@ -113,17 +113,32 @@ abstract class NoteDao {
     @Query("SELECT id FROM notes WHERE trashedAt IS NOT NULL AND deletedAt IS NULL")
     abstract suspend fun trashedIds(): List<String>
 
-    /** Permanent delete: content removed, tags unlinked, tombstone kept (SRS 9.2). */
+    @Query("DELETE FROM ink_items WHERE pageId IN (SELECT id FROM ink_pages WHERE noteId IN (:ids))")
+    protected abstract suspend fun deleteInkItems(ids: List<String>)
+
+    @Query("DELETE FROM ink_pages WHERE noteId IN (:ids)")
+    protected abstract suspend fun deleteInkPages(ids: List<String>)
+
+    /** Permanent delete: content and handwriting removed, tags unlinked, tombstone kept (SRS 9.2). */
     @Transaction
     open suspend fun deletePermanently(ids: List<String>, now: Long): Int {
-        deleteTagLinks(ids)
-        return tombstone(ids, now)
+        var count = 0
+        // SQLite limits bound parameters per statement.
+        for (chunk in ids.chunked(500)) {
+            deleteTagLinks(chunk)
+            deleteInkItems(chunk)
+            deleteInkPages(chunk)
+            count += tombstone(chunk, now)
+        }
+        return count
     }
 
     /** For notes that never had content and were never synced: no tombstone needed. */
     @Transaction
     open suspend fun deleteUnusedNote(id: String) {
         deleteTagLinks(listOf(id))
+        deleteInkItems(listOf(id))
+        deleteInkPages(listOf(id))
         hardDelete(id)
     }
 
