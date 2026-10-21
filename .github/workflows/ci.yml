@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
-      contents: write # only to publish screenshots to the `screenshots` branch
+      contents: write # only to publish screenshots/schemas/log to the `ci-output` branch
     steps:
       - uses: actions/checkout@v5
       - uses: gradle/actions/wrapper-validation@v5
@@ -33,23 +33,26 @@ jobs:
         id: gradle
         run: |
           set -o pipefail
-          ./gradlew assembleDebug assembleRelease :core:common:test testDebugUnitTest lintDebug --continue --warning-mode all 2>&1 | tee build.log
+          ./gradlew assembleDebug assembleRelease :core:common:test :core:domain:test testDebugUnitTest lintDebug --continue --warning-mode all 2>&1 | tee build.log
 
       - name: Report results
         if: always()
-        run: python3 .github/scripts/report.py build build.log "**/build/test-results/testDebugUnitTest/**/*.xml" "core/common/build/test-results/test/**/*.xml"
+        run: python3 .github/scripts/report.py build build.log "**/build/test-results/testDebugUnitTest/**/*.xml" "core/*/build/test-results/test/**/*.xml"
 
-      - name: Publish screenshots to the `screenshots` branch
+      - name: Publish screenshots and DB schemas to the `ci-output` branch
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          [ -d app/build/screenshots ] || { echo "No screenshots"; exit 0; }
-          cd app/build/screenshots
-          git init -q -b screenshots
+          mkdir -p ci-output
+          [ -d app/build/screenshots ] && cp -r app/build/screenshots ci-output/
+          [ -d core/database/schemas ] && cp -r core/database/schemas ci-output/
+          cp build.log ci-output/ 2>/dev/null || true
+          cd ci-output
+          git init -q -b ci-output
           git add .
-          git -c user.name="ci" -c user.email="ci@users.noreply.github.com" commit -qm "Screenshots for ${GITHUB_SHA::7}"
-          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screenshots
+          git -c user.name="ci" -c user.email="ci@users.noreply.github.com" commit -qm "CI output for ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-output
 
       - name: Upload APKs
         if: success()

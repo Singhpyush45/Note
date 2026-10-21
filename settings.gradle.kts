@@ -26,3 +26,5 @@ rootProject.name = "APP_NAME"
 include(":app")
 include(":core:common")
 include(":core:designsystem")
+include(":core:domain")
+include(":core:database")
