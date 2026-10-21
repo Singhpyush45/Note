@@ -38,6 +38,9 @@ interface NoteRepository {
     /** Autosave. Only bumps the modified time/revision when title or content actually changed. */
     suspend fun saveContent(id: NoteId, title: String, document: NoteDocument): AppResult<Unit>
 
+    /** Renames a note without touching its content (used by handwritten notes). */
+    suspend fun setTitle(id: NoteId, title: String): AppResult<Unit>
+
     /** Deletes a note the user created but never typed into. Returns true if it was discarded. */
     suspend fun discardIfBlank(id: NoteId): Boolean
 

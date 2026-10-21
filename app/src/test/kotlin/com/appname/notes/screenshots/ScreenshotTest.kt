@@ -26,7 +26,22 @@ import com.appname.notes.core.domain.document.SpanType
 import com.appname.notes.core.domain.document.StyleSpan
 import com.appname.notes.core.domain.document.TextBlock
 import com.appname.notes.di.AppDataEntryPoint
+import com.appname.notes.core.common.result.AppResult
+import com.appname.notes.core.ink.codec.InkCodec
+import com.appname.notes.core.ink.edit.InkEdit
+import com.appname.notes.core.ink.input.EditorTool
+import com.appname.notes.core.ink.model.InkBrush
+import com.appname.notes.core.ink.model.InkItem
+import com.appname.notes.core.ink.model.InkTool
+import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.core.ink.model.Pt
+import com.appname.notes.core.ink.model.ShapeGeometry
+import com.appname.notes.core.ink.model.ShapeItem
+import com.appname.notes.core.ink.model.ShapeKind
+import com.appname.notes.core.ink.model.StrokeItem
+import com.appname.notes.core.ink.model.StrokePoints
 import com.appname.notes.feature.editor.EditorTestTags
+import com.appname.notes.feature.ink.InkTestTags
 import com.appname.notes.feature.library.LibraryTestTags
 import com.appname.notes.feature.search.SearchTestTags
 import com.google.common.truth.Truth.assertThat
@@ -132,6 +147,63 @@ abstract class ScreenshotTestBase(private val device: String) {
         lecture
     }
 
+    /** A handwritten note with cursive-like writing, a highlight and corrected shapes. */
+    protected fun seedInk(): com.appname.notes.core.domain.model.NoteId = runBlocking {
+        val ink = data.ink()
+        val noteId = ink.createInkNote(null, PageTemplate.LINED).getOrNull()!!
+        data.notes().setTitle(noteId, "Physics — waves")
+        val page = (ink.loadPages(noteId) as AppResult.Success).value.first().info.id
+        val pen = InkBrush(InkTool.PEN, 0xFF1F1F1F.toInt(), 2.5f)
+        val blue = InkBrush(InkTool.PEN, 0xFF1A73E8.toInt(), 2.5f)
+        val items = mutableListOf<InkItem>()
+        var z = 1L
+        // "Words": loops along a baseline, like joined-up writing.
+        fun word(x0: Float, baseline: Float, loops: Int, brush: InkBrush) {
+            val b = StrokePoints.Builder(hasPressure = true, hasTilt = false, hasOrientation = false)
+            val n = loops * 14
+            for (i in 0..n) {
+                val t = i / 14.0 * 2 * Math.PI
+                val x = x0 + 9 * t - 7 * kotlin.math.sin(t)
+                val y = baseline - 11 - 11 * kotlin.math.cos(t)
+                b.add(x.toFloat(), y.toFloat(), i * 8, (0.45 + 0.35 * kotlin.math.sin(t / 3)).toFloat())
+            }
+            items += InkCodec.quantize(StrokeItem(id(), z++, brush, b.build()))
+        }
+        var x = 72f
+        for (w in listOf(4, 3, 5)) { word(x, 120f, w, pen); x += w * 57f + 24f }
+        x = 72f
+        for (w in listOf(3, 6, 2, 4)) { word(x, 180f, w, blue); x += w * 57f + 24f }
+        // Highlight under the second line.
+        val hl = StrokePoints.Builder(false, false, false).apply { for (i in 0..20) add(70f + i * 17f, 172f, i * 8) }.build()
+        items += StrokeItem(id(), z++, InkBrush(InkTool.HIGHLIGHTER, 0x66FFEB3B, 18f), hl)
+        // Corrected shapes: a box with an arrow to a circle, and an underline.
+        items += ShapeItem(id(), z++, pen, ShapeKind.RECTANGLE, ShapeGeometry.Polygon(listOf(Pt(80f, 260f), Pt(330f, 260f), Pt(330f, 400f), Pt(80f, 400f))), null)
+        items += ShapeItem(id(), z++, blue, ShapeKind.ARROW, ShapeGeometry.Segment(Pt(340f, 330f), Pt(470f, 330f), 22f), null)
+        items += ShapeItem(id(), z++, pen, ShapeKind.CIRCLE, ShapeGeometry.Ellipse(Pt(560f, 330f), 75f, 75f, 0f), null)
+        items += ShapeItem(id(), z++, InkBrush(InkTool.MARKER, 0xFFD93025.toInt(), 4f), ShapeKind.LINE, ShapeGeometry.Segment(Pt(72f, 450f), Pt(420f, 450f)), null)
+        items += ShapeItem(id(), z++, pen, ShapeKind.TRIANGLE, ShapeGeometry.Polygon(listOf(Pt(120f, 640f), Pt(220f, 480f), Pt(320f, 640f))), null)
+        ink.commit(page, InkEdit(emptyList(), items))
+        noteId
+    }
+
+    @Test
+    fun captureHandwriting() {
+        seed()
+        seedInk()
+        waitAdvancing { exists(hasText("Physics — waves")) }
+        snap("library_with_ink_light")
+        composeRule.onNodeWithText("Physics — waves").performClick()
+        waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
+        snap("ink_light")
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.ERASER)).performClick()
+        snap("ink_eraser_tools_light")
+        pressBack()
+        setTheme(R.string.settings_theme_dark)
+        composeRule.onNodeWithText("Physics — waves").performClick()
+        waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
+        snap("ink_dark")
+    }
+
     protected fun pressBack() {
         composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SCREEN)) }
@@ -210,5 +282,16 @@ class TabletScreenshotTest : ScreenshotTestBase("tablet") {
         val list = composeRule.onNodeWithTag(LibraryTestTags.SCREEN).fetchSemanticsNode().boundsInRoot
         val editor = composeRule.onNodeWithTag(EditorTestTags.SCREEN).fetchSemanticsNode().boundsInRoot
         assertThat(editor.left).isAtLeast(list.right - 1f)
+    }
+
+    @Test
+    fun handwritingIsFullScreenOnTablets() {
+        composeRule.onNodeWithTag(LibraryTestTags.NEW_INK_NOTE).performClick()
+        waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
+        assertThat(exists(hasTestTag(LibraryTestTags.SCREEN))).isFalse() // no list pane
+        assertThat(exists(hasTestTag("nav_settings"))).isFalse() // no navigation rail
+        val canvas = composeRule.onNodeWithTag(InkTestTags.CANVAS).fetchSemanticsNode().boundsInRoot
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        assertThat(canvas.width).isAtLeast(root.width - 1f)
     }
 }

@@ -1,0 +1,514 @@
+package com.appname.notes.feature.ink
+
+import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Redo
+import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.BorderColor
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconToggleButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.appname.notes.R
+import com.appname.notes.core.designsystem.component.EmptyState
+import com.appname.notes.core.ink.edit.InkSession
+import com.appname.notes.core.ink.input.EditorTool
+import com.appname.notes.core.ink.input.EraserMode
+import com.appname.notes.core.ink.input.InkInputController
+import com.appname.notes.core.ink.model.InkTool
+import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.feature.editor.ReadOnlyReason
+import com.appname.notes.feature.editor.SaveStatusLabel
+import com.appname.notes.feature.library.ConfirmDialog
+import com.appname.notes.ui.common.MessageEffect
+import kotlinx.coroutines.launch
+
+object InkTestTags {
+    const val SCREEN = "ink_screen"
+    const val CANVAS = "ink_canvas"
+    const val TOOLBAR = "ink_toolbar"
+    const val PAGE_INDICATOR = "ink_page_indicator"
+    fun tool(tool: EditorTool) = "ink_tool_${tool.name.lowercase()}"
+}
+
+@Composable
+fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
+    val load by viewModel.load.collectAsStateWithLifecycle()
+    val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    MessageEffect(message, snackbar, viewModel::onMessageShown)
+
+    var renaming by rememberSaveable { mutableStateOf(false) }
+    var confirmDeletePage by remember { mutableStateOf(false) }
+
+    Scaffold(
+        modifier = Modifier.testTag(InkTestTags.SCREEN),
+        contentWindowInsets = WindowInsets(0),
+        snackbarHost = { SnackbarHost(snackbar) },
+        topBar = {
+            InkTopBar(
+                ui = ui,
+                ready = load is InkLoad.Ready,
+                onBack = onClose,
+                onUndo = viewModel::undo,
+                onRedo = viewModel::redo,
+                onRename = { renaming = true },
+                onAddPage = viewModel::addPage,
+                onDeletePage = { confirmDeletePage = true },
+                onTemplate = viewModel::setTemplate,
+                onTrash = { scope.launch { if (viewModel.moveToTrash()) onClose() } },
+            )
+        },
+        bottomBar = {
+            if (load is InkLoad.Ready && ui.readOnly == null) {
+                InkToolbar(
+                    ui = ui,
+                    onTool = viewModel::selectTool,
+                    onColor = viewModel::setColor,
+                    onSize = viewModel::setSize,
+                    onEraserMode = viewModel::setEraserMode,
+                    onEraserSize = viewModel::setEraserSize,
+                    onDeleteSelection = viewModel::deleteSelection,
+                    onDuplicateSelection = viewModel::duplicateSelection,
+                    onRecolorSelection = viewModel::recolorSelection,
+                    onDoneSelection = viewModel::clearSelection,
+                    modifier = Modifier.navigationBarsPadding(),
+                )
+            }
+        },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (val l = load) {
+                InkLoad.Loading -> Unit
+                InkLoad.NotFound -> EmptyState(
+                    title = stringResource(R.string.editor_not_found),
+                    body = "",
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                is InkLoad.Ready -> {
+                    InkCanvas(l.session, l.controller, ui, viewModel)
+                    ui.readOnly?.let { reason ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.align(Alignment.TopCenter).padding(12.dp),
+                        ) {
+                            Text(
+                                stringResource(if (reason == ReadOnlyReason.IN_TRASH) R.string.editor_in_trash else R.string.editor_read_only_newer),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                    }
+                    if (ui.pageCount > 1) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
+                            shape = CircleShape,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).testTag(InkTestTags.PAGE_INDICATOR),
+                        ) {
+                            Text(
+                                stringResource(R.string.ink_page_indicator, ui.currentPage + 1, ui.pageCount),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.inverseOnSurface,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (renaming) {
+        RenameDialog(
+            initial = ui.title,
+            onConfirm = { viewModel.rename(it); renaming = false },
+            onDismiss = { renaming = false },
+        )
+    }
+    if (confirmDeletePage) {
+        ConfirmDialog(
+            title = stringResource(R.string.ink_delete_page_title),
+            body = stringResource(R.string.ink_delete_page_body),
+            confirm = stringResource(R.string.action_delete),
+            onConfirm = { viewModel.deleteCurrentPage(); confirmDeletePage = false },
+            onDismiss = { confirmDeletePage = false },
+        )
+    }
+}
+
+@Composable
+private fun InkCanvas(session: InkSession, controller: InkInputController, ui: InkEditorUi, viewModel: InkEditorViewModel) {
+    val background = MaterialTheme.colorScheme.surfaceContainerHigh.toArgb()
+    val description = stringResource(R.string.ink_canvas_description, ui.currentPage + 1, ui.pageCount.coerceAtLeast(1))
+    AndroidView(
+        factory = { context ->
+            InkCanvasView(context).apply {
+                viewState = viewModel.viewState
+                listener = object : InkCanvasView.Listener {
+                    override fun onInteraction() = viewModel.refresh()
+                    override fun onStylusDetected() = viewModel.onStylusDetected()
+                    override fun onPageChanged(index: Int) = viewModel.onPageChanged(index)
+                    override fun onUndoRequested() = viewModel.undo()
+                    override fun onRedoRequested() = viewModel.redo()
+                }
+            }
+        },
+        onRelease = { view -> viewModel.viewState = view.viewState },
+        update = { view ->
+            view.fingerDraws = ui.fingerDraws
+            view.backgroundArgb = background
+            view.contentDescription = description
+            view.bind(session, controller)
+            ui.scrollRequest?.let {
+                view.scrollToPage(it.page)
+                viewModel.consumeScrollRequest()
+            }
+        },
+        modifier = Modifier.fillMaxSize().testTag(InkTestTags.CANVAS),
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InkTopBar(
+    ui: InkEditorUi,
+    ready: Boolean,
+    onBack: () -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onRename: () -> Unit,
+    onAddPage: () -> Unit,
+    onDeletePage: () -> Unit,
+    onTemplate: (PageTemplate) -> Unit,
+    onTrash: () -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
+    var templates by remember { mutableStateOf(false) }
+    val editable = ready && ui.readOnly == null
+    TopAppBar(
+        navigationIcon = {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back)) }
+        },
+        title = {
+            Column(Modifier.clickable(enabled = editable, onClick = onRename)) {
+                Text(
+                    ui.title.ifBlank { stringResource(R.string.ink_untitled) },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                )
+                if (editable) SaveStatusLabel(ui.saveStatus)
+            }
+        },
+        actions = {
+            if (editable) {
+                IconButton(onClick = onUndo, enabled = ui.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo)) }
+                IconButton(onClick = onRedo, enabled = ui.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo)) }
+            }
+            if (ready) {
+                Box {
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.ink_more_options)) }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        if (editable) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_add)) }, onClick = { menu = false; onAddPage() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_template)) }, onClick = { menu = false; templates = true })
+                            if (ui.pageCount > 1) {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_delete)) }, onClick = { menu = false; onDeletePage() })
+                            }
+                            HorizontalDivider()
+                        }
+                        if (ui.readOnly != ReadOnlyReason.IN_TRASH) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.note_trash)) }, onClick = { menu = false; onTrash() })
+                        }
+                    }
+                }
+            }
+        },
+    )
+    if (templates) {
+        TemplateDialog(ui.currentTemplate, onPick = { onTemplate(it); templates = false }, onDismiss = { templates = false })
+    }
+}
+
+// ---------------------------------------------------------------- toolbar
+
+private data class Swatch(val argb: Int, @param:StringRes val name: Int)
+
+private val InkColors = listOf(
+    Swatch(0xFF1F1F1F.toInt(), R.string.ink_color_black),
+    Swatch(0xFF5F6368.toInt(), R.string.ink_color_gray),
+    Swatch(0xFFD93025.toInt(), R.string.ink_color_red),
+    Swatch(0xFFE8710A.toInt(), R.string.ink_color_orange),
+    Swatch(0xFF188038.toInt(), R.string.ink_color_green),
+    Swatch(0xFF1A73E8.toInt(), R.string.ink_color_blue),
+    Swatch(0xFF9334E6.toInt(), R.string.ink_color_purple),
+    Swatch(0xFF795548.toInt(), R.string.ink_color_brown),
+)
+
+private val HighlighterColors = listOf(
+    Swatch(0xFFFFEB3B.toInt(), R.string.ink_color_yellow),
+    Swatch(0xFF76FF03.toInt(), R.string.ink_color_green),
+    Swatch(0xFF40C4FF.toInt(), R.string.ink_color_blue),
+    Swatch(0xFFFF80AB.toInt(), R.string.ink_color_pink),
+)
+
+private val Sizes = mapOf(
+    InkTool.PEN to listOf(1.5f, 2.5f, 4f),
+    InkTool.MARKER to listOf(3f, 5f, 8f),
+    InkTool.HIGHLIGHTER to listOf(12f, 18f, 26f),
+)
+private val EraserSizes = listOf(10.0, 16.0, 28.0)
+private val SizeNames = listOf(R.string.ink_size_fine, R.string.ink_size_medium, R.string.ink_size_bold)
+
+@OptIn(ExperimentalMaterial3Api::class) // segmented buttons
+@Composable
+private fun InkToolbar(
+    ui: InkEditorUi,
+    onTool: (EditorTool) -> Unit,
+    onColor: (Int) -> Unit,
+    onSize: (Float) -> Unit,
+    onEraserMode: (EraserMode) -> Unit,
+    onEraserSize: (Double) -> Unit,
+    onDeleteSelection: () -> Unit,
+    onDuplicateSelection: () -> Unit,
+    onRecolorSelection: (Int) -> Unit,
+    onDoneSelection: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tools = ui.tools
+    Surface(tonalElevation = 3.dp, modifier = modifier.testTag(InkTestTags.TOOLBAR)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            ) {
+                ToolButton(EditorTool.PEN, Icons.Outlined.Edit, R.string.ink_tool_pen, tools.tool, onTool)
+                ToolButton(EditorTool.MARKER, Icons.Outlined.BorderColor, R.string.ink_tool_marker, tools.tool, onTool)
+                ToolButton(EditorTool.HIGHLIGHTER, InkIcons.Highlighter, R.string.ink_tool_highlighter, tools.tool, onTool)
+                ToolButton(EditorTool.ERASER, InkIcons.Eraser, R.string.ink_tool_eraser, tools.tool, onTool)
+                ToolButton(EditorTool.LASSO, InkIcons.Lasso, R.string.ink_tool_lasso, tools.tool, onTool)
+            }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).height(48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                when (tools.tool) {
+                    EditorTool.PEN, EditorTool.MARKER, EditorTool.HIGHLIGHTER -> {
+                        val inkTool = tools.tool.inkTool()!!
+                        val brush = tools.brushes.getValue(inkTool)
+                        val palette = if (inkTool == InkTool.HIGHLIGHTER) HighlighterColors else InkColors
+                        palette.forEach { s ->
+                            ColorDot(s, selected = (brush.colorArgb and 0xFFFFFF) == (s.argb and 0xFFFFFF), onClick = { onColor(s.argb) })
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Sizes.getValue(inkTool).forEachIndexed { i, size ->
+                            SizeDot(size / Sizes.getValue(inkTool).last(), SizeNames[i], selected = brush.size == size, onClick = { onSize(size) })
+                        }
+                    }
+                    EditorTool.ERASER -> {
+                        SingleChoiceSegmentedButtonRow {
+                            EraserMode.entries.forEachIndexed { i, mode ->
+                                SegmentedButton(
+                                    selected = tools.eraserMode == mode,
+                                    onClick = { onEraserMode(mode) },
+                                    shape = SegmentedButtonDefaults.itemShape(i, EraserMode.entries.size),
+                                ) {
+                                    Text(stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area))
+                                }
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        EraserSizes.forEachIndexed { i, size ->
+                            SizeDot((size / EraserSizes.last()).toFloat(), SizeNames[i], selected = tools.eraserSizeDp == size, onClick = { onEraserSize(size) })
+                        }
+                    }
+                    EditorTool.LASSO -> if (ui.hasSelection) {
+                        IconButton(onClick = onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
+                        IconButton(onClick = onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }
+                        InkColors.forEach { s -> ColorDot(s, selected = false, onClick = { onRecolorSelection(s.argb) }) }
+                        IconButton(onClick = onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolButton(tool: EditorTool, icon: ImageVector, @StringRes label: Int, current: EditorTool, onTool: (EditorTool) -> Unit) {
+    FilledIconToggleButton(
+        checked = tool == current,
+        onCheckedChange = { onTool(tool) },
+        modifier = Modifier.testTag(InkTestTags.tool(tool)),
+    ) {
+        Icon(icon, stringResource(label))
+    }
+}
+
+/** 48 dp touch target with a 28 dp colour dot (SRS 8.2). */
+@Composable
+private fun ColorDot(swatch: Swatch, selected: Boolean, onClick: () -> Unit) {
+    val name = stringResource(swatch.name)
+    val ring = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier
+            .size(40.dp)
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = name
+                role = Role.RadioButton
+                this.selected = selected
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(28.dp)
+                .then(if (selected) Modifier.border(3.dp, ring, CircleShape) else Modifier.border(1.dp, Color(0x33000000), CircleShape))
+                .padding(if (selected) 5.dp else 1.dp)
+                .background(Color(swatch.argb or 0xFF000000.toInt()), CircleShape),
+        )
+    }
+}
+
+@Composable
+private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, onClick: () -> Unit) {
+    val label = stringResource(name)
+    val colors = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .size(40.dp)
+            .clickable(onClick = onClick)
+            .then(if (selected) Modifier.background(colors.secondaryContainer, CircleShape) else Modifier)
+            .semantics {
+                contentDescription = label
+                role = Role.RadioButton
+                this.selected = selected
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size((6 + 16 * fraction).dp).background(colors.onSurface, CircleShape))
+    }
+}
+
+// ---------------------------------------------------------------- dialogs
+
+@Composable
+private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by rememberSaveable { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.action_rename)) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text(stringResource(R.string.editor_title_hint)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            )
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text(stringResource(R.string.action_rename)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+@Composable
+private fun TemplateDialog(current: PageTemplate, onPick: (PageTemplate) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ink_page_template)) },
+        text = {
+            Column {
+                PageTemplate.entries.forEach { t ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onPick(t) }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = t == current, onClick = { onPick(t) })
+                        Text(stringResource(t.label()))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+@StringRes
+private fun PageTemplate.label(): Int = when (this) {
+    PageTemplate.BLANK -> R.string.ink_template_blank
+    PageTemplate.LINED -> R.string.ink_template_lined
+    PageTemplate.GRID -> R.string.ink_template_grid
+    PageTemplate.DOTTED -> R.string.ink_template_dotted
+}

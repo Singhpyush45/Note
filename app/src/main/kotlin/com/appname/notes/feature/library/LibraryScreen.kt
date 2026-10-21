@@ -66,6 +66,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
+import androidx.compose.foundation.layout.Column
+import com.appname.notes.ui.common.InkThumbnail
+import com.appname.notes.feature.ink.InkIcons
+import androidx.compose.material3.SmallFloatingActionButton
+import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.designsystem.component.EmptyState
 import com.appname.notes.core.designsystem.theme.AppTheme
 import com.appname.notes.core.domain.model.NoteCollection
@@ -83,6 +88,7 @@ import kotlinx.coroutines.launch
 object LibraryTestTags {
     const val SCREEN = "screen_home"
     const val NEW_NOTE = "fab_new_note"
+    const val NEW_INK_NOTE = "fab_new_ink_note"
     const val COLLECTION_BUTTON = "collection_button"
     const val SEARCH = "action_search"
     const val GRID = "notes_grid"
@@ -90,7 +96,7 @@ object LibraryTestTags {
 
 @Composable
 fun LibraryRoute(
-    onOpenNote: (NoteId) -> Unit,
+    onOpenNote: (NoteId, NoteType) -> Unit,
     onOpenSearch: () -> Unit,
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
@@ -100,7 +106,7 @@ fun LibraryRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch { viewModel.import(uri)?.let(onOpenNote) }
+        if (uri != null) scope.launch { viewModel.import(uri)?.let { onOpenNote(it, NoteType.TEXT) } }
     }
     // A notebook/tag shown here was deleted elsewhere: go back to All notes.
     LaunchedEffect(state.collection, state.loading, state.collectionName) {
@@ -113,7 +119,9 @@ fun LibraryRoute(
         state = state,
         selectedNoteId = selectedNoteId,
         onOpenNote = onOpenNote,
-        onNewNote = { scope.launch { viewModel.createNote()?.let(onOpenNote) } },
+        onNewNote = { scope.launch { viewModel.createNote()?.let { onOpenNote(it, NoteType.TEXT) } } },
+        onNewInkNote = { scope.launch { viewModel.createInkNote()?.let { onOpenNote(it, NoteType.INK) } } },
+        inkThumbnail = viewModel::inkThumbnail,
         onOpenSearch = onOpenSearch,
         onSelectCollection = viewModel::selectCollection,
         onSort = viewModel::setSort,
@@ -153,8 +161,10 @@ data class NoteActions(
 fun LibraryScreen(
     state: LibraryUiState,
     selectedNoteId: String?,
-    onOpenNote: (NoteId) -> Unit,
+    onOpenNote: (NoteId, NoteType) -> Unit,
     onNewNote: () -> Unit,
+    onNewInkNote: () -> Unit,
+    inkThumbnail: suspend (NoteSummary) -> InkThumbnail?,
     onOpenSearch: () -> Unit,
     onSelectCollection: (NoteCollection) -> Unit,
     onSort: (NoteSort) -> Unit,
@@ -211,12 +221,20 @@ fun LibraryScreen(
         },
         floatingActionButton = {
             if (state.canCreate) {
-                ExtendedFloatingActionButton(
-                    onClick = onNewNote,
-                    icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                    text = { Text(stringResource(R.string.library_new_note)) },
-                    modifier = Modifier.testTag(LibraryTestTags.NEW_NOTE),
-                )
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                    SmallFloatingActionButton(
+                        onClick = onNewInkNote,
+                        modifier = Modifier.testTag(LibraryTestTags.NEW_INK_NOTE),
+                    ) {
+                        Icon(InkIcons.Handwriting, contentDescription = stringResource(R.string.ink_new_note))
+                    }
+                    ExtendedFloatingActionButton(
+                        onClick = onNewNote,
+                        icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
+                        text = { Text(stringResource(R.string.library_new_note)) },
+                        modifier = Modifier.testTag(LibraryTestTags.NEW_NOTE),
+                    )
+                }
             }
         },
     ) { padding ->
@@ -228,6 +246,7 @@ fun LibraryScreen(
                     state = state,
                     selectedNoteId = selectedNoteId,
                     onOpenNote = onOpenNote,
+                    inkThumbnail = inkThumbnail,
                     onLongPress = { actionsFor = it },
                     accessibilityActions = { note ->
                         noteActions(note, state.collection, actions, onMove = { moveFor = it }, onDelete = { confirmDeleteFor = it })
@@ -291,7 +310,8 @@ private fun collectionTitle(state: LibraryUiState): String = when (val c = state
 private fun NotesGrid(
     state: LibraryUiState,
     selectedNoteId: String?,
-    onOpenNote: (NoteId) -> Unit,
+    onOpenNote: (NoteId, NoteType) -> Unit,
+    inkThumbnail: suspend (NoteSummary) -> InkThumbnail?,
     onLongPress: (NoteSummary) -> Unit,
     accessibilityActions: @Composable (NoteSummary) -> List<CardAction>,
 ) {
@@ -306,14 +326,14 @@ private fun NotesGrid(
         if (state.pinned.isNotEmpty()) {
             item(key = "h_pinned", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.library_pinned)) }
             items(state.pinned, key = { it.id.value }) { note ->
-                NoteCard(note, { onOpenNote(note.id) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId)
+                NoteCard(note, { onOpenNote(note.id, note.type) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId, inkThumbnail = inkThumbnail)
             }
             if (state.others.isNotEmpty()) {
                 item(key = "h_others", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.library_others)) }
             }
         }
         items(state.others, key = { it.id.value }) { note ->
-            NoteCard(note, { onOpenNote(note.id) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId)
+            NoteCard(note, { onOpenNote(note.id, note.type) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId, inkThumbnail = inkThumbnail)
         }
     }
 }

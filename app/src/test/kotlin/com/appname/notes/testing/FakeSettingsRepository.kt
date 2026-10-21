@@ -4,6 +4,7 @@ import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.common.result.DomainError
 import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.settings.AppearanceSettings
+import com.appname.notes.core.settings.InkSettings
 import com.appname.notes.core.settings.LibrarySettings
 import com.appname.notes.core.settings.SettingsRepository
 import com.appname.notes.core.settings.ThemeMode
@@ -20,6 +21,12 @@ class FakeSettingsRepository(initial: AppearanceSettings = AppearanceSettings())
 
     private val librarySettings = MutableStateFlow(LibrarySettings())
     override val library: Flow<LibrarySettings> = librarySettings
+
+    val inkSettings = MutableStateFlow(InkSettings())
+    override val ink: Flow<InkSettings> = inkSettings
+
+    override suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit> =
+        write { inkSettings.value = change(inkSettings.value) }
 
     override suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit> =
         write { librarySettings.value = librarySettings.value.copy(sort = sort) }

@@ -107,6 +107,20 @@ class RoomNoteRepository(
         }
     }
 
+    override suspend fun setTitle(id: NoteId, title: String): AppResult<Unit> {
+        val clean = title.trim()
+        return when (val r = storageCall(logger, "Rename note") {
+            val current = dao.getEntity(id.value)
+            when {
+                current == null || current.deletedAt != null -> -1
+                else -> dao.setTitle(id.value, clean, clock.now().toEpochMilli())
+            }
+        }) {
+            is AppResult.Failure -> r
+            is AppResult.Success -> if (r.value < 0) AppResult.Failure(DomainError.NotFound("Note", id.value)) else AppResult.Success(Unit)
+        }
+    }
+
     override suspend fun discardIfBlank(id: NoteId): Boolean {
         val note = dao.getNote(id.value) ?: return false
         val contentBlank = when (note.note.noteType.toNoteType()) {

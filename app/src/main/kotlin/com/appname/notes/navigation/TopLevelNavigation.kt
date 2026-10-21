@@ -1,6 +1,7 @@
 package com.appname.notes.navigation
 
 import androidx.navigation3.runtime.NavKey
+import com.appname.notes.core.domain.model.NoteType
 
 /*
  * Pure back-stack rules (no Android needed, fully unit-tested).
@@ -33,13 +34,20 @@ fun MutableList<NavKey>.navigateToTopLevel(destination: TopLevelDestination) {
 }
 
 /**
- * Opens a note. Any editor already on top is replaced rather than stacked, so on a tablet tapping
- * another note swaps the detail pane, and Back still returns to the list in one step.
+ * Opens a note in the editor for its type. Any editor already on top is replaced rather than stacked, so
+ * on a tablet tapping another note swaps the detail pane, and Back still returns to the list in one step.
  */
-fun MutableList<NavKey>.openNote(noteId: String) {
-    while (lastOrNull() is NoteEditorKey) removeAt(lastIndex)
-    add(NoteEditorKey(noteId))
+fun MutableList<NavKey>.openNote(noteId: String, type: NoteType = NoteType.TEXT) {
+    while (lastOrNull().isEditor()) removeAt(lastIndex)
+    add(
+        when (type) {
+            NoteType.TEXT -> NoteEditorKey(noteId)
+            NoteType.INK -> InkEditorKey(noteId)
+        },
+    )
 }
+
+private fun NavKey?.isEditor() = this is NoteEditorKey || this is InkEditorKey
 
 /** Opens a non-top-level screen on top, unless it is already showing. */
 fun MutableList<NavKey>.push(key: NavKey) {
@@ -55,7 +63,7 @@ fun MutableList<NavKey>.pop(): Boolean {
 
 /** Removes the editor of [noteId] (e.g. after the note was trashed from inside the editor). */
 fun MutableList<NavKey>.closeNote(noteId: String) {
-    val index = indexOfLast { it == NoteEditorKey(noteId) }
+    val index = indexOfLast { it == NoteEditorKey(noteId) || it == InkEditorKey(noteId) }
     if (index > 0) removeAt(index)
 }
 

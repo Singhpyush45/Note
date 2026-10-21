@@ -16,7 +16,10 @@ import com.appname.notes.core.domain.model.Notebook
 import com.appname.notes.core.domain.model.NotebookId
 import com.appname.notes.core.domain.model.Tag
 import com.appname.notes.core.domain.model.TagId
+import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
+import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.ui.common.InkThumbnail
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.TagRepository
 import com.appname.notes.core.files.DocumentFiles
@@ -55,6 +58,7 @@ data class LibraryUiState(
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val notes: NoteRepository,
+    private val ink: InkRepository,
     notebooks: NotebookRepository,
     tags: TagRepository,
     private val settings: SettingsRepository,
@@ -107,6 +111,32 @@ class LibraryViewModel @Inject constructor(
     }
 
     /** Creates a note in the current notebook (if any) and returns its id, or null on failure. */
+    /** New handwritten note in the shown notebook/tag, like [createNote]. */
+    suspend fun createInkNote(): NoteId? {
+        val notebook = (collection.value as? NoteCollection.InNotebook)?.id
+        return when (val result = ink.createInkNote(notebook, PageTemplate.LINED)) {
+            is AppResult.Success -> {
+                (collection.value as? NoteCollection.WithTag)?.let { notes.setTags(result.value, setOf(it.id)) }
+                result.value
+            }
+            is AppResult.Failure -> { message.value = result.error.toUserMessage(); null }
+        }
+    }
+
+    /** Recently drawn thumbnails, keyed by note and its modified time, so scrolling doesn't reload them. */
+    private val thumbnails = object : LinkedHashMap<String, InkThumbnail>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, InkThumbnail>?) = size > THUMBNAIL_CACHE
+    }
+
+    suspend fun inkThumbnail(note: NoteSummary): InkThumbnail? {
+        val key = "${note.id.value}@${note.updatedAt.toEpochMilli()}"
+        synchronized(thumbnails) { thumbnails[key] }?.let { return it }
+        val page = (ink.firstPage(note.id) as? AppResult.Success)?.value ?: return null
+        val thumb = InkThumbnail(page.info.width, page.info.height, page.info.template, page.items)
+        synchronized(thumbnails) { thumbnails[key] = thumb }
+        return thumb
+    }
+
     suspend fun createNote(): NoteId? {
         val notebook = (collection.value as? NoteCollection.InNotebook)?.id
         return when (val result = notes.createNote(notebook)) {
@@ -193,6 +223,7 @@ class LibraryViewModel @Inject constructor(
 
     companion object {
         private const val KEY_COLLECTION = "collection"
+        private const val THUMBNAIL_CACHE = 60
 
         fun encode(c: NoteCollection): String = when (c) {
             NoteCollection.All -> "all"

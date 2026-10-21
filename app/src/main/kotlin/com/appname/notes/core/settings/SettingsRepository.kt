@@ -14,9 +14,14 @@ interface SettingsRepository {
 
     val library: Flow<LibrarySettings>
 
+    val ink: Flow<InkSettings>
+
     suspend fun setThemeMode(mode: ThemeMode): AppResult<Unit>
 
     suspend fun setDynamicColor(enabled: Boolean): AppResult<Unit>
 
     suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit>
+
+    /** Reads the current ink settings, applies [change] and saves the result in one transaction. */
+    suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit>
 }

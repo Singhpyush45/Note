@@ -36,6 +36,9 @@ import com.appname.notes.core.designsystem.component.SettingsSwitchRow
 import com.appname.notes.core.designsystem.theme.AppTheme
 import com.appname.notes.core.designsystem.theme.supportsDynamicColor
 import com.appname.notes.core.settings.AppearanceSettings
+import com.appname.notes.core.settings.FingerMode
+import com.appname.notes.core.settings.HoldDuration
+import com.appname.notes.core.settings.InkSettings
 import com.appname.notes.core.settings.ThemeMode
 
 /** Connects the screen to its ViewModel. Kept separate so [SettingsScreen] is easy to preview and test. */
@@ -49,6 +52,9 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         onSaveErrorShown = viewModel::onSaveErrorShown,
         onRebuildSearchIndex = viewModel::onRebuildSearchIndex,
         onIndexRebuiltShown = viewModel::onIndexRebuiltShown,
+        onShapeCorrectionChanged = viewModel::onShapeCorrectionChanged,
+        onHoldDurationSelected = viewModel::onHoldDurationSelected,
+        onFingerModeSelected = viewModel::onFingerModeSelected,
     )
 }
 
@@ -62,6 +68,9 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     onRebuildSearchIndex: () -> Unit = {},
     onIndexRebuiltShown: () -> Unit = {},
+    onShapeCorrectionChanged: (Boolean) -> Unit = {},
+    onHoldDurationSelected: (HoldDuration) -> Unit = {},
+    onFingerModeSelected: (FingerMode) -> Unit = {},
     dynamicColorSupported: Boolean = supportsDynamicColor(),
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -99,10 +108,14 @@ fun SettingsScreen(
             ) {
                 SettingsList(
                     appearance = uiState.appearance,
+                    ink = uiState.ink,
                     dynamicColorSupported = dynamicColorSupported,
                     onThemeModeSelected = onThemeModeSelected,
                     onDynamicColorChanged = onDynamicColorChanged,
                     onRebuildSearchIndex = onRebuildSearchIndex,
+                    onShapeCorrectionChanged = onShapeCorrectionChanged,
+                    onHoldDurationSelected = onHoldDurationSelected,
+                    onFingerModeSelected = onFingerModeSelected,
                 )
             }
         }
@@ -112,10 +125,14 @@ fun SettingsScreen(
 @Composable
 private fun SettingsList(
     appearance: AppearanceSettings,
+    ink: InkSettings,
     dynamicColorSupported: Boolean,
     onThemeModeSelected: (ThemeMode) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
     onRebuildSearchIndex: () -> Unit,
+    onShapeCorrectionChanged: (Boolean) -> Unit,
+    onHoldDurationSelected: (HoldDuration) -> Unit,
+    onFingerModeSelected: (FingerMode) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier
@@ -157,6 +174,44 @@ private fun SettingsList(
         }
 
         item { HorizontalDivider() }
+        item { SettingsSectionHeader(stringResource(R.string.settings_section_handwriting)) }
+        item {
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_shape_correction),
+                summary = stringResource(R.string.settings_shape_correction_summary),
+                checked = ink.shapeCorrection,
+                onCheckedChange = onShapeCorrectionChanged,
+            )
+        }
+        if (ink.shapeCorrection) {
+            item { SettingsSectionHeader(stringResource(R.string.settings_hold_time)) }
+            item {
+                SettingsRadioGroup {
+                    HoldDuration.entries.forEach { d ->
+                        SettingsRadioRow(
+                            title = stringResource(d.labelRes()),
+                            selected = ink.holdDuration == d,
+                            onClick = { onHoldDurationSelected(d) },
+                        )
+                    }
+                }
+            }
+        }
+        item { SettingsSectionHeader(stringResource(R.string.settings_finger)) }
+        item {
+            SettingsRadioGroup {
+                FingerMode.entries.forEach { mode ->
+                    SettingsRadioRow(
+                        title = stringResource(mode.labelRes()),
+                        summary = if (mode == FingerMode.AUTO) stringResource(R.string.settings_finger_auto_summary) else null,
+                        selected = ink.fingerMode == mode,
+                        onClick = { onFingerModeSelected(mode) },
+                    )
+                }
+            }
+        }
+
+        item { HorizontalDivider() }
         item { SettingsSectionHeader(stringResource(R.string.settings_section_privacy)) }
         item {
             SettingsInfoRow(
@@ -181,6 +236,18 @@ private fun SettingsList(
             SettingsInfoRow(title = stringResource(R.string.settings_version), value = BuildConfig.VERSION_NAME)
         }
     }
+}
+
+private fun HoldDuration.labelRes(): Int = when (this) {
+    HoldDuration.SHORT -> R.string.settings_hold_short
+    HoldDuration.NORMAL -> R.string.settings_hold_normal
+    HoldDuration.LONG -> R.string.settings_hold_long
+}
+
+private fun FingerMode.labelRes(): Int = when (this) {
+    FingerMode.AUTO -> R.string.settings_finger_auto
+    FingerMode.DRAW -> R.string.settings_finger_draw
+    FingerMode.SCROLL -> R.string.settings_finger_scroll
 }
 
 private fun ThemeMode.labelRes(): Int = when (this) {

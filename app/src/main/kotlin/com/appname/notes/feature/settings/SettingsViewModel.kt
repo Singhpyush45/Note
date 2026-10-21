@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.settings.AppearanceSettings
+import com.appname.notes.core.settings.FingerMode
+import com.appname.notes.core.settings.HoldDuration
+import com.appname.notes.core.settings.InkSettings
 import com.appname.notes.core.settings.SettingsRepository
 import com.appname.notes.core.settings.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,6 +24,7 @@ sealed interface SettingsUiState {
 
     data class Ready(
         val appearance: AppearanceSettings,
+        val ink: InkSettings = InkSettings(),
         /** True after a save failed, until the screen has shown the message. */
         val showSaveError: Boolean = false,
         /** True after the search index was rebuilt, until the screen has shown the confirmation. */
@@ -47,8 +51,8 @@ class SettingsViewModel @Inject constructor(
     private val indexRebuilt = MutableStateFlow(false)
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(repository.appearance, saveFailed, indexRebuilt) { appearance, failed, rebuilt ->
-            SettingsUiState.Ready(appearance, showSaveError = failed, showIndexRebuilt = rebuilt)
+        combine(repository.appearance, repository.ink, saveFailed, indexRebuilt) { appearance, ink, failed, rebuilt ->
+            SettingsUiState.Ready(appearance, ink, showSaveError = failed, showIndexRebuilt = rebuilt)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -61,6 +65,18 @@ class SettingsViewModel @Inject constructor(
 
     fun onDynamicColorChanged(enabled: Boolean) {
         viewModelScope.launch { handle(repository.setDynamicColor(enabled)) }
+    }
+
+    fun onShapeCorrectionChanged(enabled: Boolean) {
+        viewModelScope.launch { handle(repository.updateInk { it.copy(shapeCorrection = enabled) }) }
+    }
+
+    fun onHoldDurationSelected(duration: HoldDuration) {
+        viewModelScope.launch { handle(repository.updateInk { it.copy(holdDuration = duration) }) }
+    }
+
+    fun onFingerModeSelected(mode: FingerMode) {
+        viewModelScope.launch { handle(repository.updateInk { it.copy(fingerMode = mode) }) }
     }
 
     fun onSaveErrorShown() {

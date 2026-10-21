@@ -199,6 +199,25 @@ class InkRepositoryTest {
         assertThat(pages(id).single().items).isEmpty()
     }
 
+    @Test
+    fun `renaming a handwritten note changes only its title`() = runTest {
+        val id = ink.createInkNote(null, PageTemplate.BLANK).ok()
+        ink.commit(pages(id).single().info.id, InkEdit.add(shape(1))).ok()
+        clock.advanceMillis(1_000)
+        notes.setTitle(id, "  Lecture 4  ").ok()
+        val note = notes.getNote(id)!!
+        assertThat(note.title).isEqualTo("Lecture 4")
+        assertThat(note.updatedAt).isEqualTo(clock.now())
+        assertThat(pages(id).single().items).hasSize(1)
+        // Same title again: no change, modified time stays.
+        clock.advanceMillis(1_000)
+        notes.setTitle(id, "Lecture 4").ok()
+        assertThat(notes.getNote(id)!!.updatedAt).isEqualTo(clock.now().minusMillis(1_000))
+        assertThat(notes.setTitle(NoteId("missing"), "x")).isInstanceOf(AppResult.Failure::class.java)
+        // Title search works for handwritten notes.
+        assertThat(notes.search("lecture", com.appname.notes.core.domain.model.SearchFilters()).first().map { it.note.id }).containsExactly(id)
+    }
+
     private fun countRows(table: String): Int =
         db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { it.moveToFirst(); it.getInt(0) }
 }

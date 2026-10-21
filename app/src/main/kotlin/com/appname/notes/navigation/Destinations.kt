@@ -27,6 +27,10 @@ data object SettingsKey : NavKey
 @Serializable
 data class NoteEditorKey(val noteId: String) : NavKey
 
+/** A handwritten note. Full screen on every device: writing needs the space (not a detail pane). */
+@Serializable
+data class InkEditorKey(val noteId: String) : NavKey
+
 @Serializable
 data object SearchKey : NavKey
 

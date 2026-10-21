@@ -96,6 +96,12 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    // Jetpack Ink (ADR-0009): low-latency live strokes and stroke rendering. Our data model stays our own.
+    implementation(libs.androidx.ink.authoring)
+    implementation(libs.androidx.ink.brush)
+    implementation(libs.androidx.ink.geometry)
+    implementation(libs.androidx.ink.rendering)
+    implementation(libs.androidx.ink.strokes)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

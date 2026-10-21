@@ -310,7 +310,7 @@ fun NoteEditorScreen(
 }
 
 @Composable
-private fun SaveStatusLabel(status: SaveStatus) {
+internal fun SaveStatusLabel(status: SaveStatus) {
     val text = stringResource(
         when (status) {
             SaveStatus.SAVED -> R.string.editor_saved

@@ -1,5 +1,6 @@
 package com.appname.notes.di
 
+import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.TagRepository
@@ -17,4 +18,5 @@ interface AppDataEntryPoint {
     fun notes(): NoteRepository
     fun notebooks(): NotebookRepository
     fun tags(): TagRepository
+    fun ink(): InkRepository
 }

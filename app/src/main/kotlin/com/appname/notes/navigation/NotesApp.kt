@@ -33,8 +33,11 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.window.core.layout.WindowSizeClass
 import com.appname.notes.R
 import com.appname.notes.core.domain.model.NoteId
+import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.feature.editor.NoteEditorRoute
 import com.appname.notes.feature.editor.NoteEditorViewModel
+import com.appname.notes.feature.ink.InkEditorRoute
+import com.appname.notes.feature.ink.InkEditorViewModel
 import com.appname.notes.feature.library.LibraryRoute
 import com.appname.notes.feature.organize.NotebooksRoute
 import com.appname.notes.feature.organize.TagsRoute
@@ -54,10 +57,11 @@ fun NotesApp(modifier: Modifier = Modifier) {
     val currentTopLevel = backStack.currentTopLevel()
     val adaptiveInfo = currentWindowAdaptiveInfoV2()
     val isWide = adaptiveInfo.windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
-    val editingFullScreen = !isWide && backStack.lastOrNull() !in topLevelKeys
+    // Phones: editors get the whole screen. Handwriting gets it on every device.
+    val editingFullScreen = (!isWide && backStack.lastOrNull() !in topLevelKeys) || backStack.lastOrNull() is InkEditorKey
 
     val listDetail = rememberListDetailSceneStrategy<NavKey>()
-    val openNote: (NoteId) -> Unit = { backStack.openNote(it.value) }
+    val openNote: (NoteId, NoteType) -> Unit = { id, type -> backStack.openNote(id.value, type) }
     val selectedNoteId = (backStack.lastOrNull() as? NoteEditorKey)?.noteId
 
     NavigationSuiteScaffold(
@@ -113,8 +117,14 @@ fun NotesApp(modifier: Modifier = Modifier) {
                     NoteEditorRoute(
                         viewModel = viewModel,
                         onClose = { backStack.closeNote(key.noteId) },
-                        onOpenNote = openNote,
+                        onOpenNote = { openNote(it, NoteType.TEXT) },
                     )
+                }
+                entry<InkEditorKey> { key ->
+                    val viewModel = hiltViewModel<InkEditorViewModel, InkEditorViewModel.Factory>(
+                        creationCallback = { factory -> factory.create(key.noteId) },
+                    )
+                    InkEditorRoute(viewModel = viewModel, onClose = { backStack.closeNote(key.noteId) })
                 }
                 entry<NotebooksKey> { NotebooksRoute(onBack = { backStack.pop() }) }
                 entry<TagsKey> { TagsRoute(onBack = { backStack.pop() }) }

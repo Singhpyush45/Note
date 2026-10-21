@@ -77,6 +77,10 @@ abstract class NoteDao {
     )
     abstract suspend fun updateContent(id: String, title: String, contentJson: String, plainText: String, preview: String, now: Long): Int
 
+    /** Returns 1 if renamed, 0 if the note is gone or already has that title (no modified-time bump then). */
+    @Query("UPDATE notes SET title = :title, updatedAt = :now, revision = revision + 1 WHERE id = :id AND deletedAt IS NULL AND title != :title")
+    abstract suspend fun setTitle(id: String, title: String, now: Long): Int
+
     @Query("UPDATE notes SET isPinned = :pinned, revision = revision + 1 WHERE id IN (:ids) AND deletedAt IS NULL")
     abstract suspend fun setPinned(ids: List<String>, pinned: Boolean): Int
 

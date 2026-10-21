@@ -60,6 +60,7 @@ import com.appname.notes.core.designsystem.component.EmptyState
 import com.appname.notes.core.designsystem.theme.AppTheme
 import com.appname.notes.core.domain.model.ModifiedWithin
 import com.appname.notes.core.domain.model.NoteId
+import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.domain.model.SearchHit
 import com.appname.notes.core.domain.search.Highlighted
 import com.appname.notes.ui.common.NoteDates
@@ -71,7 +72,7 @@ object SearchTestTags {
 }
 
 @Composable
-fun SearchRoute(onBack: () -> Unit, onOpenNote: (NoteId) -> Unit, viewModel: SearchViewModel = hiltViewModel()) {
+fun SearchRoute(onBack: () -> Unit, onOpenNote: (NoteId, NoteType) -> Unit, viewModel: SearchViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     SearchScreen(
         state = state,
@@ -91,7 +92,7 @@ fun SearchScreen(
     state: SearchUiState,
     onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
-    onOpenNote: (NoteId) -> Unit,
+    onOpenNote: (NoteId, NoteType) -> Unit,
     onNotebook: (com.appname.notes.core.domain.model.NotebookId?) -> Unit,
     onTag: (com.appname.notes.core.domain.model.TagId?) -> Unit,
     onModified: (ModifiedWithin) -> Unit,
@@ -152,7 +153,7 @@ fun SearchScreen(
                     )
                     else -> LazyColumn(Modifier.fillMaxSize().testTag(SearchTestTags.RESULTS)) {
                         items(results, key = { it.note.id.value }) { hit ->
-                            SearchResultRow(hit, onClick = { onOpenNote(hit.note.id) })
+                            SearchResultRow(hit, onClick = { onOpenNote(hit.note.id, hit.note.type) })
                             HorizontalDivider()
                         }
                     }

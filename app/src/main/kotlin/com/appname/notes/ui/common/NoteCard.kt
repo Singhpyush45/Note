@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.appname.notes.R
 import com.appname.notes.core.designsystem.theme.AppTheme
 import com.appname.notes.core.domain.model.NoteSummary
+import com.appname.notes.core.domain.model.NoteType
 
 /** One accessibility action per thing the long-press sheet can do (SRS 8.2: no gesture-only features). */
 data class CardAction(val label: String, val run: () -> Unit)
@@ -49,10 +50,13 @@ fun NoteCard(
     accessibilityActions: List<CardAction>,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
+    inkThumbnail: (suspend (NoteSummary) -> InkThumbnail?)? = null,
 ) {
     val spacing = AppTheme.spacing
+    val isInk = note.type == NoteType.INK
     val firstLine = note.preview.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
-    val heading = note.title.ifBlank { firstLine }.ifBlank { stringResource(R.string.untitled) }
+    val untitled = stringResource(if (isInk) R.string.ink_untitled else R.string.untitled)
+    val heading = note.title.ifBlank { firstLine }.ifBlank { untitled }
     val body = if (note.title.isBlank()) note.preview.substringAfter(firstLine).trim() else note.preview
     OutlinedCard(
         modifier = modifier
@@ -87,6 +91,9 @@ fun NoteCard(
                 if (note.isPinned) {
                     Icon(Icons.Filled.PushPin, stringResource(R.string.library_pinned), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                 }
+            }
+            if (isInk && inkThumbnail != null) {
+                InkThumbnailView(note, inkThumbnail)
             }
             if (body.isNotBlank()) {
                 Text(
