@@ -9,6 +9,7 @@ jobs:
     steps:
       - name: Latest artifact versions
         run: |
+          exec > >(tee /tmp/out.txt) 2>&1
           latest() { # repo group artifact
             url="$1/$(echo $2 | tr . /)/$3/maven-metadata.xml"
             xml=$(curl -fsSL "$url" || echo "")
@@ -51,7 +52,10 @@ jobs:
           latest $C com.jakewharton.timber timber
           latest $P org.jetbrains.kotlin.plugin.compose org.jetbrains.kotlin.plugin.compose.gradle.plugin
           echo "gradle current:"; curl -fsSL https://services.gradle.org/versions/current | head -c 300; echo
+          sleep 1; msg=$(sed -e ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' /tmp/out.txt); echo "::notice title=versions::$msg"
       - name: Runner SDK
         run: |
+          exec > >(tee /tmp/sdk.txt) 2>&1
           echo "ANDROID_HOME=$ANDROID_HOME"; ls $ANDROID_HOME/platforms; ls $ANDROID_HOME/build-tools; java -version 2>&1
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list 2>/dev/null | grep -E "^\s*platforms;android-[0-9]" | sort -u | tail -8
+          sleep 1; msg=$(sed -e ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' /tmp/sdk.txt); echo "::notice title=sdk::$msg"
