@@ -219,6 +219,12 @@
     <string name="ink_selection_delete">Delete selection</string>
     <string name="ink_selection_duplicate">Duplicate selection</string>
     <string name="ink_selection_done">Done</string>
+    <string name="ink_go_to_page">Go to page…</string>
+    <string name="ink_fit_width">Fit width</string>
+    <string name="ink_fit_page">Fit page</string>
+    <string name="ink_pages_title">Pages (%1$d)</string>
+    <string name="ink_page_cell">Page %1$d</string>
+    <string name="ink_page_cell_ink">Page %1$d, has handwriting</string>
     <string name="ink_page_add">Add page</string>
     <string name="ink_page_delete">Delete page</string>
     <string name="ink_page_template">Page background</string>
@@ -248,6 +254,8 @@
     <string name="pdf_export_failed">Couldn\'t export the PDF. Your notes are safe; please try again.</string>
     <string name="pdf_cant_display">This PDF couldn\'t be displayed. Your handwriting on it is safe.</string>
     <string name="pdf_untitled">PDF</string>
+    <string name="pdf_share">Share annotated PDF</string>
+    <string name="pdf_share_title">Share PDF</string>
     <string name="pdf_import">Import PDF</string>
     <string name="pdf_importing">Importing PDF…</string>
     <string name="pdf_import_not_pdf">That file isn\'t a PDF this app can open.</string>

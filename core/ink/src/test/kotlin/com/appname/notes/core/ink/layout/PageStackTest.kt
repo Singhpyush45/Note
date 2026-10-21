@@ -64,4 +64,28 @@ class PageStackTest {
         assertEquals(2, rules.currentPage(down, 2000.0, stack))
         assertEquals(1, rules.currentPage(rules.scrollTo(v0, 1, 1080.0, 2000.0, stack), 2000.0, stack))
     }
+
+    @Test
+    fun `fit width fills the view with that page, even past real size`() {
+        // Tablet: the reading zoom stops at real size, fit width goes further.
+        val v = rules.fitWidth(2, 2560.0, 1600.0, stack)
+        assertEquals((2560.0 - 32) / 500, v.scale, 1e-9)
+        val page = v.toScreen(Vec(stack.left(2), stack.top(2)))
+        assertEquals(16.0, page.x, 1e-6) // left edge at the margin
+        assertEquals(16.0, page.y, 1e-6) // top of the page at the top
+    }
+
+    @Test
+    fun `fit page shows a whole tall page on a wide screen, centred`() {
+        val w = 2560.0
+        val h = 1000.0
+        val v = rules.fitPage(1, w, h, stack)
+        assertEquals((h - 32) / 1123, v.scale, 1e-9) // height-limited
+        assertTrue(v.scale >= rules.minScale(w, stack)) // reachable: not cut off by the zoom-out limit
+        val top = v.toScreen(Vec(0.0, stack.top(1))).y
+        val bottom = v.toScreen(Vec(0.0, stack.top(1) + 1123)).y
+        assertEquals(16.0, top, 1e-6)
+        assertEquals(h - 16, bottom, 1e-6)
+        assertEquals(1, rules.currentPage(v, h, stack))
+    }
 }

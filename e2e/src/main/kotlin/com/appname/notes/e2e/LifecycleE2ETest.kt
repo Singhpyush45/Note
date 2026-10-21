@@ -3,6 +3,9 @@ package com.appname.notes.e2e
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import androidx.core.content.FileProvider
 import java.io.File
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -21,6 +24,7 @@ import org.junit.runner.RunWith
  * - write → background → system kills the process → reopen: same screen, same text (FR-008).
  * - write → background → force-stop → relaunch: note is in the library (FR-002, NFR-04).
  * - handwrite → background → process killed → reopen: the ink is still on the page (Phase 3).
+ * - PDF from another app → annotate → process killed → reopen: the ink is still on the PDF page (Phase 4).
  */
 @RunWith(AndroidJUnit4::class)
 class LifecycleE2ETest {
@@ -87,6 +91,54 @@ class LifecycleE2ETest {
         // Back to the library: the note is still there (an empty one would have been discarded).
         device.pressBack()
         assertThat(device.wait(Until.hasObject(By.res(java.util.regex.Pattern.compile("ink_thumbnail_.*"))), TIMEOUT_MS)).isTrue()
+    }
+
+    /**
+     * A PDF opened from another app ("Open with") is imported, opened, annotated, and the ink survives the
+     * process being killed. Reopening restores the editor without importing the file a second time.
+     */
+    @Test
+    fun pdfOpenedFromAnotherAppKeepsItsInkAfterProcessDeath() {
+        val uri = FileProvider.getUriForFile(context, "com.appname.notes.e2e.files", samplePdf())
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/pdf")
+            .setPackage(PACKAGE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(view)
+
+        val canvas = findCanvas().visibleBounds
+        Thread.sleep(1_000) // let the PDF page draw
+        assertThat(device.hasObject(By.res("ink_pdf_failed"))).isFalse()
+        val y = canvas.top + canvas.height() / 4
+        device.swipe(canvas.left + canvas.width() / 5, y, canvas.right - canvas.width() / 5, y, 40)
+        device.waitForIdle()
+
+        device.pressHome()
+        Thread.sleep(SAVE_WAIT_MS)
+        device.executeShellCommand("am kill $PACKAGE")
+        waitUntilProcessGone()
+
+        launch(clearTask = false)
+        findCanvas()
+        Thread.sleep(1_000)
+        assertThat(device.hasObject(By.res("ink_pdf_failed"))).isFalse()
+        assertThat(darkPixelsAlong(y, canvas.left + canvas.width() / 3, canvas.right - canvas.width() / 3)).isGreaterThan(20)
+
+        device.pressBack()
+        assertThat(device.wait(Until.hasObject(By.text("Lecture notes")), TIMEOUT_MS)).isTrue()
+        assertThat(device.findObjects(By.text("Lecture notes"))).hasSize(1) // not imported twice
+    }
+
+    /** A one-page A4 PDF made with Android's own PDF writer, in the folder the FileProvider shares. */
+    private fun samplePdf(): File {
+        val file = File(File(context.cacheDir, "shared").apply { mkdirs() }, "Lecture notes.pdf")
+        val doc = PdfDocument()
+        val page = doc.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
+        page.canvas.drawRect(40f, 40f, 160f, 80f, Paint().apply { color = android.graphics.Color.GRAY })
+        doc.finishPage(page)
+        file.outputStream().use { doc.writeTo(it) }
+        doc.close()
+        return file
     }
 
     /** The handwriting canvas is a classic Android View: found by its accessibility description, not a test tag. */

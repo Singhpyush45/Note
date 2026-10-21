@@ -66,9 +66,9 @@ class PdfFlowRobolectricTest {
     private fun pages(id: NoteId): List<InkPageContent> = runBlocking { (data.ink().loadPages(id) as AppResult.Success).value }
 
     /** A PDF note whose file isn't in storage (as if it was deleted or damaged): A4 portrait, then landscape. */
-    private fun createPdfNoteWithMissingFile(): NoteId = runBlocking {
-        val doc = PdfDocumentInfo("missing-${System.nanoTime()}.pdf", "Lecture 5.pdf", "0".repeat(64), 1234, 2)
-        (data.pdf().createPdfNote(null, "Lecture 5", doc, listOf(794f to 1123f, 1123f to 794f)) as AppResult.Success).value
+    private fun createPdfNoteWithMissingFile(sizes: List<Pair<Float, Float>> = listOf(794f to 1123f, 1123f to 794f)): NoteId = runBlocking {
+        val doc = PdfDocumentInfo("missing-${System.nanoTime()}.pdf", "Lecture 5.pdf", "0".repeat(64), 1234, sizes.size)
+        (data.pdf().createPdfNote(null, "Lecture 5", doc, sizes) as AppResult.Success).value
     }
 
     private fun openNote(id: NoteId) {
@@ -138,5 +138,22 @@ class PdfFlowRobolectricTest {
         composeRule.onNodeWithContentDescription(string(R.string.action_more)).performClick()
         composeRule.waitForIdle()
         assertThat(exists(hasTestTag(LibraryTestTags.IMPORT_PDF))).isTrue()
+    }
+
+    /** SRS 7.1 page navigation and page count: the grid jumps to a page, the indicator follows. */
+    @Test
+    fun pageGridJumpsToTheChosenPage() {
+        // Four A4 pages: taller than the screen, so the current page follows scrolling.
+        val id = createPdfNoteWithMissingFile(List(4) { 794f to 1123f })
+        openNote(id)
+        waitAdvancing { exists(hasTestTag(InkTestTags.PAGE_INDICATOR)) }
+        assertThat(exists(hasText("1 / 4"), unmerged = true)).isTrue()
+
+        composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
+        composeRule.onNodeWithTag(InkTestTags.GO_TO_PAGE).performClick()
+        waitAdvancing { exists(hasTestTag(InkTestTags.PAGES_DIALOG)) }
+        composeRule.onNodeWithTag(InkTestTags.pageCell(2)).performClick()
+        waitAdvancing { exists(hasText("3 / 4"), unmerged = true) }
+        assertThat(exists(hasTestTag(InkTestTags.PAGES_DIALOG))).isFalse()
     }
 }

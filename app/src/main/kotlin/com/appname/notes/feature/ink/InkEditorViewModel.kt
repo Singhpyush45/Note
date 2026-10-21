@@ -20,6 +20,11 @@ import com.appname.notes.feature.pdf.PdfFileStore
 import com.appname.notes.feature.pdf.PdfPageRenderer
 import android.content.Context
 import android.net.Uri
+import androidx.core.content.FileProvider
+import com.appname.notes.core.ink.model.InkItem
+import java.io.File
+import java.io.IOException
+import java.io.OutputStream
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.withContext
 import com.appname.notes.core.ink.edit.InkSession
@@ -74,6 +79,9 @@ data class InkEditorUi(
     val version: Long = 0,
     /** One-shot request for the canvas to show a page (after adding one). */
     val scrollRequest: ScrollRequest? = null,
+    val fitRequest: FitRequest? = null,
+    /** A written annotated copy waiting for the share sheet. */
+    val shareRequest: ShareRequest? = null,
     /** A PDF note: pages come from the document (no adding/deleting), export is available. */
     val isPdf: Boolean = false,
     /** The PDF file can't be displayed (missing or damaged). The ink is still there. */
@@ -82,6 +90,12 @@ data class InkEditorUi(
 )
 
 data class ScrollRequest(val page: Int, val id: Long = System.nanoTime())
+
+enum class FitMode { WIDTH, PAGE }
+
+data class ShareRequest(val uri: Uri, val id: Long = System.nanoTime())
+
+data class FitRequest(val mode: FitMode, val id: Long = System.nanoTime())
 
 sealed interface InkLoad {
     data object Loading : InkLoad
@@ -311,36 +325,71 @@ class InkEditorViewModel @AssistedInject constructor(
     /** Suggested file name for "Export annotated PDF". */
     fun exportFileName(): String = "${_ui.value.title.ifBlank { pdfDocument?.displayName?.removeSuffix(".pdf") ?: "PDF" }} (annotated).pdf"
 
+    /** Ink per PDF page, snapshotted on the main thread (page lists are immutable, so this is cheap and safe). */
+    private fun inkByPdfPage(s: InkSession): Map<Int, List<InkItem>> =
+        s.pages.mapNotNull { p -> p.pdfPageIndex?.let { it to p.items.items } }.toMap()
+
     /**
-     * Writes a copy of the PDF with the ink drawn in (SRS 7.3) to [target]. The stored original is only read.
-     * Runs in the app scope so it finishes even if the screen closes.
+     * Writes a copy of the PDF with the ink drawn in (SRS 7.3) with [open]; the stored original is only read
+     * (PDF-05). Runs in the app scope so it finishes even if the screen closes. Returns false on failure.
      */
+    private suspend fun writeAnnotated(doc: PdfDocumentInfo, ink: Map<Int, List<InkItem>>, open: () -> OutputStream?): Boolean =
+        withContext(dispatchers.io) {
+            try {
+                val out = open() ?: return@withContext false
+                out.use { pdfWriter.writeAnnotatedCopy(pdfFiles.file(doc.fileName), ink, it) }
+                true
+            } catch (e: IOException) {
+                logger.warn(TAG, "PDF export failed", e)
+                false
+            } catch (e: SecurityException) {
+                logger.warn(TAG, "PDF export not permitted", e)
+                false
+            } catch (e: RuntimeException) { // a PDF PdfBox can't rewrite
+                logger.warn(TAG, "PDF export failed", e)
+                false
+            }
+        }
+
+    /** "Export annotated PDF": [target] comes from the system "save as" screen. */
     fun exportPdf(target: Uri) {
         val doc = pdfDocument ?: return
-        val s = session() ?: return
-        // Snapshot on the main thread: page lists are immutable.
-        val ink = s.pages.mapNotNull { p -> p.pdfPageIndex?.let { it to p.items.items } }.toMap()
+        val ink = inkByPdfPage(session() ?: return)
         _ui.update { it.copy(exporting = true) }
         appScope.launch {
-            val ok = withContext(dispatchers.io) {
-                try {
-                    val out = appContext.contentResolver.openOutputStream(target, "wt") ?: return@withContext false
-                    out.use { pdfWriter.writeAnnotatedCopy(pdfFiles.file(doc.fileName), ink, it) }
-                    true
-                } catch (e: java.io.IOException) {
-                    logger.warn(TAG, "PDF export failed", e)
-                    false
-                } catch (e: SecurityException) {
-                    logger.warn(TAG, "PDF export not permitted", e)
-                    false
-                } catch (e: RuntimeException) { // a PDF PdfBox can't rewrite
-                    logger.warn(TAG, "PDF export failed", e)
-                    false
-                }
-            }
+            val ok = writeAnnotated(doc, ink) { appContext.contentResolver.openOutputStream(target, "wt") }
             _ui.update { it.copy(exporting = false) }
             _message.value = UserMessage(if (ok) R.string.pdf_exported else R.string.pdf_export_failed)
         }
+    }
+
+    /**
+     * "Share annotated PDF": writes the copy to a private cache folder and offers it through the app's
+     * FileProvider, so only the app the user picks can read it, and only that file.
+     */
+    fun sharePdf() {
+        val doc = pdfDocument ?: return
+        val ink = inkByPdfPage(session() ?: return)
+        val name = exportFileName().replace(UNSAFE_FILE_CHARS, "_").take(MAX_FILE_NAME)
+        _ui.update { it.copy(exporting = true) }
+        appScope.launch {
+            val dir = File(appContext.cacheDir, SHARE_DIR)
+            val file = File(dir, name)
+            val ok = writeAnnotated(doc, ink) {
+                dir.mkdirs()
+                // Earlier shares are removed once the receiving app has had plenty of time to read them.
+                val old = System.currentTimeMillis() - SHARE_KEEP_MS
+                dir.listFiles()?.forEach { if (it.lastModified() < old) it.delete() }
+                file.outputStream()
+            }
+            val uri = if (ok) FileProvider.getUriForFile(appContext, "${appContext.packageName}.files", file) else null
+            _ui.update { it.copy(exporting = false, shareRequest = uri?.let { u -> ShareRequest(u) }) }
+            if (uri == null) _message.value = UserMessage(R.string.pdf_export_failed)
+        }
+    }
+
+    fun consumeShareRequest() {
+        _ui.update { it.copy(shareRequest = null) }
     }
 
     // ---------------------------------------------------------------- canvas callbacks
@@ -366,6 +415,20 @@ class InkEditorViewModel @AssistedInject constructor(
 
     fun consumeScrollRequest() {
         _ui.update { it.copy(scrollRequest = null) }
+    }
+
+    /** Page navigation (SRS 7.1): jump to page [index] (0-based). */
+    fun goToPage(index: Int) {
+        val count = session()?.pages?.size ?: return
+        if (index in 0 until count) _ui.update { it.copy(scrollRequest = ScrollRequest(index)) }
+    }
+
+    fun fit(mode: FitMode) {
+        _ui.update { it.copy(fitRequest = FitRequest(mode)) }
+    }
+
+    fun consumeFitRequest() {
+        _ui.update { it.copy(fitRequest = null) }
     }
 
     // ---------------------------------------------------------------- toolbar
@@ -521,6 +584,10 @@ class InkEditorViewModel @AssistedInject constructor(
 
     private companion object {
         const val TAG = "InkEditor"
+        const val SHARE_DIR = "shared"
+        const val SHARE_KEEP_MS = 60 * 60 * 1000L
+        const val MAX_FILE_NAME = 120
+        val UNSAFE_FILE_CHARS = Regex("[\\\\/:*?\"<>|\\p{Cntrl}]")
         const val MAX_ATTEMPTS = 6
         const val FIRST_RETRY_MS = 500L
         const val MAX_RETRY_MS = 5_000L

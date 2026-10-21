@@ -28,10 +28,11 @@ unless stated otherwise.
 | material-icons-extended | 1.7.8 | Editor/library icons | Frozen upstream; R8 strips unused icons from release |
 | Lifecycle process | 2.11.0 | App-level lifecycle | Added Phase 2 |
 | UiAutomator | 2.4.0 | Process-death / force-stop e2e tests | Added Phase 2 |
+| Jetpack Ink (authoring, brush, rendering, strokes) | 1.0.0 | Low-latency stylus ink | Added Phase 3 (ADR-0009 Part A) |
+| PdfBox-Android (`com.tom-roush:pdfbox-android`) | 2.0.27.0 | Read page boxes; write the annotated export copy | Added Phase 4 (ADR-0009 Part B). Apache-2.0, a port of Apache PDFBox **maintained by one person** (not Google): kept behind `PdfAnnotationWriter` so it can be swapped. Display uses the platform `PdfRenderer` instead. |
 
 ## Watch list (later phases)
-- Jetpack Ink 1.0.0 stable / 1.1.0-alpha — Phase 3.
 - Room 3 — revisit in Phase 6 (ADR-0008).
 - WorkManager 2.12.0 — Phase 5/6.
-- `androidx.pdf` 1.0.0-beta01 — Phase 4 (not stable yet).
+- `androidx.pdf` 1.0.0-beta01 — not stable yet; could replace our renderer/page view once stable (ADR-0009 Part B).
 - Supabase Kotlin client — Phase 6 (licence + maintenance review then).

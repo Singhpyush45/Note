@@ -193,6 +193,21 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             }
         }
 
+    /** "Fit width" / "Fit page" for the page currently shown (SRS 7.1). */
+    fun fit(mode: FitMode) {
+        val v = viewport ?: return
+        if (stack.count == 0) return
+        val w = width.toDouble()
+        val h = height.toDouble()
+        val page = rules.currentPage(v, h, stack)
+        viewport = when (mode) {
+            FitMode.WIDTH -> rules.fitWidth(page, w, h, stack)
+            FitMode.PAGE -> rules.fitPage(page, w, h, stack)
+        }
+        surface.invalidate()
+        reportPage()
+    }
+
     fun scrollToPage(index: Int) {
         val v = viewport ?: return
         if (index !in 0 until stack.count) return

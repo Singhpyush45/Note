@@ -28,6 +28,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.androidx.core.ktx) // FileProvider: hands the app a PDF like another app would
     implementation(libs.androidx.test.core)
     implementation(libs.androidx.test.ext.junit)
     implementation(libs.androidx.test.runner)

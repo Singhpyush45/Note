@@ -1,5 +1,15 @@
 package com.appname.notes.feature.ink
 
+import android.content.ClipData
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -100,6 +110,10 @@ object InkTestTags {
     const val TOOLBAR = "ink_toolbar"
     const val PAGE_INDICATOR = "ink_page_indicator"
     const val EXPORT_PDF = "ink_export_pdf"
+    const val SHARE_PDF = "ink_share_pdf"
+    const val GO_TO_PAGE = "ink_go_to_page"
+    const val PAGES_DIALOG = "ink_pages_dialog"
+    fun pageCell(index: Int) = "ink_page_cell_$index"
     const val EXPORT_PROGRESS = "ink_export_progress"
     const val PDF_FAILED = "ink_pdf_failed"
     fun tool(tool: EditorTool) = "ink_tool_${tool.name.lowercase()}"
@@ -116,6 +130,19 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
 
     var renaming by rememberSaveable { mutableStateOf(false) }
     var confirmDeletePage by remember { mutableStateOf(false) }
+    var showPages by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val shareTitle = stringResource(R.string.pdf_share_title)
+    LaunchedEffect(ui.shareRequest) {
+        val request = ui.shareRequest ?: return@LaunchedEffect
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("application/pdf")
+            .putExtra(Intent.EXTRA_STREAM, request.uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = ClipData.newRawUri(null, request.uri) // carries the read grant through the chooser
+        context.startActivity(Intent.createChooser(send, shareTitle))
+        viewModel.consumeShareRequest()
+    }
     // "Export annotated PDF": the system "save as" screen picks where the copy goes (no storage permission needed).
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) viewModel.exportPdf(uri)
@@ -138,6 +165,9 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 onTemplate = viewModel::setTemplate,
                 onTrash = { scope.launch { if (viewModel.moveToTrash()) onClose() } },
                 onExportPdf = { exportLauncher.launch(viewModel.exportFileName()) },
+                onSharePdf = viewModel::sharePdf,
+                onGoToPage = { showPages = true },
+                onFit = viewModel::fit,
             )
         },
         bottomBar = {
@@ -199,7 +229,9 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                         }
                     }
                     if (ui.pageCount > 1) {
+                        // Page count (SRS 7.1); tapping it opens the page grid to jump to a page.
                         Surface(
+                            onClick = { showPages = true },
                             color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
                             shape = CircleShape,
                             modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).testTag(InkTestTags.PAGE_INDICATOR),
@@ -217,6 +249,15 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         }
     }
 
+    val ready = load as? InkLoad.Ready
+    if (showPages && ready != null) {
+        PagesDialog(
+            pages = ready.session.pages,
+            current = ui.currentPage,
+            onPick = { viewModel.goToPage(it); showPages = false },
+            onDismiss = { showPages = false },
+        )
+    }
     if (renaming) {
         RenameDialog(
             initial = ui.title,
@@ -269,6 +310,10 @@ private fun InkCanvas(
                 view.scrollToPage(it.page)
                 viewModel.consumeScrollRequest()
             }
+            ui.fitRequest?.let {
+                view.fit(it.mode)
+                viewModel.consumeFitRequest()
+            }
         },
         modifier = Modifier.fillMaxSize().testTag(InkTestTags.CANVAS),
     )
@@ -288,6 +333,9 @@ private fun InkTopBar(
     onTemplate: (PageTemplate) -> Unit,
     onTrash: () -> Unit,
     onExportPdf: () -> Unit,
+    onSharePdf: () -> Unit,
+    onGoToPage: () -> Unit,
+    onFit: (FitMode) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     var templates by remember { mutableStateOf(false) }
@@ -318,6 +366,17 @@ private fun InkTopBar(
                         if (editable) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
                         }
+                        // Viewing (works read-only too): page navigation and zoom presets (SRS 7.1).
+                        if (ui.pageCount > 1) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.ink_go_to_page)) },
+                                onClick = { menu = false; onGoToPage() },
+                                modifier = Modifier.testTag(InkTestTags.GO_TO_PAGE),
+                            )
+                        }
+                        DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_width)) }, onClick = { menu = false; onFit(FitMode.WIDTH) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_page)) }, onClick = { menu = false; onFit(FitMode.PAGE) })
+                        HorizontalDivider()
                         if (ui.isPdf) {
                             // Exporting only reads the note, so it works for read-only notes too.
                             DropdownMenuItem(
@@ -325,6 +384,12 @@ private fun InkTopBar(
                                 enabled = !ui.exporting && !ui.pdfFailed,
                                 onClick = { menu = false; onExportPdf() },
                                 modifier = Modifier.testTag(InkTestTags.EXPORT_PDF),
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.pdf_share)) },
+                                enabled = !ui.exporting && !ui.pdfFailed,
+                                onClick = { menu = false; onSharePdf() },
+                                modifier = Modifier.testTag(InkTestTags.SHARE_PDF),
                             )
                         }
                         if (editable && !ui.isPdf) {
@@ -571,4 +636,60 @@ private fun PageTemplate.label(): Int = when (this) {
     PageTemplate.LINED -> R.string.ink_template_lined
     PageTemplate.GRID -> R.string.ink_template_grid
     PageTemplate.DOTTED -> R.string.ink_template_dotted
+}
+
+/** Page navigation (SRS 7.1 "page rail"): every page at its shape, the current one marked, tap to go there. */
+@Composable
+private fun PagesDialog(pages: List<InkSession.Page>, current: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ink_pages_title, pages.size)) },
+        text = {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(76.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = 420.dp).testTag(InkTestTags.PAGES_DIALOG),
+            ) {
+                itemsIndexed(pages, key = { _, p -> p.id }) { i, page ->
+                    val selected = i == current
+                    val hasInk = page.items.items.isNotEmpty()
+                    val label = stringResource(if (hasInk) R.string.ink_page_cell_ink else R.string.ink_page_cell, i + 1)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Surface(
+                            onClick = { onPick(i) },
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = Color(InkPaints.PAPER),
+                            border = BorderStroke(
+                                if (selected) 3.dp else 1.dp,
+                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio((page.width / page.height).coerceIn(0.4f, 2.5f))
+                                .testTag(InkTestTags.pageCell(i))
+                                .semantics {
+                                    contentDescription = label
+                                    this.selected = selected
+                                },
+                        ) {
+                            if (hasInk) {
+                                // Not by colour alone: the label says "has handwriting" too.
+                                Box(Modifier.padding(6.dp), contentAlignment = Alignment.TopEnd) {
+                                    Icon(InkIcons.Handwriting, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                        Text(
+                            "${i + 1}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp).clearAndSetSemantics { },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
 }

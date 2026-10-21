@@ -92,7 +92,8 @@ class ViewportRules(
         return min((viewW - 2 * margin) / stack.width, actualSize).coerceAtLeast(MIN_ABSOLUTE)
     }
 
-    fun minScale(viewW: Double, stack: PageStack) = fitScale(viewW, stack) * 0.5
+    /** Zooming out stops at a quarter of the reading zoom: enough for "fit page" of a tall page on a wide screen. */
+    fun minScale(viewW: Double, stack: PageStack) = fitScale(viewW, stack) * MIN_ZOOM
     fun maxScale() = actualSize * 4
 
     /** Initial view: fitted, top of [page] at the top. */
@@ -124,6 +125,7 @@ class ViewportRules(
 
     private companion object {
         const val MIN_ABSOLUTE = 0.05
+        const val MIN_ZOOM = 0.25
     }
 
     /**
@@ -140,6 +142,21 @@ class ViewportRules(
     /** Scrolls so page [i] starts at the top. */
     fun scrollTo(v: Viewport, i: Int, viewW: Double, viewH: Double, stack: PageStack): Viewport =
         clamp(v.copy(dy = margin - stack.top(i) * v.scale), viewW, viewH, stack)
+
+    /** "Fit width" (SRS 7.1): page [i]'s width fills the view, even beyond real size; the page starts at the top. */
+    fun fitWidth(i: Int, viewW: Double, viewH: Double, stack: PageStack): Viewport {
+        val r = stack.rect(i)
+        val s = ((viewW - 2 * margin) / r.width).coerceIn(minScale(viewW, stack), maxScale())
+        return clamp(Viewport(s, margin - r.left * s, margin - r.top * s), viewW, viewH, stack)
+    }
+
+    /** "Fit page" (SRS 7.1): all of page [i] is visible, centred. */
+    fun fitPage(i: Int, viewW: Double, viewH: Double, stack: PageStack): Viewport {
+        val r = stack.rect(i)
+        val s = min((viewW - 2 * margin) / r.width, (viewH - 2 * margin) / r.height).coerceIn(minScale(viewW, stack), maxScale())
+        val c = r.center
+        return clamp(Viewport(s, viewW / 2 - c.x * s, viewH / 2 - c.y * s), viewW, viewH, stack)
+    }
 
     fun withinZoomRange(scale: Double, viewW: Double, stack: PageStack) = scale in minScale(viewW, stack)..maxScale()
 }
