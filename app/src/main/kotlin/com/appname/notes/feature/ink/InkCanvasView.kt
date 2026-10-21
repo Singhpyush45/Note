@@ -643,6 +643,8 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     private inner class Surface(context: Context) : View(context) {
         private val shadow = 1.5f * density
+        private val selectionRect = RectF()
+        private val selectionOutline = RectF()
 
         override fun onDraw(canvas: Canvas) {
             canvas.drawColor(backgroundArgb)
@@ -676,10 +678,13 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 }
                 if (selection != null && selection.pageId == page.id) {
                     val b = selection.bounds
-                    val r = RectF(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat())
+                    val r = selectionRect
+                    r.set(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat())
                     liveMatrix?.mapRect(r)
                     m.mapRect(r)
-                    renderer.drawSelection(canvas, RectF(r).apply { inset(-4 * density, -4 * density) }, density)
+                    selectionOutline.set(r)
+                    selectionOutline.inset(-4 * density, -4 * density)
+                    renderer.drawSelection(canvas, selectionOutline, density)
                     renderer.drawHandle(canvas, r.right, r.bottom, density)
                 }
             }

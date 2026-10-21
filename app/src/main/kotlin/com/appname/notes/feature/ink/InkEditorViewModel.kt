@@ -271,7 +271,6 @@ class InkEditorViewModel @AssistedInject constructor(
     override fun onCleared() {
         // Let the worker finish what's queued, then stop.
         queue.close()
-        super.onCleared()
     }
 
     // ---------------------------------------------------------------- canvas callbacks

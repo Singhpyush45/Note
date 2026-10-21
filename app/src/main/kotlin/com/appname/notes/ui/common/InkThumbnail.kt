@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.withScale
 import com.appname.notes.core.domain.model.NoteSummary
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.InkTool
@@ -53,17 +54,16 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
         val scale = size.width / thumbnail.width
         drawIntoCanvas { c ->
             val canvas = c.nativeCanvas
-            canvas.save()
-            canvas.scale(scale, scale)
-            canvas.clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
-            for (pass in 0..1) {
-                for (item in thumbnail.items) {
-                    if ((pass == 0) != (item.brush.tool == InkTool.HIGHLIGHTER)) continue
-                    paint.set(InkPaints.inkPaint(item.brush))
-                    InkPaths.drawItem(canvas, item, paint)
-                }
+            canvas.withScale(scale, scale) {
+                clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
+                for (pass in 0..1) {
+                    for (item in thumbnail.items) {
+                        if ((pass == 0) != (item.brush.tool == InkTool.HIGHLIGHTER)) continue
+                        paint.set(InkPaints.inkPaint(item.brush))
+                        InkPaths.drawItem(this, item, paint)
+                    }
             }
-            canvas.restore()
+            }
         }
     }
 }

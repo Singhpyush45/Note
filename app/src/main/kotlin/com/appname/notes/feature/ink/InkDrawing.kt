@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import androidx.core.graphics.withMatrix
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.Stroke
 import com.appname.notes.core.ink.geometry.Vec
@@ -123,6 +124,7 @@ internal class InkRenderer {
     private val marginPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = InkPaints.MARGIN; strokeWidth = 0.8f }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = InkPaints.DOT }
     private val itemPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val paperRect = RectF()
     private val combined = Matrix()
 
     /** Forgets cached strokes of items that no longer exist. */
@@ -133,44 +135,42 @@ internal class InkRenderer {
 
     /** Paper with shadow and template. [pageToScreen] maps page units to the canvas. */
     fun drawPaper(canvas: Canvas, width: Float, height: Float, template: PageTemplate, pageToScreen: Matrix, shadowPx: Float) {
-        val r = RectF(0f, 0f, width, height)
+        val r = paperRect
+        r.set(0f, 0f, width, height)
         pageToScreen.mapRect(r)
         canvas.drawRect(r.left + shadowPx, r.top + shadowPx, r.right + shadowPx, r.bottom + shadowPx, shadowPaint)
         canvas.drawRect(r, paperPaint)
-        canvas.save()
-        canvas.concat(pageToScreen)
-        drawTemplate(canvas, width, height, template)
-        canvas.restore()
-    }
+        canvas.withMatrix(pageToScreen) { drawTemplate(this, width, height, template) }
+        }
 
-    private fun drawTemplate(canvas: Canvas, w: Float, h: Float, template: PageTemplate) {
-        when (template) {
-            PageTemplate.BLANK -> Unit
-            PageTemplate.LINED -> {
-                val s = PageTemplate.LINE_SPACING
-                var y = s * 3
-                while (y < h - s / 2) {
-                    canvas.drawLine(0f, y, w, y, rulePaint)
-                    y += s
+        private fun drawTemplate(canvas: Canvas, w: Float, h: Float, template: PageTemplate) {
+            when (template) {
+                PageTemplate.BLANK -> Unit
+                PageTemplate.LINED -> {
+                    val s = PageTemplate.LINE_SPACING
+                    var y = s * 3
+                    while (y < h - s / 2) {
+                        canvas.drawLine(0f, y, w, y, rulePaint)
+                        y += s
+                    }
+                    canvas.drawLine(LINED_MARGIN, 0f, LINED_MARGIN, h, marginPaint)
                 }
-                canvas.drawLine(LINED_MARGIN, 0f, LINED_MARGIN, h, marginPaint)
-            }
-            PageTemplate.GRID -> {
-                val s = PageTemplate.GRID_SPACING
-                var x = s
-                while (x < w) { canvas.drawLine(x, 0f, x, h, rulePaint); x += s }
-                var y = s
-                while (y < h) { canvas.drawLine(0f, y, w, y, rulePaint); y += s }
-            }
-            PageTemplate.DOTTED -> {
-                val s = PageTemplate.GRID_SPACING
-                var y = s
-                while (y < h) {
+                PageTemplate.GRID -> {
+                    val s = PageTemplate.GRID_SPACING
                     var x = s
-                    while (x < w) { canvas.drawCircle(x, y, 1.1f, dotPaint); x += s }
-                    y += s
+                    while (x < w) { canvas.drawLine(x, 0f, x, h, rulePaint); x += s }
+                    var y = s
+                    while (y < h) { canvas.drawLine(0f, y, w, y, rulePaint); y += s }
                 }
-            }
+                PageTemplate.DOTTED -> {
+                    val s = PageTemplate.GRID_SPACING
+                    var y = s
+                    while (y < h) {
+                        var x = s
+                        while (x < w) { canvas.drawCircle(x, y, 1.1f, dotPaint); x += s }
+                        y += s
+                    }
+                }
         }
     }
 
@@ -188,27 +188,23 @@ internal class InkRenderer {
         transformed: Set<String> = emptySet(),
         itemTransform: Matrix? = null,
     ) {
-        canvas.save()
-        canvas.concat(pageToScreen)
-        canvas.clipRect(0f, 0f, width, height)
+        canvas.withMatrix(pageToScreen) {
+        clipRect(0f, 0f, width, height)
         // Highlighter first so writing stays crisp on top of it.
         for (pass in 0..1) {
             for (item in items) {
                 val isHighlighter = item.brush.tool == InkTool.HIGHLIGHTER
                 if ((pass == 0) != isHighlighter || item.id in hidden) continue
                 if (itemTransform != null && item.id in transformed) {
-                    canvas.save()
-                    canvas.concat(itemTransform)
                     combined.set(pageToScreen)
                     combined.preConcat(itemTransform)
-                    drawItem(canvas, item, combined)
-                    canvas.restore()
+                    withMatrix(itemTransform) { drawItem(this, item, combined) }
                 } else {
-                    drawItem(canvas, item, pageToScreen)
+                    drawItem(this, item, pageToScreen)
                 }
             }
         }
-        canvas.restore()
+        }
     }
 
     /** Draws one item; canvas already in page coordinates, [transform] is that same transform. */
@@ -236,11 +232,8 @@ internal class InkRenderer {
 
     /** A live stroke drawn by us (only when Ink isn't available). */
     fun drawLive(canvas: Canvas, brush: InkBrush, points: StrokePoints, pageToScreen: Matrix) {
-        canvas.save()
-        canvas.concat(pageToScreen)
         paintFor(brush)
-        InkPaths.drawStroke(canvas, StrokeItem("live", 0, brush, points), itemPaint)
-        canvas.restore()
+        canvas.withMatrix(pageToScreen) { InkPaths.drawStroke(this, StrokeItem("live", 0, brush, points), itemPaint) }
     }
 
     private fun paintFor(brush: InkBrush) {
