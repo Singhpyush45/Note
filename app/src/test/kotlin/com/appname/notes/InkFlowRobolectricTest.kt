@@ -297,9 +297,10 @@ class InkFlowRobolectricTest {
                     ?: node.config.getOrNull(SemanticsProperties.Text)?.joinToString()
                     ?: node.children.firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() }
                 assertThat(label).isNotEmpty()
-                // Touch bounds: Material expands small buttons' touch area to 48 dp around the visible shape.
-                val w = node.touchBoundsInRoot.width / density
-                val h = node.touchBoundsInRoot.height / density
+                // Material expands small buttons' touch area to 48 dp around the visible shape (touch bounds);
+                // controls scrolled out of the toolbar have no visible touch area, so use their layout size.
+                val w = maxOf(node.touchBoundsInRoot.width, node.size.width.toFloat()) / density
+                val h = maxOf(node.touchBoundsInRoot.height, node.size.height.toFloat()) / density
                 assertThat(minOf(w, h)).isAtLeast(47.5f)
             }
         }
