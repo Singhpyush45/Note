@@ -56,7 +56,7 @@ def junit(globs):
     return files, totals, failures
 
 
-def lint_errors():
+def lint_issues(severities):
     issues = []
     for path in glob.glob("**/build/reports/lint-results-*.xml", recursive=True):
         try:
@@ -64,7 +64,7 @@ def lint_errors():
         except ET.ParseError:
             continue
         for issue in root.findall("issue"):
-            if issue.get("severity") in ("Error", "Fatal"):
+            if issue.get("severity") in severities:
                 loc = issue.find("location")
                 where = f"{loc.get('file')}:{loc.get('line')}" if loc is not None else "?"
                 issues.append(f"[{issue.get('id')}] {where}\n  {issue.get('message')}")
@@ -95,7 +95,8 @@ def gradle_failure(log_path):
 def main():
     label, log_path, globs = sys.argv[1], sys.argv[2], sys.argv[3:]
     files, totals, failures = junit(globs)
-    lint = lint_errors() if label.startswith("build") else []
+    lint = lint_issues(("Error", "Fatal")) if label.startswith("build") else []
+    lint_warnings = lint_issues(("Warning",)) if label.startswith("build") else []
     failure_text, build_failed = gradle_failure(log_path)
 
     status = "FAILED" if (build_failed or failures or totals["errors"]) else "OK"
@@ -116,6 +117,8 @@ def main():
         log_lines = []
     deprecations = sorted({l.strip() for l in log_lines if "deprecated" in l.lower() and "Gradle" in l
                            and not l.startswith("w: ")})
+    if lint_warnings:
+        emit("warning", f"{label}: lint warnings ({len(lint_warnings)})", "\n\n".join(lint_warnings[:40]))
     if deprecations:
         emit("warning", f"{label}: Gradle deprecations ({len(deprecations)})", "\n".join(deprecations[:40]))
 

@@ -39,7 +39,7 @@ class DocumentFiles @Inject constructor(
                 buffer
             } ?: return@withContext AppResult.Failure(DomainError.NotFound("File", "uri"))
             if (bytes.any { it == 0.toByte() }) return@withContext AppResult.Failure(DomainError.UnsupportedFormat("binary"))
-            AppResult.Success(PickedText(name, bytes.toString(Charsets.UTF_8).removePrefix("﻿")))
+            AppResult.Success(PickedText(name, bytes.toString(Charsets.UTF_8).removePrefix(BYTE_ORDER_MARK)))
         } catch (e: IOException) {
             logger.warn(TAG, "Import read failed", e)
             AppResult.Failure(DomainError.Storage())
@@ -82,5 +82,8 @@ class DocumentFiles @Inject constructor(
     private companion object {
         const val TAG = "DocumentFiles"
         const val MAX_BYTES = 2 * 1024 * 1024
+
+        /** Some editors (e.g. Windows Notepad) start UTF-8 files with this invisible marker. */
+        const val BYTE_ORDER_MARK = "\uFEFF"
     }
 }
