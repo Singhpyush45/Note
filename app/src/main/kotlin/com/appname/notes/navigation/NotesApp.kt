@@ -88,7 +88,7 @@ fun NotesApp(modifier: Modifier = Modifier) {
         NavDisplay(
             backStack = backStack,
             onBack = { backStack.pop() },
-            sceneStrategy = listDetail,
+            sceneStrategies = listOf(listDetail),
             entryDecorators = listOf(
                 rememberSaveableStateHolderNavEntryDecorator(), // keeps scroll/text state per screen
                 rememberViewModelStoreNavEntryDecorator(), // each screen gets its own ViewModels
