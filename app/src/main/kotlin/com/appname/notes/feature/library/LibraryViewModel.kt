@@ -118,28 +118,44 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    fun setPinned(id: NoteId, pinned: Boolean) = launchAction { notes.setPinned(setOf(id), pinned) }
+    // Block bodies with explicit Unit: some actions refer to each other (undo), which needs declared types.
+    fun setPinned(id: NoteId, pinned: Boolean) {
+        launchAction { notes.setPinned(setOf(id), pinned) }
+    }
 
-    fun setFavourite(id: NoteId, favourite: Boolean) = launchAction { notes.setFavourite(setOf(id), favourite) }
+    fun setFavourite(id: NoteId, favourite: Boolean) {
+        launchAction { notes.setFavourite(setOf(id), favourite) }
+    }
 
-    fun setArchived(id: NoteId, archived: Boolean) = launchAction(
-        UserMessage(if (archived) R.string.msg_archived else R.string.msg_unarchived, undo = { setArchived(id, !archived) }),
-    ) { notes.setArchived(setOf(id), archived) }
+    fun setArchived(id: NoteId, archived: Boolean) {
+        launchAction(UserMessage(if (archived) R.string.msg_archived else R.string.msg_unarchived, undo = { setArchived(id, !archived) })) {
+            notes.setArchived(setOf(id), archived)
+        }
+    }
 
-    fun moveToTrash(id: NoteId) = launchAction(
-        UserMessage(R.string.msg_trashed, undo = { restore(id) }),
-    ) { notes.moveToTrash(setOf(id)) }
+    fun moveToTrash(id: NoteId) {
+        launchAction(UserMessage(R.string.msg_trashed, undo = { restore(id) })) { notes.moveToTrash(setOf(id)) }
+    }
 
-    fun restore(id: NoteId) = launchAction(UserMessage(R.string.msg_restored)) { notes.restoreFromTrash(setOf(id)) }
+    fun restore(id: NoteId) {
+        launchAction(UserMessage(R.string.msg_restored)) { notes.restoreFromTrash(setOf(id)) }
+    }
 
-    fun deleteForever(id: NoteId) = launchAction(UserMessage(R.string.msg_deleted)) { notes.deletePermanently(setOf(id)) }
+    fun deleteForever(id: NoteId) {
+        launchAction(UserMessage(R.string.msg_deleted)) { notes.deletePermanently(setOf(id)) }
+    }
 
-    fun emptyTrash() = launchAction(UserMessage(R.string.msg_trash_emptied)) { notes.emptyTrash() }
+    fun emptyTrash() {
+        launchAction(UserMessage(R.string.msg_trash_emptied)) { notes.emptyTrash() }
+    }
 
-    fun duplicate(id: NoteId) = launchAction(UserMessage(R.string.msg_duplicated)) { notes.duplicate(id) }
+    fun duplicate(id: NoteId) {
+        launchAction(UserMessage(R.string.msg_duplicated)) { notes.duplicate(id) }
+    }
 
-    fun moveToNotebook(id: NoteId, notebook: NotebookId?) =
+    fun moveToNotebook(id: NoteId, notebook: NotebookId?) {
         launchAction(UserMessage(R.string.msg_moved)) { notes.moveToNotebook(setOf(id), notebook) }
+    }
 
     /** Imports a Markdown/text file as a new note; returns the new note's id. */
     suspend fun import(uri: Uri): NoteId? {
