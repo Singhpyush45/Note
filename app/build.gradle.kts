@@ -67,6 +67,8 @@ val java21Launcher = project.extensions.getByType<JavaToolchainService>().launch
 }
 tasks.withType<Test>().configureEach {
     javaLauncher.set(java21Launcher)
+    // Screenshot tests write here; declaring it lets the build cache restore the images too.
+    outputs.dir(layout.buildDirectory.dir("screenshots"))
     // Robolectric's API 36 sandbox reflects into JDK internals.
     jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED", "--add-opens=java.base/java.io=ALL-UNNAMED")
 }
