@@ -18,7 +18,7 @@ import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
@@ -79,7 +79,7 @@ fun FormatToolbar(controller: EditorController, modifier: Modifier = Modifier) {
             StyleButton(Icons.Outlined.FormatStrikethrough, R.string.fmt_strike, SpanType.STRIKETHROUGH in active) { controller.toggleStyle(SpanType.STRIKETHROUGH) }
             StyleButton(Icons.Outlined.Code, R.string.fmt_code, SpanType.CODE in active) { controller.toggleStyle(SpanType.CODE) }
             if (linkUrl != null) {
-                ToolbarIcon(Icons.Outlined.OpenInNew, R.string.fmt_open_link) { runCatching { uriHandler.openUri(linkUrl) } }
+                ToolbarIcon(Icons.AutoMirrored.Outlined.OpenInNew, R.string.fmt_open_link) { runCatching { uriHandler.openUri(linkUrl) } }
                 ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
             } else {
                 ToolbarIcon(Icons.Outlined.Link, R.string.fmt_link, enabled = controller.hasSelection) { showLinkDialog = true }

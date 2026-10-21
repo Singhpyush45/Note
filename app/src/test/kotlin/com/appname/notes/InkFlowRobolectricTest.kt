@@ -67,7 +67,8 @@ class InkFlowRobolectricTest {
         condition()
     }
 
-    private fun exists(matcher: SemanticsMatcher) = composeRule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+    private fun exists(matcher: SemanticsMatcher, unmerged: Boolean = false) =
+        composeRule.onAllNodes(matcher, useUnmergedTree = unmerged).fetchSemanticsNodes().isNotEmpty()
 
     private fun waitFor(tag: String) = waitAdvancing { exists(hasTestTag(tag)) }
 
@@ -154,7 +155,8 @@ class InkFlowRobolectricTest {
 
         pressBack()
         waitFor(LibraryTestTags.SCREEN)
-        waitAdvancing { exists(hasTestTag("ink_thumbnail_${inkNote().value}")) }
+        // The card merges its children for TalkBack, so the thumbnail is found in the unmerged tree.
+        waitAdvancing { exists(hasTestTag("ink_thumbnail_${inkNote().value}"), unmerged = true) }
         composeRule.onNodeWithText(string(R.string.ink_untitled)).performClick()
         waitFor(InkTestTags.CANVAS)
         assertThat(items()).hasSize(1)
@@ -240,7 +242,7 @@ class InkFlowRobolectricTest {
         composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
         composeRule.onNodeWithText(string(R.string.ink_page_add)).performClick()
         waitAdvancing { pages().size == 2 }
-        waitAdvancing { exists(hasTestTag(InkTestTags.PAGE_INDICATOR) and hasText("2 / 2", substring = true)) }
+        waitAdvancing { exists(hasText("2 / 2")) } // the new page is scrolled into view
         composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
         composeRule.onNodeWithText(string(R.string.ink_page_delete)).performClick()
         composeRule.onNodeWithText(string(R.string.action_delete)).performClick()

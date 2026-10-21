@@ -163,7 +163,7 @@ abstract class ScreenshotTestBase(private val device: String) {
             val n = loops * 14
             for (i in 0..n) {
                 val t = i / 14.0 * 2 * Math.PI
-                val x = x0 + 9 * t - 7 * kotlin.math.sin(t)
+                val x = x0 + 9 * t - 13 * kotlin.math.sin(t) // loops: 13 > 9
                 val y = baseline - 11 - 11 * kotlin.math.cos(t)
                 b.add(x.toFloat(), y.toFloat(), i * 8, (0.45 + 0.35 * kotlin.math.sin(t / 3)).toFloat())
             }

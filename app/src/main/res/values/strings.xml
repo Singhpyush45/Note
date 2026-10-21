@@ -199,8 +199,10 @@
     <string name="ink_tool_highlighter">Highlighter</string>
     <string name="ink_tool_eraser">Eraser</string>
     <string name="ink_tool_lasso">Lasso select</string>
-    <string name="ink_eraser_stroke">Whole strokes</string>
+    <string name="ink_eraser_stroke">Strokes</string>
+    <string name="ink_eraser_stroke_description">Erase whole strokes</string>
     <string name="ink_eraser_area">Area</string>
+    <string name="ink_eraser_area_description">Erase only the ink under the eraser</string>
     <string name="ink_size_fine">Fine</string>
     <string name="ink_size_medium">Medium</string>
     <string name="ink_size_bold">Bold</string>

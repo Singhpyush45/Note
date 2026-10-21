@@ -367,23 +367,31 @@ private fun InkToolbar(
                         val inkTool = tools.tool.inkTool()!!
                         val brush = tools.brushes.getValue(inkTool)
                         val palette = if (inkTool == InkTool.HIGHLIGHTER) HighlighterColors else InkColors
-                        palette.forEach { s ->
-                            ColorDot(s, selected = (brush.colorArgb and 0xFFFFFF) == (s.argb and 0xFFFFFF), onClick = { onColor(s.argb) })
-                        }
-                        Spacer(Modifier.width(8.dp))
+                        // Sizes first: on narrow phones the colour row scrolls, and sizes must stay visible.
                         Sizes.getValue(inkTool).forEachIndexed { i, size ->
                             SizeDot(size / Sizes.getValue(inkTool).last(), SizeNames[i], selected = brush.size == size, onClick = { onSize(size) })
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        palette.forEach { s ->
+                            ColorDot(s, selected = (brush.colorArgb and 0xFFFFFF) == (s.argb and 0xFFFFFF), onClick = { onColor(s.argb) })
                         }
                     }
                     EditorTool.ERASER -> {
                         SingleChoiceSegmentedButtonRow {
                             EraserMode.entries.forEachIndexed { i, mode ->
+                                val description = stringResource(
+                                    if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke_description else R.string.ink_eraser_area_description,
+                                )
                                 SegmentedButton(
                                     selected = tools.eraserMode == mode,
                                     onClick = { onEraserMode(mode) },
                                     shape = SegmentedButtonDefaults.itemShape(i, EraserMode.entries.size),
+                                    modifier = Modifier.semantics { contentDescription = description },
                                 ) {
-                                    Text(stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area))
+                                    Text(
+                                        stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area),
+                                        maxLines = 1,
+                                    )
                                 }
                             }
                         }

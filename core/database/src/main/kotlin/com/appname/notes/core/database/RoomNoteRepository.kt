@@ -188,7 +188,7 @@ class RoomNoteRepository(
         if (notebookId != null && db.notebookDao().get(notebookId.value) == null) {
             return AppResult.Failure(DomainError.NotFound("Notebook", notebookId.value))
         }
-        return storageCall(logger, "Move") { dao.moveToNotebook(ids.raw(), notebookId?.value); Unit }
+        return storageCall<Unit>(logger, "Move") { dao.moveToNotebook(ids.raw(), notebookId?.value) }
     }
 
     override suspend fun setTags(id: NoteId, tagIds: Set<TagId>) =

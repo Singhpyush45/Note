@@ -40,7 +40,7 @@ class RoomTagRepository(
         val clean = clean(name) ?: return AppResult.Failure(DomainError.Validation("name", "empty"))
         val existing = dao.findByName(clean)
         if (existing != null && existing.id != id.value) return AppResult.Failure(DomainError.Validation("name", "exists"))
-        return storageCall(logger, "Rename tag") { dao.rename(id.value, clean); Unit }
+        return storageCall<Unit>(logger, "Rename tag") { dao.rename(id.value, clean) }
     }
 
     override suspend fun delete(id: TagId): AppResult<Unit> = storageCall(logger, "Delete tag") { dao.delete(id.value) }

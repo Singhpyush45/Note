@@ -632,7 +632,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     page.width,
                     page.height,
                     m,
-                    translated = if (dragging) selection!!.ids else emptySet(),
+                    translated = if (dragging) selection.ids else emptySet(),
                     dx = offset.x.toFloat(),
                     dy = offset.y.toFloat(),
                 )

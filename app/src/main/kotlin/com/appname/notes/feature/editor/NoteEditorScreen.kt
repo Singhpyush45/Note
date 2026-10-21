@@ -34,7 +34,7 @@ import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
@@ -493,7 +493,7 @@ private fun EditorOverflowMenu(meta: NoteMeta, actions: EditorMenuActions) {
                     actions.onFavourite,
                 )
                 item(R.string.note_tags, Icons.AutoMirrored.Outlined.Label, actions.onTags)
-                item(R.string.note_move, Icons.Outlined.DriveFileMove, actions.onMove)
+                item(R.string.note_move, Icons.AutoMirrored.Outlined.DriveFileMove, actions.onMove)
                 item(R.string.note_duplicate, Icons.Outlined.ContentCopy, actions.onDuplicate)
                 item(R.string.note_share, Icons.Outlined.Share, actions.onShare)
                 item(R.string.note_export_markdown, Icons.Outlined.FileDownload, actions.onExport)

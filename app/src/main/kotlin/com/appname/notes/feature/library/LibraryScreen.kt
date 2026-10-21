@@ -19,7 +19,7 @@ import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Folder
@@ -372,7 +372,7 @@ private fun noteActions(
                 if (note.isFavourite) Icons.Outlined.Star else Icons.Outlined.StarOutline,
             ) { a.setFavourite(note.id, !note.isFavourite) },
         )
-        add(ActionSpec(R.string.note_move, Icons.Outlined.DriveFileMove) { onMove(note) })
+        add(ActionSpec(R.string.note_move, Icons.AutoMirrored.Outlined.DriveFileMove) { onMove(note) })
         add(ActionSpec(R.string.note_duplicate, Icons.Outlined.ContentCopy) { a.duplicate(note.id) })
         add(
             if (note.isArchived) {
