@@ -2,6 +2,7 @@ package com.appname.notes.feature.editor
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -104,6 +105,7 @@ class EditorScreenTest {
         assertThat(c.state.text).isEqualTo("buy milk") // the box isn't part of the text
     }
 
+    @OptIn(ExperimentalTestApi::class)
     @Test
     fun screenReaderActionTicksTheCurrentChecklistItem() {
         val c = controller(EditorState("call mum", listOf(ParagraphMeta("p0", BlockKind.CHECKLIST))))
