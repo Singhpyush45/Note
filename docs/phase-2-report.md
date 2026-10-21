@@ -39,6 +39,10 @@ Screenshots: `ci-output` branch → `screenshots/` (regenerated on every push to
 | Release (R8) smoke: install, launch, alive, no crash | 1 |
 | Lint | 0 errors, 0 warnings from our code |
 
+Stability: a collision between the in-app instrumented tests and the e2e tests (Gradle ran both in parallel
+on one emulator) was found and fixed; they now run sequentially. Two consecutive identical CI runs were
+fully green afterwards.
+
 ## Known limitations (deliberate, with owner of follow-up)
 - Images/attachments inside notes → Phase 5 (FR-009).
 - List indentation (nested bullets) not yet supported; the data model reserves room for it.
