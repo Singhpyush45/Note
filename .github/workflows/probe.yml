@@ -1,0 +1,57 @@
+name: probe-versions
+on:
+  push:
+    branches: [probe]
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Latest artifact versions
+        run: |
+          latest() { # repo group artifact
+            url="$1/$(echo $2 | tr . /)/$3/maven-metadata.xml"
+            xml=$(curl -fsSL "$url" || echo "")
+            rel=$(echo "$xml" | grep -o '<release>[^<]*' | sed 's/<release>//')
+            all=$(echo "$xml" | grep -o '<version>[^<]*' | sed 's/<version>//' | grep -v -E 'alpha|beta|rc|RC|dev|M[0-9]|Beta|-[0-9]+$' | tail -4 | tr '\n' ' ')
+            echo "$2:$3 release=$rel stable-tail=[$all]"
+          }
+          G=https://dl.google.com/dl/android/maven2
+          C=https://repo1.maven.org/maven2
+          P=https://plugins.gradle.org/m2
+          latest $G com.android.tools.build gradle
+          latest $C org.jetbrains.kotlin kotlin-gradle-plugin
+          latest $C com.google.devtools.ksp symbol-processing-gradle-plugin
+          latest $C com.google.dagger hilt-android
+          latest $G androidx.compose compose-bom
+          latest $G androidx.room room-runtime
+          latest $G androidx.room3 room3-runtime
+          latest $G androidx.navigation navigation-compose
+          latest $G androidx.navigation3 navigation3-runtime
+          latest $G androidx.lifecycle lifecycle-viewmodel-navigation3
+          latest $G androidx.hilt hilt-navigation-compose
+          latest $G androidx.hilt hilt-lifecycle-viewmodel-compose
+          latest $G androidx.activity activity-compose
+          latest $G androidx.lifecycle lifecycle-runtime-compose
+          latest $G androidx.core core-ktx
+          latest $G androidx.core core-splashscreen
+          latest $G androidx.datastore datastore-preferences
+          latest $G androidx.work work-runtime-ktx
+          latest $G androidx.ink ink-authoring
+          latest $G androidx.test.ext junit
+          latest $G androidx.test runner
+          latest $G androidx.test core
+          latest $G androidx.test.espresso espresso-core
+          latest $C org.robolectric robolectric
+          latest $C junit junit
+          latest $C org.jetbrains.kotlinx kotlinx-coroutines-core
+          latest $C org.jetbrains.kotlinx kotlinx-serialization-json
+          latest $C app.cash.turbine turbine
+          latest $C com.google.truth truth
+          latest $C com.jakewharton.timber timber
+          latest $P org.jetbrains.kotlin.plugin.compose org.jetbrains.kotlin.plugin.compose.gradle.plugin
+          echo "gradle current:"; curl -fsSL https://services.gradle.org/versions/current | head -c 300; echo
+      - name: Runner SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"; ls $ANDROID_HOME/platforms; ls $ANDROID_HOME/build-tools; java -version 2>&1
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list 2>/dev/null | grep -E "^\s*platforms;android-[0-9]" | sort -u | tail -8
