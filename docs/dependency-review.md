@@ -23,10 +23,15 @@ unless stated otherwise.
 | JUnit4 / Truth / Turbine | 4.13.2 / 1.4.5 / 1.2.1 | Tests | |
 | Robolectric | 4.17 | JVM Android tests | Runs SDK ≤36; tests pinned to 26 and 36 |
 | AndroidX Test | core 1.7.0, ext-junit 1.3.0, runner 1.7.0 | Instrumented tests | |
+| Room (+ testing) | 2.8.5 | Local database, FTS4 search | Added Phase 2 (ADR-0008) |
+| Material 3 Adaptive Navigation 3 | 1.3.0 | Tablet list-detail layout | Added Phase 2 |
+| material-icons-extended | 1.7.8 | Editor/library icons | Frozen upstream; R8 strips unused icons from release |
+| Lifecycle process | 2.11.0 | App-level lifecycle | Added Phase 2 |
+| UiAutomator | 2.4.0 | Process-death / force-stop e2e tests | Added Phase 2 |
 
 ## Watch list (later phases)
 - Jetpack Ink 1.0.0 stable / 1.1.0-alpha — Phase 3.
-- Room 2.8.5 vs Room 3.0.3 — Phase 2 (ADR-0008).
+- Room 3 — revisit in Phase 6 (ADR-0008).
 - WorkManager 2.12.0 — Phase 5/6.
 - `androidx.pdf` 1.0.0-beta01 — Phase 4 (not stable yet).
 - Supabase Kotlin client — Phase 6 (licence + maintenance review then).
