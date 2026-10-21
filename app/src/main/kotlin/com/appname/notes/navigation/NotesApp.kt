@@ -108,7 +108,7 @@ fun NotesApp(modifier: Modifier = Modifier) {
                 }
                 entry<NoteEditorKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
                     val viewModel = hiltViewModel<NoteEditorViewModel, NoteEditorViewModel.Factory>(
-                        creationCallback = { factory -> factory.create(NoteId(key.noteId)) },
+                        creationCallback = { factory -> factory.create(key.noteId) },
                     )
                     NoteEditorRoute(
                         viewModel = viewModel,

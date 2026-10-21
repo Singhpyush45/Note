@@ -76,7 +76,8 @@ data class NoteMeta(
 @OptIn(FlowPreview::class)
 @HiltViewModel(assistedFactory = NoteEditorViewModel.Factory::class)
 class NoteEditorViewModel @AssistedInject constructor(
-    @Assisted val noteId: NoteId,
+    // A plain String: Dagger can't use Kotlin value classes in assisted factories (name mangling).
+    @Assisted noteIdValue: String,
     private val notes: NoteRepository,
     notebooks: NotebookRepository,
     private val tagRepository: TagRepository,
@@ -87,8 +88,11 @@ class NoteEditorViewModel @AssistedInject constructor(
 
     @AssistedFactory
     interface Factory {
-        fun create(noteId: NoteId): NoteEditorViewModel
+        fun create(noteId: String): NoteEditorViewModel
     }
+
+    /** Declared first: other properties below use it while initialising. */
+    val noteId = NoteId(noteIdValue)
 
     private val _load = MutableStateFlow<EditorLoad>(EditorLoad.Loading)
     val load: StateFlow<EditorLoad> = _load.asStateFlow()
