@@ -29,6 +29,37 @@ fun List<NavKey>.currentTopLevel(): TopLevelDestination =
 fun MutableList<NavKey>.navigateToTopLevel(destination: TopLevelDestination) {
     val target = topLevelStackFor(destination)
     if (this == target) return
+    replaceWith(target)
+}
+
+/**
+ * Opens a note. Any editor already on top is replaced rather than stacked, so on a tablet tapping
+ * another note swaps the detail pane, and Back still returns to the list in one step.
+ */
+fun MutableList<NavKey>.openNote(noteId: String) {
+    while (lastOrNull() is NoteEditorKey) removeAt(lastIndex)
+    add(NoteEditorKey(noteId))
+}
+
+/** Opens a non-top-level screen on top, unless it is already showing. */
+fun MutableList<NavKey>.push(key: NavKey) {
+    if (lastOrNull() != key) add(key)
+}
+
+/** Back: pops one entry; at the root it does nothing (the system then leaves the app). */
+fun MutableList<NavKey>.pop(): Boolean {
+    if (size <= 1) return false
+    removeAt(lastIndex)
+    return true
+}
+
+/** Removes the editor of [noteId] (e.g. after the note was trashed from inside the editor). */
+fun MutableList<NavKey>.closeNote(noteId: String) {
+    val index = indexOfLast { it == NoteEditorKey(noteId) }
+    if (index > 0) removeAt(index)
+}
+
+private fun MutableList<NavKey>.replaceWith(target: List<NavKey>) {
     var common = 0
     while (common < size && common < target.size && this[common] == target[common]) common++
     while (size > common) removeAt(lastIndex)

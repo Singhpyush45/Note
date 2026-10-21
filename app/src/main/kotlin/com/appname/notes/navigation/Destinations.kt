@@ -13,15 +13,28 @@ import kotlinx.serialization.Serializable
 
 /*
  * Every screen has a key. Keys are @Serializable so the back stack can be saved in the Bundle and
- * restored after rotation or process death. Screens that need arguments become data classes later,
- * e.g. `data class NoteEditorKey(val noteId: String) : NavKey`.
+ * restored after rotation or process death.
  */
 
+/** The notes library (list pane on tablets). */
 @Serializable
 data object HomeKey : NavKey
 
 @Serializable
 data object SettingsKey : NavKey
+
+/** The editor for one note (detail pane on tablets). */
+@Serializable
+data class NoteEditorKey(val noteId: String) : NavKey
+
+@Serializable
+data object SearchKey : NavKey
+
+@Serializable
+data object NotebooksKey : NavKey
+
+@Serializable
+data object TagsKey : NavKey
 
 /** Destinations shown in the bottom bar / navigation rail. */
 enum class TopLevelDestination(

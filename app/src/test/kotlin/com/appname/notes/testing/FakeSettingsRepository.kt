@@ -2,7 +2,9 @@ package com.appname.notes.testing
 
 import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.common.result.DomainError
+import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.settings.AppearanceSettings
+import com.appname.notes.core.settings.LibrarySettings
 import com.appname.notes.core.settings.SettingsRepository
 import com.appname.notes.core.settings.ThemeMode
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +17,12 @@ class FakeSettingsRepository(initial: AppearanceSettings = AppearanceSettings())
     var failWrites = false
 
     override val appearance: Flow<AppearanceSettings> = state
+
+    private val librarySettings = MutableStateFlow(LibrarySettings())
+    override val library: Flow<LibrarySettings> = librarySettings
+
+    override suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit> =
+        write { librarySettings.value = librarySettings.value.copy(sort = sort) }
 
     override suspend fun setThemeMode(mode: ThemeMode): AppResult<Unit> =
         write { state.value = state.value.copy(themeMode = mode) }

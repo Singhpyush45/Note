@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.appname.notes.core.common.logging.AppLogger
 import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.common.result.DomainError
+import com.appname.notes.core.domain.model.NoteSort
 import java.io.IOException
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -26,7 +27,7 @@ class DataStoreSettingsRepository @Inject constructor(
     private val logger: AppLogger,
 ) : SettingsRepository {
 
-    override val appearance: Flow<AppearanceSettings> = dataStore.data
+    private val prefs: Flow<Preferences> = dataStore.data
         .catch { error ->
             // A read failure must not crash the app: fall back to defaults and log it.
             if (error is IOException) {
@@ -36,6 +37,8 @@ class DataStoreSettingsRepository @Inject constructor(
                 throw error
             }
         }
+
+    override val appearance: Flow<AppearanceSettings> = prefs
         .map { prefs ->
             AppearanceSettings(
                 themeMode = prefs[Keys.THEME_MODE].toThemeMode(),
@@ -43,6 +46,13 @@ class DataStoreSettingsRepository @Inject constructor(
             )
         }
         .distinctUntilChanged()
+
+    override val library: Flow<LibrarySettings> = prefs
+        .map { prefs -> LibrarySettings(sort = prefs[Keys.LIBRARY_SORT].toNoteSort()) }
+        .distinctUntilChanged()
+
+    override suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit> =
+        write { it[Keys.LIBRARY_SORT] = sort.name }
 
     override suspend fun setThemeMode(mode: ThemeMode): AppResult<Unit> =
         write { it[Keys.THEME_MODE] = mode.name }
@@ -61,6 +71,7 @@ class DataStoreSettingsRepository @Inject constructor(
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val LIBRARY_SORT = stringPreferencesKey("library_sort")
     }
 
     private companion object {
@@ -71,3 +82,5 @@ class DataStoreSettingsRepository @Inject constructor(
 /** Unknown or missing values (e.g. written by a future app version) fall back to SYSTEM. */
 internal fun String?.toThemeMode(): ThemeMode =
     ThemeMode.entries.firstOrNull { it.name == this } ?: ThemeMode.SYSTEM
+
+internal fun String?.toNoteSort(): NoteSort = NoteSort.entries.firstOrNull { it.name == this } ?: NoteSort.MODIFIED

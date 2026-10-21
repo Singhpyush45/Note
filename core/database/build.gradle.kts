@@ -22,11 +22,10 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
-
-    // Exported schemas are committed so migrations can be tested against every past version (SRS 16.2).
-    sourceSets["test"].assets.srcDir("$projectDir/schemas")
 }
 
+// Exported schemas are committed so migrations can be tested against every past version (SRS 16.2).
+// The Room plugin also exposes them to MigrationTestHelper in tests.
 room {
     schemaDirectory("$projectDir/schemas")
 }

@@ -1,6 +1,7 @@
 package com.appname.notes.core.settings
 
 import com.appname.notes.core.common.result.AppResult
+import com.appname.notes.core.domain.model.NoteSort
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -11,7 +12,11 @@ interface SettingsRepository {
     /** Emits the current settings immediately, then again whenever they change. */
     val appearance: Flow<AppearanceSettings>
 
+    val library: Flow<LibrarySettings>
+
     suspend fun setThemeMode(mode: ThemeMode): AppResult<Unit>
 
     suspend fun setDynamicColor(enabled: Boolean): AppResult<Unit>
+
+    suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit>
 }
