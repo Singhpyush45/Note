@@ -20,37 +20,17 @@ jobs:
           G=https://dl.google.com/dl/android/maven2
           C=https://repo1.maven.org/maven2
           P=https://plugins.gradle.org/m2
-          latest $G com.android.tools.build gradle
-          latest $C org.jetbrains.kotlin kotlin-gradle-plugin
-          latest $C com.google.devtools.ksp symbol-processing-gradle-plugin
-          latest $C com.google.dagger hilt-android
-          latest $G androidx.compose compose-bom
           latest $G androidx.room room-runtime
-          latest $G androidx.room3 room3-runtime
-          latest $G androidx.navigation navigation-compose
-          latest $G androidx.navigation3 navigation3-runtime
-          latest $G androidx.lifecycle lifecycle-viewmodel-navigation3
-          latest $G androidx.hilt hilt-navigation-compose
-          latest $G androidx.hilt hilt-lifecycle-viewmodel-compose
-          latest $G androidx.activity activity-compose
-          latest $G androidx.lifecycle lifecycle-runtime-compose
-          latest $G androidx.core core-ktx
-          latest $G androidx.core core-splashscreen
-          latest $G androidx.datastore datastore-preferences
-          latest $G androidx.work work-runtime-ktx
-          latest $G androidx.ink ink-authoring
-          latest $G androidx.test.ext junit
-          latest $G androidx.test runner
-          latest $G androidx.test core
-          latest $G androidx.test.espresso espresso-core
-          latest $C org.robolectric robolectric
-          latest $C junit junit
-          latest $C org.jetbrains.kotlinx kotlinx-coroutines-core
-          latest $C org.jetbrains.kotlinx kotlinx-serialization-json
-          latest $C app.cash.turbine turbine
-          latest $C com.google.truth truth
-          latest $C com.jakewharton.timber timber
-          latest $P org.jetbrains.kotlin.plugin.compose org.jetbrains.kotlin.plugin.compose.gradle.plugin
+          latest $G androidx.room room-testing
+          latest $G androidx.room androidx.room.gradle.plugin
+          latest $G androidx.compose.material3.adaptive adaptive-navigation3
+          latest $G androidx.compose.material3.adaptive adaptive
+          latest $G androidx.compose.material3.adaptive adaptive-layout
+          latest $G androidx.compose.material material-icons-extended
+          latest $G androidx.test.uiautomator uiautomator
+          latest $G androidx.lifecycle lifecycle-process
+          latest $C org.jetbrains.kotlinx kotlinx-collections-immutable
+          curl -fsSL https://dl.google.com/dl/android/maven2/androidx/compose/compose-bom/2026.09.00/compose-bom-2026.09.00.pom | grep -A1 -E "<artifactId>(material3|foundation|ui|material3-adaptive-navigation-suite|material-icons-core|material-icons-extended)</artifactId>" | grep -E "artifactId|version"
           echo "gradle current:"; curl -fsSL https://services.gradle.org/versions/current | head -c 300; echo
           sleep 1; msg=$(sed -e ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' /tmp/out.txt); echo "::notice title=versions::$msg"
       - name: Runner SDK
