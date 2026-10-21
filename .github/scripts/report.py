@@ -109,6 +109,14 @@ def main():
         warnings = []
     if warnings:
         emit("warning", f"{label}: compiler warnings ({len(warnings)})", "\n".join(warnings[:80]))
+    try:
+        log_lines = open(log_path, encoding="utf-8", errors="replace").read().splitlines()
+    except OSError:
+        log_lines = []
+    deprecations = sorted({l.strip() for l in log_lines if "deprecated" in l.lower() and "Gradle" in l
+                           and not l.startswith("w: ")})
+    if deprecations:
+        emit("warning", f"{label}: Gradle deprecations ({len(deprecations)})", "\n".join(deprecations[:40]))
 
     budget = MAX_ERRORS
     if failure_text and budget:

@@ -18,6 +18,8 @@ jobs:
     name: Build, unit & Robolectric tests, lint
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    permissions:
+      contents: write # only to publish screenshots to the `screenshots` branch
     steps:
       - uses: actions/checkout@v5
       - uses: gradle/actions/wrapper-validation@v5
@@ -31,15 +33,27 @@ jobs:
         id: gradle
         run: |
           set -o pipefail
-          ./gradlew assembleDebug assembleRelease :core:common:test testDebugUnitTest lintDebug --continue 2>&1 | tee build.log
+          ./gradlew assembleDebug assembleRelease :core:common:test testDebugUnitTest lintDebug --continue --warning-mode all 2>&1 | tee build.log
 
       - name: Report results
         if: always()
         run: python3 .github/scripts/report.py build build.log "**/build/test-results/testDebugUnitTest/**/*.xml" "core/common/build/test-results/test/**/*.xml"
 
+      - name: Publish screenshots to the `screenshots` branch
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [ -d app/build/screenshots ] || { echo "No screenshots"; exit 0; }
+          cd app/build/screenshots
+          git init -q -b screenshots
+          git add .
+          git -c user.name="ci" -c user.email="ci@users.noreply.github.com" commit -qm "Screenshots for ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screenshots
+
       - name: Upload APKs
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: apks
           path: app/build/outputs/apk/**/*.apk
@@ -47,7 +61,7 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: build-reports
           path: |
@@ -93,7 +107,7 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: instrumented-reports
           path: |

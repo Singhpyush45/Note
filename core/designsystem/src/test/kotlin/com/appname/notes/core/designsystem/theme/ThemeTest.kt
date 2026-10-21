@@ -41,6 +41,6 @@ class ThemeTest {
     private fun contrast(a: Color, b: Color): Double {
         val l1 = a.luminance() + 0.05
         val l2 = b.luminance() + 0.05
-        return (maxOf(l1, l2) / minOf(l1, l2)).toDouble()
+        return maxOf(l1, l2) / minOf(l1, l2)
     }
 }
