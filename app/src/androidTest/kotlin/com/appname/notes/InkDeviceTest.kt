@@ -113,9 +113,16 @@ class InkDeviceTest {
             val c = bitmap.getPixel(x, yy)
             ((c shr 16 and 0xFF) + (c shr 8 and 0xFF) + (c and 0xFF)) / 3
         }
-        val mid = (w * 0.5f).toInt()
-        assertThat(darkest(mid, y.toInt())).isLessThan(110)
-        assertThat(darkest(mid, (y - 40).toInt())).isGreaterThan(180)
+        val yi = y.toInt()
+        // Ink along the pen path (start, middle, end) is clearly darker than the paper just above it …
+        for (fraction in listOf(0.3f, 0.5f, 0.7f)) {
+            val x = (w * fraction).toInt()
+            val paper = darkest(x, yi - 40)
+            assertThat(paper).isGreaterThan(180) // paper or a light ruled line
+            assertThat(darkest(x, yi)).isLessThan(paper - 60)
+        }
+        // … and nothing is drawn where the pen never went.
+        assertThat(darkest((w * 0.1f).toInt(), yi)).isGreaterThan(180)
     }
 
     @Test

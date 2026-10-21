@@ -222,6 +222,34 @@ class InkInputControllerTest {
     }
 
     @Test
+    fun `dragging the corner handle resizes the selection, line width too, in one undo step`() {
+        draw(line(Vec(100.0, 100.0), Vec(200.0, 100.0)))
+        c.tools = c.tools.copy(tool = EditorTool.LASSO)
+        draw(listOf(Vec(80.0, 80.0), Vec(220.0, 80.0), Vec(220.0, 120.0), Vec(80.0, 120.0), Vec(80.0, 82.0)))
+        val b = c.selection!!.bounds
+        val handle = c.resizeHandle!!
+        assertEquals(Vec(b.right, b.bottom), handle)
+        // Drag the handle so the selection becomes twice as big around its top-left corner.
+        val anchor = Vec(b.left, b.top)
+        val target = Vec(anchor.x + (handle.x - anchor.x) * 2, anchor.y + (handle.y - anchor.y) * 2)
+        val s0 = items().single() as StrokeItem
+        c.down("p1", sample(handle), PointerSource.STYLUS, 1.0)
+        c.move(listOf(sample(Vec((handle.x + target.x) / 2, (handle.y + target.y) / 2))))
+        assertEquals(1.5, c.selectionTransform!!.scale, 1e-6) // live preview
+        c.move(listOf(sample(target)))
+        c.up(null)
+        assertNull(c.selectionTransform)
+        val s1 = items().single() as StrokeItem
+        val len0 = s0.points.x.last() - s0.points.x.first()
+        val len1 = s1.points.x.last() - s1.points.x.first()
+        assertEquals(2.0 * len0, len1.toDouble(), 0.2)
+        assertEquals(s0.brush.size * 2, s1.brush.size, 1e-3f)
+        assertEquals(s0.id, s1.id) // same item, transformed
+        assertTrue(session.undo())
+        assertEquals(s0, items().single())
+    }
+
+    @Test
     fun `highlighter recolour keeps translucency, selection survives undo cleanly`() {
         c.tools = c.tools.copy(tool = EditorTool.HIGHLIGHTER)
         draw(line(Vec(100.0, 100.0), Vec(200.0, 100.0)))

@@ -123,9 +123,12 @@ class InkInputController(
     var lassoPath: List<Vec> = emptyList()
         private set
 
-    /** How far the selection is being dragged (drawn translated until the pen lifts). */
-    var selectionOffset: Vec = ZERO
+    /** How the selection is being moved or resized right now (drawn transformed until the pen lifts). */
+    var selectionTransform: Similarity? = null
         private set
+
+    /** Where the resize handle is (bottom-right corner of the selection), in page units. */
+    val resizeHandle: Vec? get() = selection?.let { Vec(it.bounds.right, it.bounds.bottom) }
 
     /** Eraser position while erasing (to show its outline). */
     var eraserAt: Vec? = null
@@ -161,6 +164,9 @@ class InkInputController(
         class Erase(override val pageId: String, var last: Vec) : Gesture
         class LassoDraw(override val pageId: String) : Gesture
         class MoveSelection(override val pageId: String, val start: Vec) : Gesture
+
+        /** Dragging the corner handle: scales around the opposite (top-left) corner. */
+        class ResizeSelection(override val pageId: String, val anchor: Vec, val startDistance: Double) : Gesture
     }
 
     /** A snapped shape and the point where the pen was held (for resizing by dragging). */
@@ -203,7 +209,11 @@ class InkInputController(
             }
             EditorTool.LASSO -> {
                 val sel = selection
-                if (sel != null && sel.pageId == pageId && sel.bounds.inflate(8 * unitsPerDp).contains(p)) {
+                val handle = resizeHandle
+                if (sel != null && sel.pageId == pageId && handle != null && dist(handle, p) <= HANDLE_DP * unitsPerDp) {
+                    val anchor = Vec(sel.bounds.left, sel.bounds.top)
+                    gesture = Gesture.ResizeSelection(pageId, anchor, dist(anchor, p).coerceAtLeast(1e-6))
+                } else if (sel != null && sel.pageId == pageId && sel.bounds.inflate(8 * unitsPerDp).contains(p)) {
                     gesture = Gesture.MoveSelection(pageId, p)
                 } else {
                     selection = null
@@ -247,7 +257,13 @@ class InkInputController(
                 Response.REDRAW
             }
             is Gesture.MoveSelection -> {
-                selectionOffset = p - g.start
+                val d = p - g.start
+                selectionTransform = Similarity.translate(d.x, d.y)
+                Response.REDRAW
+            }
+            is Gesture.ResizeSelection -> {
+                val k = (dist(g.anchor, p) / g.startDistance).coerceIn(MIN_SCALE, MAX_SCALE)
+                selectionTransform = Similarity(scale = k, pivot = g.anchor)
                 Response.REDRAW
             }
         }
@@ -289,12 +305,13 @@ class InkInputController(
                 }
                 Response.REDRAW
             }
-            is Gesture.MoveSelection -> {
-                val offset = selectionOffset
-                selectionOffset = ZERO
+            is Gesture.MoveSelection, is Gesture.ResizeSelection -> {
+                val t = selectionTransform
+                selectionTransform = null
                 val selected = selectedItems()
-                if (offset.length >= 2 * unitsPerDp && selected.isNotEmpty()) {
-                    val edit = Lasso.move(selected, offset.x, offset.y)
+                val moved = t != null && (Vec(t.dx, t.dy).length >= 2 * unitsPerDp || kotlin.math.abs(t.scale - 1) >= 0.01)
+                if (moved && selected.isNotEmpty()) {
+                    val edit = Lasso.transform(selected, t)
                     session.apply(g.pageId, InkEdit(edit.removed, edit.added.map { InkCodec.quantize(it) }))
                     selection = selectionOf(g.pageId, selectedItems())
                 }
@@ -309,7 +326,7 @@ class InkInputController(
         gesture = null
         shapePreview = null
         lassoPath = emptyList()
-        selectionOffset = ZERO
+        selectionTransform = null
         eraserAt = null
         return when (g) {
             is Gesture.Draw -> Response(live = if (g.shape == null) LiveStroke.CANCEL else LiveStroke.NONE, redraw = true)
@@ -472,7 +489,11 @@ class InkInputController(
     )
 
     companion object {
-        private val ZERO = Vec(0.0, 0.0)
         const val PREVIEW_ID = "shape-preview"
+
+        /** Touch radius of the resize handle, in dp. */
+        const val HANDLE_DP = 20.0
+        private const val MIN_SCALE = 0.1
+        private const val MAX_SCALE = 10.0
     }
 }

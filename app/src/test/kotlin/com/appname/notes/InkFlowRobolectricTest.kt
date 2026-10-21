@@ -175,6 +175,64 @@ class InkFlowRobolectricTest {
         waitAdvancing { items().singleOrNull() is StrokeItem }
     }
 
+    /** SRS 16.2: ink → correct shape → undo → redo → reopen → same geometry (also INK-SH-06). */
+    @Test
+    fun correctedShapeSurvivesUndoRedoAndReopening() {
+        openNewInkNote()
+        stroke(rectangle(80f, 200f, 330f, 360f), holdMillis = 700)
+        waitAdvancing { items().singleOrNull() is ShapeItem }
+        val shape = items().single() as ShapeItem
+        val undo = string(R.string.editor_undo)
+        val redo = string(R.string.editor_redo)
+        composeRule.onNodeWithContentDescription(undo).performClick()
+        waitAdvancing { items().singleOrNull() is StrokeItem }
+        composeRule.onNodeWithContentDescription(redo).performClick()
+        waitAdvancing { items().singleOrNull() == shape }
+
+        pressBack()
+        waitFor(LibraryTestTags.SCREEN)
+        composeRule.onNodeWithText(string(R.string.ink_untitled)).performClick()
+        waitFor(InkTestTags.CANVAS)
+        assertThat(items()).containsExactly(shape) // same geometry, style and position
+    }
+
+    /** Ink is stored in page units: after zooming in 2×, the same screen distance is half as long on the page. */
+    @Test
+    fun strokesAfterPinchZoomLandAtThePageScale() {
+        openNewInkNote()
+        stroke(line(60f, 200f, 340f, 200f))
+        waitAdvancing { items().size == 1 }
+        pinch(from = 50f, to = 100f, centerX = 200f, centerY = 400f)
+        stroke(line(60f, 600f, 340f, 600f))
+        waitAdvancing { items().size == 2 } // the pinch itself drew nothing
+        fun width(s: InkItem) = (s as StrokeItem).points.x.let { it.max() - it.min() }
+        val (before, after) = items().sortedBy { it.z }
+        assertThat(width(after) / width(before)).isWithin(0.03f).of(0.5f)
+    }
+
+    /** Two fingers moving apart from ±[from] to ±[to] px around the centre (a 2× zoom for 50 → 100). */
+    private fun pinch(from: Float, to: Float, centerX: Float, centerY: Float) {
+        composeRule.runOnUiThread {
+            val view = canvas()
+            val down = SystemClock.uptimeMillis()
+            var t = down
+            val props = Array(2) { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
+            fun send(action: Int, count: Int, half: Float) {
+                val coords = Array(count) { i -> MotionEvent.PointerCoords().apply { x = centerX + (if (i == 0) -half else half); y = centerY } }
+                val e = MotionEvent.obtain(down, t, action, count, props.copyOf(count).requireNoNulls(), coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+                view.dispatchTouchEvent(e)
+                e.recycle()
+            }
+            val second = 1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT
+            send(MotionEvent.ACTION_DOWN, 1, from)
+            t += 8; send(MotionEvent.ACTION_POINTER_DOWN or second, 2, from)
+            for (k in 1..10) { t += 8; send(MotionEvent.ACTION_MOVE, 2, from + (to - from) * k / 10) }
+            t += 8; send(MotionEvent.ACTION_POINTER_UP or second, 2, to)
+            t += 8; send(MotionEvent.ACTION_UP, 1, to)
+        }
+        composeRule.waitForIdle()
+    }
+
     @Test
     fun eraserRemovesStrokesAndUndoRestoresThem() {
         openNewInkNote()

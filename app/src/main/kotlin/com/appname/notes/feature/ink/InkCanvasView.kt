@@ -21,6 +21,7 @@ import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
 import androidx.ink.strokes.Stroke
 import com.appname.notes.core.ink.edit.InkSession
+import com.appname.notes.core.ink.edit.Similarity
 import com.appname.notes.core.ink.geometry.Vec
 import com.appname.notes.core.ink.input.InkInputController
 import com.appname.notes.core.ink.input.LiveStroke
@@ -620,21 +621,21 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             val c = controller ?: return
             val v = viewport ?: return
             val selection = c.selection
-            val offset = c.selectionOffset
+            val live = c.selectionTransform
+            val liveMatrix = live?.let { similarityMatrix(it) }
             for (i in stack.visible(v.visibleWorld(width.toDouble(), height.toDouble()))) {
                 val page = s.pages.getOrNull(i) ?: continue
                 val m = pageToScreen(i, v)
                 renderer.drawPaper(canvas, page.width, page.height, page.template, m, shadow)
-                val dragging = selection != null && selection.pageId == page.id && (offset.x != 0.0 || offset.y != 0.0)
+                val editing = selection != null && selection.pageId == page.id && liveMatrix != null
                 renderer.drawInk(
                     canvas,
                     page.items.items,
                     page.width,
                     page.height,
                     m,
-                    translated = if (dragging) selection.ids else emptySet(),
-                    dx = offset.x.toFloat(),
-                    dy = offset.y.toFloat(),
+                    transformed = if (editing) selection.ids else emptySet(),
+                    itemTransform = if (editing) liveMatrix else null,
                 )
                 if (c.activePageId == page.id) {
                     c.shapePreview?.let { renderer.drawInk(canvas, listOf(it), page.width, page.height, m) }
@@ -646,17 +647,24 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 }
                 if (selection != null && selection.pageId == page.id) {
                     val b = selection.bounds
-                    val r = RectF(
-                        (b.left + offset.x).toFloat(), (b.top + offset.y).toFloat(),
-                        (b.right + offset.x).toFloat(), (b.bottom + offset.y).toFloat(),
-                    )
+                    val r = RectF(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat())
+                    liveMatrix?.mapRect(r)
                     m.mapRect(r)
-                    r.inset(-4 * density, -4 * density)
-                    renderer.drawSelection(canvas, r, density)
+                    renderer.drawSelection(canvas, RectF(r).apply { inset(-4 * density, -4 * density) }, density)
+                    renderer.drawHandle(canvas, r.right, r.bottom, density)
                 }
             }
         }
     }
 
     private fun toScreen(i: Int, v: Viewport, page: Vec): Vec = v.toScreen(stack.toWorld(i, page))
+
+    /** Our page-unit transform as an Android matrix: scale and rotate around the pivot, then move. */
+    private fun similarityMatrix(t: Similarity): Matrix = Matrix().apply {
+        val px = t.pivot.x.toFloat()
+        val py = t.pivot.y.toFloat()
+        setScale(t.scale.toFloat(), t.scale.toFloat(), px, py)
+        postRotate(t.rotationDeg.toFloat(), px, py)
+        postTranslate(t.dx.toFloat(), t.dy.toFloat())
+    }
 }

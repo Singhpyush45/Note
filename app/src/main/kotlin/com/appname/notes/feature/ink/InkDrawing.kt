@@ -123,6 +123,7 @@ internal class InkRenderer {
     private val marginPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = InkPaints.MARGIN; strokeWidth = 0.8f }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = InkPaints.DOT }
     private val itemPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val combined = Matrix()
 
     /** Forgets cached strokes of items that no longer exist. */
     fun retain(ids: Set<String>) {
@@ -174,8 +175,8 @@ internal class InkRenderer {
     }
 
     /**
-     * Ink of one page, clipped to the page. Items in [hidden] are skipped (e.g. being dragged);
-     * [translated] items are drawn moved by ([dx], [dy]) page units.
+     * Ink of one page, clipped to the page. Items in [hidden] are skipped; [transformed] items are drawn
+     * with [itemTransform] (page units) applied first, e.g. while a selection is dragged or resized.
      */
     fun drawInk(
         canvas: Canvas,
@@ -184,9 +185,8 @@ internal class InkRenderer {
         height: Float,
         pageToScreen: Matrix,
         hidden: Set<String> = emptySet(),
-        translated: Set<String> = emptySet(),
-        dx: Float = 0f,
-        dy: Float = 0f,
+        transformed: Set<String> = emptySet(),
+        itemTransform: Matrix? = null,
     ) {
         canvas.save()
         canvas.concat(pageToScreen)
@@ -196,11 +196,12 @@ internal class InkRenderer {
             for (item in items) {
                 val isHighlighter = item.brush.tool == InkTool.HIGHLIGHTER
                 if ((pass == 0) != isHighlighter || item.id in hidden) continue
-                if (item.id in translated) {
+                if (itemTransform != null && item.id in transformed) {
                     canvas.save()
-                    canvas.translate(dx, dy)
-                    val m = Matrix(pageToScreen).apply { preTranslate(dx, dy) }
-                    drawItem(canvas, item, m)
+                    canvas.concat(itemTransform)
+                    combined.set(pageToScreen)
+                    combined.preConcat(itemTransform)
+                    drawItem(canvas, item, combined)
                     canvas.restore()
                 } else {
                     drawItem(canvas, item, pageToScreen)
@@ -276,6 +277,16 @@ internal class InkRenderer {
         selectionPaint.pathEffect = DashPathEffect(floatArrayOf(6 * density, 4 * density), 0f)
         canvas.drawRect(rectScreen, selectionFill)
         canvas.drawRect(rectScreen, selectionPaint)
+    }
+
+    private val handleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+
+    /** The resize handle: a ring at the selection's bottom-right corner. */
+    fun drawHandle(canvas: Canvas, x: Float, y: Float, density: Float) {
+        selectionPaint.pathEffect = null
+        selectionPaint.strokeWidth = 2f * density
+        canvas.drawCircle(x, y, 7 * density, handleFill)
+        canvas.drawCircle(x, y, 7 * density, selectionPaint)
     }
 
     fun drawLasso(canvas: Canvas, pathScreen: List<Vec>, density: Float) {
