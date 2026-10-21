@@ -16,7 +16,7 @@ class NotesApplication : Application() {
 
     @Inject lateinit var pdfImporter: PdfImporter
 
-    @Inject @field:ApplicationScope lateinit var appScope: CoroutineScope
+    @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     override fun onCreate() {
         if (BuildConfig.DEBUG) enableStrictMode()

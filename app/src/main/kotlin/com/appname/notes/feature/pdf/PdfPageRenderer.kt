@@ -4,6 +4,7 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import androidx.core.graphics.createBitmap
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.RectF
@@ -191,7 +192,7 @@ class PdfPageRenderer(
         if (page !in 0 until r.pageCount) return null
         return try {
             r.openPage(page).use { p ->
-                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                val bmp = createBitmap(w, h, Bitmap.Config.ARGB_8888)
                 bmp.eraseColor(Color.WHITE)
                 p.render(bmp, null, transform?.invoke(), PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 bmp

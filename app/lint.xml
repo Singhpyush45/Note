@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+        Bouncy Castle (pulled in by PdfBox-Android for PDF encryption) contains a trust-all TLS helper.
+        This app makes no network connections and never uses it: PdfBox only uses Bouncy Castle's
+        crypto to read password-protected PDFs. Ignored only inside that jar, so the check still
+        guards our own code.
+    -->
+    <issue id="TrustAllX509TrustManager">
+        <ignore path="**/bcpkix-jdk15to18-*.jar" />
+    </issue>
+</lint>

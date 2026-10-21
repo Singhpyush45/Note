@@ -1,6 +1,7 @@
 package com.appname.notes.feature.pdf
 
 import android.graphics.Bitmap
+import androidx.core.graphics.createBitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -39,7 +40,7 @@ class PdfThumbnails(
                         if (pageIndex !in 0 until r.pageCount) return@use null
                         r.openPage(pageIndex).use { page ->
                             val h = (widthPx.toFloat() * page.height / page.width).roundToInt().coerceIn(1, widthPx * 4)
-                            val argb = Bitmap.createBitmap(widthPx, h, Bitmap.Config.ARGB_8888) // the renderer needs ARGB
+                            val argb = createBitmap(widthPx, h, Bitmap.Config.ARGB_8888) // the renderer needs ARGB
                             argb.eraseColor(Color.WHITE)
                             page.render(argb, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                             // Half the memory for the cache: a white page has no transparency to keep.
