@@ -4,7 +4,11 @@ set -u
 status=0
 
 # In-app instrumented tests, then black-box lifecycle tests (process death, force-stop) from :e2e.
-./gradlew connectedDebugAndroidTest :e2e:connectedCheck --continue 2>&1 | tee instrumented.log
+# Two separate Gradle runs on purpose: in one run Gradle executes them in parallel on the same emulator,
+# and the e2e tests' `pm clear` / app launches would collide with the other suite.
+./gradlew connectedDebugAndroidTest -x :e2e:connectedDebugAndroidTest --continue 2>&1 | tee instrumented.log
+[ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+./gradlew :e2e:connectedCheck --continue 2>&1 | tee -a instrumented.log
 [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
 
 # Release smoke test: install the R8-minified APK, launch it, make sure it is still alive and didn't crash.
