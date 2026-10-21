@@ -5,9 +5,14 @@ latency (NFR-03) can only be judged with a real stylus. Please run this on your 
 the device + stylus model and any ✗.
 
 ## Install
-1. GitHub → *Actions* → latest green **CI** run on `main` → *Artifacts* → download **apks**.
-2. Install `app-release.apk` (the minified build users would get). Android asks to allow installs from
-   your browser/files app once.
+1. On your phone or tablet, open **https://github.com/Singhpyush45/Note/releases/tag/test-build** and tap
+   **APP_NAME-test.apk** (no GitHub login needed). It is the newest build that passed every CI test.
+   The same file is also sent in our chat when a phase is ready.
+2. Open the downloaded file. The first time, Android asks to allow installs from your browser/Files app:
+   allow it (Settings → *Install unknown apps*), then **Install**. If Play Protect warns about an unknown
+   developer, choose *Install anyway* (it is a test build, not from the Play Store).
+3. Later builds install **over** this one and keep your notes. Check the version in Settings → *About*
+   (e.g. `0.4.0-build57`) when you report results.
 
 ## Checks
 Create a handwritten note with the small pen button above **New note**.

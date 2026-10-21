@@ -15,13 +15,27 @@ android {
         applicationId = "com.appname.notes"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI numbers every build, so each test APK is a newer version that installs over the previous one.
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.4.0-build$build" // 0.<last finished phase>
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        // One fixed key for test builds, so updates install over each other and keep your notes.
+        // Not a secret and not the Play Store key: see signing/README.md.
+        create("testBuilds") {
+            storeFile = rootProject.file("signing/test-builds.jks")
+            storePassword = "test-builds-only"
+            keyAlias = "test"
+            keyPassword = "test-builds-only"
+        }
     }
 
     buildTypes {
         debug {
+            signingConfig = signingConfigs.getByName("testBuilds")
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
@@ -29,9 +43,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // TEMPORARY: signed with the debug key so CI can install and smoke-test the R8-minified build.
-            // A real upload key is configured in Phase 8 (release) and never committed (SRS 13.1).
-            signingConfig = signingConfigs.getByName("debug")
+            // TEMPORARY: signed with the test-build key so it can be installed for testing (CI smoke test, your
+            // phone). A real upload key is configured in Phase 8 (release) and never committed (SRS 13.1).
+            signingConfig = signingConfigs.getByName("testBuilds")
         }
     }
 
