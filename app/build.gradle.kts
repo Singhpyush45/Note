@@ -102,6 +102,8 @@ dependencies {
     implementation(libs.androidx.ink.geometry)
     implementation(libs.androidx.ink.rendering)
     implementation(libs.androidx.ink.strokes)
+    // PDF export (ADR-0009 Part B): writes annotations into a copy. Apache-2.0. Display uses Android's PdfRenderer.
+    implementation(libs.pdfbox.android)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

@@ -26,8 +26,10 @@ adaptive = "1.3.0"
 materialIconsExtended = "1.7.8"
 uiautomator = "2.4.0"
 ink = "1.0.0"
+pdfboxAndroid = "2.0.27.0"
 
 [libraries]
+pdfbox-android = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfboxAndroid" }
 androidx-ink-authoring = { module = "androidx.ink:ink-authoring", version.ref = "ink" }
 androidx-ink-brush = { module = "androidx.ink:ink-brush", version.ref = "ink" }
 androidx-ink-geometry = { module = "androidx.ink:ink-geometry", version.ref = "ink" }
