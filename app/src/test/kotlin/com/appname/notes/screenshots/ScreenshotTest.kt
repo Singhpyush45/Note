@@ -132,6 +132,11 @@ abstract class ScreenshotTestBase(private val device: String) {
         lecture
     }
 
+    protected fun pressBack() {
+        composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.SCREEN)) }
+    }
+
     protected fun setTheme(id: Int) {
         composeRule.onNodeWithTag("nav_settings").performClick()
         waitAdvancing { exists(hasText(string(id))) }
@@ -150,6 +155,7 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithText("Lecture 4 — Chain rule").performClick()
         waitAdvancing { exists(hasTestTag(EditorTestTags.BODY)) }
         snap("editor_light")
+        pressBack() // the bottom bar is hidden while editing on phones
 
         setTheme(R.string.settings_theme_dark)
         waitAdvancing { exists(hasText("Groceries")) }

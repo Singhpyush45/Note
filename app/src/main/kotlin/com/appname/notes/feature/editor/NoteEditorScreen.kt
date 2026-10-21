@@ -60,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -71,6 +72,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -117,6 +119,7 @@ fun NoteEditorRoute(
     val allTags by viewModel.allTags.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(message, snackbar, viewModel::messageShown)
 
@@ -203,8 +206,8 @@ fun NoteEditorRoute(
                 Text(
                     export.lost.joinToString("\n") {
                         when (it) {
-                            LostFeature.UNDERLINE -> context.getString(R.string.export_lost_underline)
-                            LostFeature.UNSUPPORTED_CONTENT -> context.getString(R.string.export_lost_unsupported)
+                            LostFeature.UNDERLINE -> resources.getString(R.string.export_lost_underline)
+                            LostFeature.UNSUPPORTED_CONTENT -> resources.getString(R.string.export_lost_unsupported)
                         }
                     },
                 )
@@ -324,6 +327,9 @@ private fun EditorContent(controller: EditorController, readOnly: ReadOnlyReason
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val state = controller.state
     val transformation = remember(state, styles) { EditorVisualTransformation(state, styles) }
+    // The tap handler is installed once; these always hold the latest values for it to read.
+    val latestTransformation by rememberUpdatedState(transformation)
+    val latestState by rememberUpdatedState(state)
     val bodyLabel = stringResource(R.string.editor_body_label)
     val colors = MaterialTheme.colorScheme
 
@@ -393,8 +399,8 @@ private fun EditorContent(controller: EditorController, readOnly: ReadOnlyReason
                 .checkboxTaps(
                     enabled = readOnly == null,
                     layout = { layout },
-                    decorations = { transformation.decorations },
-                    isChecklist = { line -> state.paragraphs.getOrNull(line)?.kind == com.appname.notes.core.domain.document.BlockKind.CHECKLIST },
+                    decorations = { latestTransformation.decorations },
+                    isChecklist = { line -> latestState.paragraphs.getOrNull(line)?.kind == com.appname.notes.core.domain.document.BlockKind.CHECKLIST },
                     onToggle = controller::toggleChecked,
                 ),
             decorationBox = { inner ->

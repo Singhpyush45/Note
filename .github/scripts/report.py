@@ -50,7 +50,8 @@ def junit(globs):
                     if node is not None:
                         totals["failures" if kind == "failure" else "errors"] += 1
                         body = (node.get("message") or "") + "\n" + (node.text or "")
-                        lines = [l for l in body.strip().splitlines() if l.strip()][:30]
+                        lines = [l for l in body.strip().splitlines()
+                                 if l.strip() and not re.match(r"\s+at (org\.junit|org\.robolectric|java\.base|jdk\.|androidx\.test|org\.gradle|kotlinx\.coroutines|androidx\.compose\.ui\.test)", l)][:14]
                         failures.append(f"✗ {case.get('classname')}.{case.get('name')}\n" + "\n".join(lines))
     return files, totals, failures
 
@@ -119,11 +120,14 @@ def main():
         emit("warning", f"{label}: Gradle deprecations ({len(deprecations)})", "\n".join(deprecations[:40]))
 
     budget = MAX_ERRORS
+    if lint and budget:
+        emit("error", f"{label}: lint errors ({len(lint)})", "\n\n".join(lint))
+        budget -= 1
     if failure_text and budget:
         emit("error", f"{label}: Gradle failure", failure_text)
         budget -= 1
     chunk = ""
-    for item in failures + lint:
+    for item in failures:
         if len(chunk) + len(item) > MAX_CHARS and chunk and budget > 1:
             emit("error", f"{label}: failures", chunk)
             budget -= 1

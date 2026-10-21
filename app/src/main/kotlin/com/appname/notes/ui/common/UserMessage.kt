@@ -6,7 +6,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import com.appname.notes.R
 import com.appname.notes.core.common.result.DomainError
 
@@ -32,13 +32,13 @@ fun DomainError.toUserMessage(): UserMessage = UserMessage(
 /** Shows [message] once, then calls [onShown]. */
 @Composable
 fun MessageEffect(message: UserMessage?, snackbarHostState: SnackbarHostState, onShown: () -> Unit) {
-    val context = LocalContext.current
+    val resources = LocalResources.current
     LaunchedEffect(message?.id) {
         val current = message ?: return@LaunchedEffect
-        val text = context.getString(current.text, *current.args.toTypedArray())
+        val text = resources.getString(current.text, *current.args.toTypedArray())
         val result = snackbarHostState.showSnackbar(
             message = text,
-            actionLabel = if (current.undo != null) context.getString(R.string.action_undo) else null,
+            actionLabel = if (current.undo != null) resources.getString(R.string.action_undo) else null,
             duration = SnackbarDuration.Short,
             withDismissAction = current.undo == null,
         )

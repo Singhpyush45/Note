@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
 import androidx.compose.ui.test.performTouchInput
@@ -24,8 +25,11 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.GraphicsMode
 
 /** The editor screen with a real controller, without database or ViewModel. */
+// Real text measurement is needed to tap a checkbox at a pixel position.
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(AndroidJUnit4::class)
 class EditorScreenTest {
 
@@ -84,7 +88,7 @@ class EditorScreenTest {
         val c = controller()
         show(c)
         composeRule.onNodeWithTag(EditorTestTags.BODY).performTextInput("milk")
-        composeRule.onNodeWithContentDescription(string(R.string.fmt_checklist)).performClick()
+        composeRule.onNodeWithContentDescription(string(R.string.fmt_checklist)).performScrollTo().performClick()
         composeRule.waitForIdle()
         assertThat(c.state.paragraphs.single().kind).isEqualTo(BlockKind.CHECKLIST)
     }
