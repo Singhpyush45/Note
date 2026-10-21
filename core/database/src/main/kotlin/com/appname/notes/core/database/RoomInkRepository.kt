@@ -132,6 +132,7 @@ class RoomInkRepository(
         template = PageTemplate.fromCode(template),
         width = width,
         height = height,
+        pdfPageIndex = pdfPageIndex,
     )
 
     private companion object {

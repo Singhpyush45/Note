@@ -7,11 +7,13 @@ import com.appname.notes.core.common.time.AppClock
 import com.appname.notes.core.database.NotesDatabase
 import com.appname.notes.core.database.RoomInkRepository
 import com.appname.notes.core.database.RoomNoteRepository
+import com.appname.notes.core.database.RoomPdfRepository
 import com.appname.notes.core.database.RoomNotebookRepository
 import com.appname.notes.core.database.RoomTagRepository
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
+import com.appname.notes.core.domain.repository.PdfRepository
 import com.appname.notes.core.domain.repository.TagRepository
 import com.appname.notes.feature.settings.SearchIndexRebuilder
 import dagger.Module
@@ -69,4 +71,9 @@ object DataModule {
     @Singleton
     fun provideInkRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): InkRepository =
         RoomInkRepository(db, clock, ids, logger)
+
+    @Provides
+    @Singleton
+    fun providePdfRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): PdfRepository =
+        RoomPdfRepository(db, clock, ids, logger)
 }

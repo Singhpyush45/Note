@@ -29,6 +29,31 @@ data class InkPageEntity(
     val height: Float,
     val createdAt: Long,
     val updatedAt: Long,
+    /** For PDF notes: the 0-based PDF page drawn under this page's ink (schema v3). Null for plain ink pages. */
+    val pdfPageIndex: Int? = null,
+)
+
+/**
+ * The imported file of a PDF note (schema v3). The file itself lives in app-private storage under
+ * [fileName] and is never modified; duplicates of the note share it (it is deleted when unreferenced).
+ */
+@Entity(
+    tableName = "pdf_documents",
+    foreignKeys = [
+        ForeignKey(entity = NoteEntity::class, parentColumns = ["id"], childColumns = ["noteId"], onDelete = ForeignKey.CASCADE),
+    ],
+    indices = [Index("fileName")],
+)
+data class PdfDocumentEntity(
+    @PrimaryKey val noteId: String,
+    val fileName: String,
+    /** Name of the file the user imported, e.g. "Lecture 5.pdf". */
+    val displayName: String,
+    /** SHA-256 of the file at import, hex. Lets us prove the original was never changed (PDF-05). */
+    val sha256: String,
+    val sizeBytes: Long,
+    val pageCount: Int,
+    val importedAt: Long,
 )
 
 @Entity(

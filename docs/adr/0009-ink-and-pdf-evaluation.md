@@ -43,15 +43,32 @@ Prototyped in plain Python against a generated corpus, then ported line-for-line
 − Two code paths (Ink and fallback) to keep visually close; Ink rendering is verified on the emulator only.
 − Real latency numbers need the owner's stylus device (NFR-03).
 
-## Part B — PDF: Proposed (resolved in Phase 4)
+## Part B — PDF: Accepted · 2026-10-22 (Phase 4)
 
-| Candidate | Licence | Render | Annotate/export | Note |
-|---|---|---|---|---|
-| Platform `PdfRenderer` | Platform | Yes | No editing (export via our own drawing) | Baseline |
-| `androidx.pdf` 1.0.0-beta01 | Apache-2.0 | Yes (viewer) | Limited | Not yet stable |
-| PdfBox-Android | Apache-2.0 | Partial | Can write annotations/content to a copy | Check maintenance |
-| MuPDF | **AGPL** / commercial | Excellent | Excellent | AGPL forces open-sourcing the app — avoid unless licensed |
-| Nutrient (PSPDFKit) | Commercial | Excellent | Excellent | Paid |
+### Options checked
+| Candidate | Licence | Fit |
+|---|---|---|
+| Platform `PdfRenderer` (PDFium) | Part of Android | Fast, memory-friendly rendering on every supported version (8+). Read-only |
+| `androidx.pdf` 1.0.0-beta01 | Apache-2.0 | Viewer + experimental editing; needs Android 9+; its own pen tools and writes edits into the PDF — would replace our ink (shapes, lasso, undo) and modify the document |
+| PdfBox-Android 2.0.27.0 | Apache-2.0 | Reads page geometry, writes content into a copy; Android 4.4+; last release Jan 2023 (port of Apache PDFBox 2.0) |
+| MuPDF | AGPL / commercial | AGPL would force open-sourcing the app |
+| Nutrient (PSPDFKit) | Commercial | Paid |
 
-Exit criteria: PDF-01…06 pass, original file byte-identical after export (checksum test).
-Ink annotations on PDF pages reuse the Phase 3 page/ink model with a PDF page as background.
+### Decision
+1. **Display: platform `PdfRenderer`**, one render thread, memory-bounded bitmap cache, detail tiles when zoomed.
+2. **Annotations: our ink model** (Phase 3) — every PDF page is an ink page with the PDF page as background, so
+   shape correction, lasso, erasers and undo work unchanged (INK-SH-07). Stored separately; the imported
+   file is copied once into app storage and never modified (SRS 7.1).
+3. **Export: PdfBox-Android** writes a copy with ink appended as vector content ("flattened": visible in every
+   viewer, not editable as annotations elsewhere — SRS 7.3 allows this when documented).
+4. Coordinates: `PdfPageMapping` (crop box, `/Rotate` 0/90/180/270, 1 unit = 0.75 pt) in `:core:ink`.
+
+### Spike evidence (emulator, judged by PDFium)
+`PdfMappingDeviceTest`: for A4, US Letter landscape, rotations 0/90/180/270 and an offset crop box, markers
+drawn by PdfBox appear where our inverse mapping predicts; ink exported at a point appears at that pixel;
+highlighter stays translucent; the source file's SHA-256 is unchanged.
+
+### Consequences
++ No licence risk, works on all supported devices, one ink system everywhere.
+− PdfBox-Android is not actively released; it's isolated behind `PdfAnnotationWriter` so it can be swapped.
+− Export flattens ink; editable native annotations would need another writer later.

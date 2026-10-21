@@ -123,6 +123,10 @@ abstract class NoteDao {
     @Query("DELETE FROM ink_pages WHERE noteId IN (:ids)")
     protected abstract suspend fun deleteInkPages(ids: List<String>)
 
+    /** The stored PDF file itself is removed afterwards by the app once no note references it. */
+    @Query("DELETE FROM pdf_documents WHERE noteId IN (:ids)")
+    protected abstract suspend fun deletePdfDocuments(ids: List<String>)
+
     /** Permanent delete: content and handwriting removed, tags unlinked, tombstone kept (SRS 9.2). */
     @Transaction
     open suspend fun deletePermanently(ids: List<String>, now: Long): Int {
@@ -132,6 +136,7 @@ abstract class NoteDao {
             deleteTagLinks(chunk)
             deleteInkItems(chunk)
             deleteInkPages(chunk)
+            deletePdfDocuments(chunk)
             count += tombstone(chunk, now)
         }
         return count
@@ -143,6 +148,7 @@ abstract class NoteDao {
         deleteTagLinks(listOf(id))
         deleteInkItems(listOf(id))
         deleteInkPages(listOf(id))
+        deletePdfDocuments(listOf(id))
         hardDelete(id)
     }
 

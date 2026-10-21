@@ -127,6 +127,7 @@ class RoomNoteRepository(
             NoteType.TEXT -> decodeDocument(note.note.contentJson, note.note.id, logger).isBlank()
             // A handwritten note is blank when it has no ink at all (pages alone don't count).
             NoteType.INK -> db.inkDao().itemCount(note.note.id) == 0
+            NoteType.PDF -> false // an imported document is content
         }
         val blank = note.note.title.isBlank() && contentBlank && note.tags.isEmpty()
         if (blank) storageCall(logger, "Discard empty note") { dao.deleteUnusedNote(id.value) }
@@ -139,7 +140,7 @@ class RoomNoteRepository(
     }
 
     private suspend fun copyOf(source: com.appname.notes.core.database.entity.NoteWithTags): NoteId {
-        if (source.note.noteType.toNoteType() == NoteType.INK) return copyOfInkNote(source)
+        if (source.note.noteType.toNoteType() != NoteType.TEXT) return copyOfInkNote(source)
         val document = decodeDocument(source.note.contentJson, source.note.id, logger)
         // Fresh block IDs so the copy is independent for future per-block sync.
         val copyDocument = document.copy(blocks = document.blocks.map { if (it is TextBlock) it.copy(id = ids.newId()) else it })
@@ -164,11 +165,14 @@ class RoomNoteRepository(
         val now = clock.now().toEpochMilli()
         val newId = ids.newId()
         val (pages, items) = copyInk(db, source.note.id, newId, ids, now)
+        // A PDF copy shares the (never modified) file; it is deleted only when no note uses it.
+        val pdf = db.inkDao().pdfDocument(source.note.id)?.copy(noteId = newId, importedAt = now)
         db.inkDao().insertCopy(
             source.note.copy(id = newId, isPinned = false, createdAt = now, updatedAt = now, trashedAt = null, revision = 1),
             source.tags.map { it.id },
             pages,
             items,
+            pdf,
         )
         return NoteId(newId)
     }

@@ -8,6 +8,7 @@ import com.appname.notes.core.database.entity.InkItemEntity
 import com.appname.notes.core.database.entity.InkPageEntity
 import com.appname.notes.core.database.entity.NoteEntity
 import com.appname.notes.core.database.entity.NoteTagCrossRef
+import com.appname.notes.core.database.entity.PdfDocumentEntity
 
 /**
  * Pages and ink items. Methods marked @Transaction run all-or-nothing (BEGIN … COMMIT), so a crash in the
@@ -71,17 +72,41 @@ abstract class InkDao {
     @Query("UPDATE notes SET updatedAt = :now, revision = revision + 1 WHERE id = :noteId AND deletedAt IS NULL")
     protected abstract suspend fun touchNote(noteId: String, now: Long): Int
 
+    @Insert
+    protected abstract suspend fun insertPdfDocument(document: PdfDocumentEntity)
+
+    @Query("SELECT * FROM pdf_documents WHERE noteId = :noteId")
+    abstract suspend fun pdfDocument(noteId: String): PdfDocumentEntity?
+
+    @Query("SELECT DISTINCT fileName FROM pdf_documents")
+    abstract suspend fun pdfFileNames(): List<String>
+
     @Transaction
     open suspend fun createNote(note: NoteEntity, firstPage: InkPageEntity) {
         insertNote(note)
         insertPage(firstPage)
     }
 
+    /** A PDF note with its document row and one page per PDF page, all or nothing. */
+    @Transaction
+    open suspend fun createPdfNote(note: NoteEntity, document: PdfDocumentEntity, pages: List<InkPageEntity>) {
+        insertNote(note)
+        insertPdfDocument(document)
+        insertPages(pages)
+    }
+
     /** Copy of a note with its tags, pages and ink (all new ids prepared by the caller). */
     @Transaction
-    open suspend fun insertCopy(note: NoteEntity, tagIds: List<String>, pages: List<InkPageEntity>, items: List<InkItemEntity>) {
+    open suspend fun insertCopy(
+        note: NoteEntity,
+        tagIds: List<String>,
+        pages: List<InkPageEntity>,
+        items: List<InkItemEntity>,
+        pdfDocument: PdfDocumentEntity? = null,
+    ) {
         insertNote(note)
         insertTagLinks(tagIds.map { NoteTagCrossRef(note.id, it) })
+        pdfDocument?.let { insertPdfDocument(it) }
         insertPages(pages)
         if (items.isNotEmpty()) insertItems(items)
     }

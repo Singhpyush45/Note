@@ -42,7 +42,7 @@ fun MutableList<NavKey>.openNote(noteId: String, type: NoteType = NoteType.TEXT)
     add(
         when (type) {
             NoteType.TEXT -> NoteEditorKey(noteId)
-            NoteType.INK -> InkEditorKey(noteId)
+            NoteType.INK, NoteType.PDF -> InkEditorKey(noteId) // a PDF is ink pages over the document's pages
         },
     )
 }

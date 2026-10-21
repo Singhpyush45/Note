@@ -92,7 +92,7 @@ class MigrationTest {
     @Test
     fun `latest schema is committed`() {
         // CI also fails when the exported schema differs from the committed one.
-        assertThat(committedVersions().last()).isEqualTo(2)
+        assertThat(committedVersions().last()).isEqualTo(3)
     }
 
     @Test
@@ -105,6 +105,35 @@ class MigrationTest {
             db.noteDao().liveNoteCount()
             db.close()
         }
+    }
+
+    @Test
+    fun `version 2 handwriting survives the upgrade to version 3`() = runTest {
+        val name = "v2-with-ink.db"
+        val old = createOldDatabase(2, name)
+        val now = clock.now().toEpochMilli()
+        old.insertOrThrow("notes", null, ContentValues().apply {
+            put("id", "n1"); put("title", "Sketch"); put("contentJson", "{}"); put("plainText", ""); put("preview", "")
+            put("noteType", "INK"); put("isPinned", 0); put("isFavourite", 0); put("isArchived", 0)
+            put("createdAt", now); put("updatedAt", now); put("revision", 1)
+        })
+        old.insertOrThrow("ink_pages", null, ContentValues().apply {
+            put("id", "p1"); put("noteId", "n1"); put("pageIndex", 0); put("template", 1)
+            put("width", 794f); put("height", 1123f); put("createdAt", now); put("updatedAt", now)
+        })
+        val stroke = StrokeItem("s1", 1, InkBrush(InkTool.PEN, -16777216, 2f), StrokePoints(floatArrayOf(1f, 2f), floatArrayOf(3f, 4f), intArrayOf(0, 8)))
+        old.insertOrThrow("ink_items", null, ContentValues().apply {
+            put("id", "s1"); put("pageId", "p1"); put("z", 1L); put("data", com.appname.notes.core.ink.codec.InkCodec.encode(stroke))
+        })
+        old.close()
+
+        val db = openCurrent(name)
+        val ink = RoomInkRepository(db, clock, ids, NoOpLogger)
+        val page = (ink.loadPages(NoteId("n1")) as AppResult.Success).value.single()
+        assertThat(page.items).containsExactly(stroke)
+        assertThat(page.info.template).isEqualTo(PageTemplate.LINED)
+        assertThat(page.info.pdfPageIndex).isNull()
+        db.close()
     }
 
     @Test

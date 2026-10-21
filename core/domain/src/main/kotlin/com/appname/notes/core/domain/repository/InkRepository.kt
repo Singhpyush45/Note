@@ -16,6 +16,8 @@ data class InkPageInfo(
     val template: PageTemplate,
     val width: Float,
     val height: Float,
+    /** For PDF notes: which PDF page is drawn under the ink. */
+    val pdfPageIndex: Int? = null,
 )
 
 /**

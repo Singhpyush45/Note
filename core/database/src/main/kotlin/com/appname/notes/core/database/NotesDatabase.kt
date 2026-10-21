@@ -15,21 +15,23 @@ import com.appname.notes.core.database.entity.NoteEntity
 import com.appname.notes.core.database.entity.NoteFtsEntity
 import com.appname.notes.core.database.entity.NoteTagCrossRef
 import com.appname.notes.core.database.entity.NotebookEntity
+import com.appname.notes.core.database.entity.PdfDocumentEntity
 import com.appname.notes.core.database.entity.TagEntity
 
 /**
  * Schema history (every version's schema is committed under schemas/ and tested by MigrationTest):
  * - v1 (Phase 2): notebooks, notes (+ FTS index), tags, note_tags.
  * - v2 (Phase 3): ink_pages, ink_items. Only new tables, so Room generates the migration.
+ * - v3 (Phase 4): pdf_documents; ink_pages.pdfPageIndex (nullable). Generated migration too.
  */
 @Database(
     entities = [
         NotebookEntity::class, NoteEntity::class, NoteFtsEntity::class, TagEntity::class, NoteTagCrossRef::class,
-        InkPageEntity::class, InkItemEntity::class,
+        InkPageEntity::class, InkItemEntity::class, PdfDocumentEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class NotesDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao

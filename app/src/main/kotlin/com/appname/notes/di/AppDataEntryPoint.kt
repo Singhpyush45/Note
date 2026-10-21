@@ -2,6 +2,7 @@ package com.appname.notes.di
 
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
+import com.appname.notes.core.domain.repository.PdfRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.TagRepository
 import dagger.hilt.EntryPoint
@@ -19,4 +20,5 @@ interface AppDataEntryPoint {
     fun notebooks(): NotebookRepository
     fun tags(): TagRepository
     fun ink(): InkRepository
+    fun pdf(): PdfRepository
 }
