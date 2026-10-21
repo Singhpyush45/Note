@@ -297,8 +297,9 @@ class InkFlowRobolectricTest {
                     ?: node.config.getOrNull(SemanticsProperties.Text)?.joinToString()
                     ?: node.children.firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() }
                 assertThat(label).isNotEmpty()
-                val w = node.boundsInRoot.width / density
-                val h = node.boundsInRoot.height / density
+                // Touch bounds: Material expands small buttons' touch area to 48 dp around the visible shape.
+                val w = node.touchBoundsInRoot.width / density
+                val h = node.touchBoundsInRoot.height / density
                 assertThat(minOf(w, h)).isAtLeast(47.5f)
             }
         }
