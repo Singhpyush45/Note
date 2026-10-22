@@ -3,13 +3,34 @@
 set -u
 status=0
 
+# A test that fails without a message usually means the app process died (native crash, killed for memory).
+# Put the device's crash buffer, low-memory kills and the test runner's last lines into the CI annotations.
+crash_report() {
+  local text
+  text=$( {
+    echo "== crash buffer =="; adb logcat -d -b crash | tail -n 60
+    echo "== process deaths / low memory =="; adb logcat -d | grep -E "lowmemorykiller|Low on memory|has died|Process .* \(pid|FATAL|SIGSEGV|SIGABRT|OutOfMemory" | tail -n 30
+    echo "== TestRunner =="; adb logcat -d -s TestRunner | tail -n 20
+  } 2>/dev/null )
+  text=${text//'%'/'%25'}; text=${text//$'\r'/}; text=${text//$'\n'/'%0A'}
+  echo "::error title=$1: device logs::${text:0:60000}"
+}
+
 # In-app instrumented tests, then black-box lifecycle tests (process death, force-stop) from :e2e.
 # Two separate Gradle runs on purpose: in one run Gradle executes them in parallel on the same emulator,
 # and the e2e tests' `pm clear` / app launches would collide with the other suite.
+adb logcat -c || true
 ./gradlew connectedDebugAndroidTest -x :e2e:connectedDebugAndroidTest --continue 2>&1 | tee instrumented.log
-[ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+  status=1
+  crash_report "In-app instrumented tests"
+fi
+adb logcat -c || true
 ./gradlew :e2e:connectedCheck --continue 2>&1 | tee -a instrumented.log
-[ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+  status=1
+  crash_report "e2e tests"
+fi
 
 # Release smoke test: install the R8-minified APK, launch it, make sure it is still alive and didn't crash.
 APK=app/build/outputs/apk/release/app-release.apk
