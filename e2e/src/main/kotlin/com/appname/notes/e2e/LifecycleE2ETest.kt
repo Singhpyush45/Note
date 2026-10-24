@@ -47,8 +47,7 @@ class LifecycleE2ETest {
 
         device.pressHome()
         Thread.sleep(SAVE_WAIT_MS) // the app saves when it goes to the background
-        device.executeShellCommand("am kill $PACKAGE") // what Android does to background apps under memory pressure
-        waitUntilProcessGone()
+        killInBackground() // what Android does to background apps under memory pressure
 
         launch(clearTask = false) // like returning from recent apps: the task and its saved state are restored
         val body = find("editor_body")
@@ -81,8 +80,7 @@ class LifecycleE2ETest {
 
         device.pressHome()
         Thread.sleep(SAVE_WAIT_MS)
-        device.executeShellCommand("am kill $PACKAGE")
-        waitUntilProcessGone()
+        killInBackground()
 
         launch(clearTask = false)
         findCanvas()
@@ -116,8 +114,7 @@ class LifecycleE2ETest {
 
         device.pressHome()
         Thread.sleep(SAVE_WAIT_MS)
-        device.executeShellCommand("am kill $PACKAGE")
-        waitUntilProcessGone()
+        killInBackground()
 
         launch(clearTask = false)
         findCanvas()
@@ -153,8 +150,7 @@ class LifecycleE2ETest {
 
         device.pressHome()
         Thread.sleep(SAVE_WAIT_MS)
-        device.executeShellCommand("am kill $PACKAGE")
-        waitUntilProcessGone()
+        killInBackground()
 
         launch(clearTask = false)
         checkNotNull(device.wait(Until.findObject(By.desc(label)), TIMEOUT_MS)) { "Photo gone after process death. ${diagnostics()}" }
@@ -223,6 +219,21 @@ class LifecycleE2ETest {
         device.waitForIdle()
     }
 
+    /**
+     * Kills the backgrounded app the way Android does under memory pressure (`am kill`). Android only kills an
+     * idle background process: while background work runs (e.g. text indexing after an import) the kill is
+     * refused, as it would be on a phone. So the kill is repeated until the work is done and it succeeds.
+     */
+    private fun killInBackground() {
+        val deadline = System.currentTimeMillis() + KILL_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            device.executeShellCommand("am kill $PACKAGE")
+            Thread.sleep(500)
+            if (device.executeShellCommand("pidof $PACKAGE").isBlank()) return
+        }
+        throw AssertionError("$PACKAGE is still running. ${diagnostics()}")
+    }
+
     private fun waitUntilProcessGone() {
         val deadline = System.currentTimeMillis() + TIMEOUT_MS
         while (System.currentTimeMillis() < deadline) {
@@ -236,5 +247,6 @@ class LifecycleE2ETest {
         const val PACKAGE = "com.appname.notes.debug"
         const val TIMEOUT_MS = 15_000L
         const val SAVE_WAIT_MS = 2_000L
+        const val KILL_TIMEOUT_MS = 60_000L
     }
 }
