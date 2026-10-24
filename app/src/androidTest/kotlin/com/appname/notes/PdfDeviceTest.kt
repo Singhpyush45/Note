@@ -203,8 +203,28 @@ class PdfDeviceTest {
 
     // ------------------------------------------------------------------ PDF-03, PDF-06: rendering and memory
 
+    /**
+     * Measures the renderer alone: background text indexing (which loads OCR models and renders pages of its own)
+     * is turned off for this test and any run already going is waited for.
+     */
+    private fun withoutBackgroundIndexing(block: () -> Unit) {
+        runBlocking { data.settings().setDocumentText(false) }
+        val work = androidx.work.WorkManager.getInstance(context)
+        val deadline = System.currentTimeMillis() + 120_000
+        while (System.currentTimeMillis() < deadline &&
+            work.getWorkInfosForUniqueWork(com.appname.notes.feature.textindex.TextIndexScheduler.WORK_NAME).get().any { !it.state.isFinished }
+        ) {
+            Thread.sleep(250)
+        }
+        try {
+            block()
+        } finally {
+            runBlocking { data.settings().setDocumentText(true) }
+        }
+    }
+
     @Test
-    fun largePdfRendersPageByPageWithinTheMemoryBudget() {
+    fun largePdfRendersPageByPageWithinTheMemoryBudget() = withoutBackgroundIndexing {
         val source = makePdf("large.pdf", pages = 150)
         val id = created(source)
         val file = storedFile(id)

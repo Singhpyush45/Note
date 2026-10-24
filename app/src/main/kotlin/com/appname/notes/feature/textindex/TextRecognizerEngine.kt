@@ -17,6 +17,9 @@ class OcrUnavailableException(cause: Throwable? = null) : Exception("Text recogn
 fun interface TextRecognizerEngine {
     /** Blocking; call from a background thread. Throws [OcrUnavailableException] when OCR can't run here. */
     fun recognize(bitmap: Bitmap): String
+
+    /** Frees models and native memory until the next [recognize] (called when an indexing run ends). */
+    fun release() {}
 }
 
 /**
@@ -25,8 +28,22 @@ fun interface TextRecognizerEngine {
  */
 class MlKitTextRecognizer : TextRecognizerEngine {
 
-    private val latin: TextRecognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
-    private val devanagari: TextRecognizer by lazy { TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build()) }
+    // Created on first use and closed by release(): the models take tens of MB of native memory.
+    private var latinClient: TextRecognizer? = null
+    private var devanagariClient: TextRecognizer? = null
+
+    private val latin: TextRecognizer
+        @Synchronized get() = latinClient ?: TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS).also { latinClient = it }
+    private val devanagari: TextRecognizer
+        @Synchronized get() = devanagariClient ?: TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build()).also { devanagariClient = it }
+
+    @Synchronized
+    override fun release() {
+        latinClient?.close()
+        devanagariClient?.close()
+        latinClient = null
+        devanagariClient = null
+    }
 
     override fun recognize(bitmap: Bitmap): String = try {
         val image = InputImage.fromBitmap(bitmap, 0)

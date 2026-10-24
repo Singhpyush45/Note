@@ -43,8 +43,10 @@ class TextIndexerTest {
 
     private fun pdf(n: Int) = TextSource.PdfNoteSource(NoteId("n$n"), "f$n.pdf")
 
+    private var released = 0
+
     private fun indexer(index: TextIndexRepository, extract: (TextSource) -> Extraction) =
-        TextIndexer(index, extract, settings, clock, dispatchers, NoOpLogger)
+        TextIndexer(index, extract, settings, clock, dispatchers, NoOpLogger, release = { released++ })
 
     @Test
     fun `processes everything pending, in batches, and records each outcome`() = runTest {
@@ -86,5 +88,12 @@ class TextIndexerTest {
         val n = indexer(index) { count++; Extraction(emptyList(), IndexStatus.EMPTY) }.run(shouldStop = { count >= 2 })
         assertThat(n).isEqualTo(2)
         assertThat(index.waiting).hasSize(8)
+    }
+
+    @Test
+    fun `OCR models are released after every run, even when a document fails`() = runTest {
+        indexer(FakeIndex(listOf(pdf(0)))) { error("boom") }.run()
+        indexer(FakeIndex(emptyList())) { error("not called") }.run()
+        assertThat(released).isEqualTo(2)
     }
 }

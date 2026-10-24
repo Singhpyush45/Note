@@ -50,7 +50,7 @@ object TextIndexModule {
         clock: AppClock,
         dispatchers: DispatcherProvider,
         logger: AppLogger,
-    ) = TextIndexer(repository, extractor::extract, settings, clock, dispatchers, logger)
+    ) = TextIndexer(repository, extractor::extract, settings, clock, dispatchers, logger, release = extractor::release)
 
     @Provides
     @Singleton

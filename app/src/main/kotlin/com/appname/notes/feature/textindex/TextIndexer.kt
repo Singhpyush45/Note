@@ -21,6 +21,8 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import java.time.Duration
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -35,9 +37,21 @@ class TextIndexer(
     private val clock: AppClock,
     private val dispatchers: DispatcherProvider,
     private val logger: AppLogger,
+    /** Frees OCR models after a run, so they don't hold native memory while the app is used (PDF-06). */
+    private val release: () -> Unit = {},
 ) {
-    /** Processes until nothing is left or [shouldStop]. Returns how many sources were processed. */
-    suspend fun run(shouldStop: () -> Boolean = { false }): Int = withContext(dispatchers.io) {
+    private val running = Mutex()
+
+    /** Processes until nothing is left or [shouldStop]. Returns how many sources were processed. One run at a time. */
+    suspend fun run(shouldStop: () -> Boolean = { false }): Int = running.withLock {
+        try {
+            runBatches(shouldStop)
+        } finally {
+            release()
+        }
+    }
+
+    private suspend fun runBatches(shouldStop: () -> Boolean): Int = withContext(dispatchers.io) {
         var processed = 0
         while (!shouldStop() && settings.documentText.first()) {
             val retryBefore = clock.now().minus(RETRY_AFTER)
@@ -98,7 +112,7 @@ class TextIndexScheduler(private val context: Context, private val logger: AppLo
         }
     }
 
-    private companion object {
+    companion object {
         const val WORK_NAME = "document-text-index"
     }
 }

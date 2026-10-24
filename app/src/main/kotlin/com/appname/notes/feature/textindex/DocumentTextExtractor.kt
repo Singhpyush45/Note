@@ -39,6 +39,9 @@ class DocumentTextExtractor(
     private val maxPages: Int = MAX_PAGES,
     private val maxOcrPages: Int = MAX_OCR_PAGES,
 ) {
+    /** Frees OCR models; called when an indexing run ends. */
+    fun release() = ocr.release()
+
     /** @throws OcrUnavailableException when OCR was needed and can't run (the caller records UNAVAILABLE). */
     fun extract(source: TextSource): Extraction = when (source) {
         is TextSource.PdfNoteSource -> pdf(pdfs.file(source.fileName))
