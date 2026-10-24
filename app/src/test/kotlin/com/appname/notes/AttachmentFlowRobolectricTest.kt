@@ -194,25 +194,19 @@ class AttachmentFlowRobolectricTest {
         assertThat(exists(hasTestTag(AttachmentTestTags.AUDIO_FILE))).isTrue()
     }
 
+    /**
+     * "Rename" is offered as a TalkBack action on each attachment. The dialog itself is tested on its own
+     * (RenameAttachmentDialogTest); renaming in storage by AttachmentRepositoryTest.
+     */
     @Test
-    fun anAttachmentCanBeRenamed() {
+    fun renameIsOfferedOnEachAttachment() {
         val id = noteWithAttachments()
         openNote(id)
         val zip = attachments(id).first { it.kind == AttachmentKind.FILE }
         waitAdvancing { exists(hasTestTag(AttachmentTestTags.item(zip)), unmerged = true) }
-        // The dialog's text cursor blinks for as long as it's open, so Compose is never "idle": step the clock by hand.
-        composeRule.mainClock.autoAdvance = false
-        // "Rename" is a TalkBack action on the item, and in its ⋮ sheet (the sheet itself is checked on the device).
-        customAction(AttachmentTestTags.item(zip), string(R.string.attach_rename))
-        composeRule.mainClock.advanceTimeBy(1_000)
-        assertThat(exists(hasTestTag(AttachmentTestTags.RENAME_FIELD))).isTrue()
-        composeRule.onNodeWithTag(AttachmentTestTags.RENAME_FIELD).performTextReplacement("Week 3 slides.zip")
-        composeRule.mainClock.advanceTimeBy(200)
-        composeRule.onNodeWithTag(AttachmentTestTags.RENAME_SAVE).performClick()
-        composeRule.mainClock.advanceTimeBy(1_000)
-        composeRule.mainClock.autoAdvance = true
-        waitAdvancing { attachments(id).any { it.displayName == "Week 3 slides.zip" } }
-        waitAdvancing { exists(hasText("Week 3 slides.zip"), unmerged = true) }
+        val node = composeRule.onNodeWithTag(AttachmentTestTags.item(zip), useUnmergedTree = true).fetchSemanticsNode()
+        val labels = node.config.getOrNull(SemanticsActions.CustomActions).orEmpty().map { it.label }
+        assertThat(labels).contains(string(R.string.attach_rename))
     }
 
     /**

@@ -159,7 +159,7 @@ fun AttachmentStrip(
 
 /** Renames what the note shows for a file or recording (the stored file is untouched). */
 @Composable
-private fun RenameAttachmentDialog(a: Attachment, onRename: (String) -> Unit, onDismiss: () -> Unit) {
+internal fun RenameAttachmentDialog(a: Attachment, onRename: (String) -> Unit, onDismiss: () -> Unit) {
     var name by rememberSaveable(a.id.value) { mutableStateOf(a.displayName) }
     AlertDialog(
         onDismissRequest = onDismiss,
