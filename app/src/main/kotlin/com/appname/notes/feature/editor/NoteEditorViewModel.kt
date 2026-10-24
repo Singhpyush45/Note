@@ -333,6 +333,25 @@ class NoteEditorViewModel @AssistedInject constructor(
         }
     }
 
+    /** A scan from the document scanner: attach the PDF, then remove the temporary copy. */
+    fun attachScan(file: File) {
+        if (_readOnly.value != null) {
+            file.delete()
+            return
+        }
+        _attaching.update { it + 1 }
+        appScope.launch {
+            val outcome = attacher.attach(noteId, listOf(attachmentIntents.uriFor(file)))
+            file.delete()
+            _attaching.update { it - 1 }
+            outcome.errorMessage?.let { _message.value = UserMessage(it) }
+        }
+    }
+
+    fun scannerUnavailable() {
+        _message.value = UserMessage(R.string.scan_unavailable)
+    }
+
     fun cameraUnavailable() {
         _message.value = UserMessage(R.string.attach_camera_unavailable)
     }

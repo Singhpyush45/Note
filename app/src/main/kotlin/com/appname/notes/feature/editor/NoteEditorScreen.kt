@@ -1,5 +1,7 @@
 package com.appname.notes.feature.editor
 
+import androidx.compose.material.icons.outlined.DocumentScanner
+import com.appname.notes.feature.attachments.rememberDocumentScanner
 import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
 import androidx.activity.result.PickVisualMediaRequest
@@ -184,6 +186,7 @@ fun NoteEditorRoute(
         annotate = { a -> scope.launch { viewModel.annotatePdf(a)?.let(onOpenPdfNote) } },
     )
     val hasCamera = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
+    val scan = rememberDocumentScanner(onScanned = viewModel::attachScan, onUnavailable = viewModel::scannerUnavailable)
     val attachMenu = AttachMenu(
         photos = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         camera = if (hasCamera) {
@@ -201,6 +204,7 @@ fun NoteEditorRoute(
             null
         },
         files = { filePicker.launch(arrayOf("*/*")) },
+        scan = scan,
     )
     var exportWarning by remember { mutableStateOf<ExportResult?>(null) }
 
@@ -597,8 +601,8 @@ private fun EditorOverflowMenu(meta: NoteMeta, actions: EditorMenuActions) {
     }
 }
 
-/** The three ways to add an attachment (FR-009). [camera] is null on devices without a camera. */
-data class AttachMenu(val photos: () -> Unit, val camera: (() -> Unit)?, val files: () -> Unit)
+/** The ways to add an attachment (FR-009, FR-011). [camera] is null on devices without a camera. */
+data class AttachMenu(val photos: () -> Unit, val camera: (() -> Unit)?, val files: () -> Unit, val scan: () -> Unit = {})
 
 @Composable
 private fun AttachButton(menu: AttachMenu) {
@@ -620,6 +624,12 @@ private fun AttachButton(menu: AttachMenu) {
                     onClick = { open = false; camera() },
                 )
             }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.scan_document)) },
+                leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) },
+                onClick = { open = false; menu.scan() },
+                modifier = Modifier.testTag(AttachmentTestTags.SCAN),
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.attach_files)) },
                 leadingIcon = { Icon(Icons.Outlined.InsertDriveFile, null) },

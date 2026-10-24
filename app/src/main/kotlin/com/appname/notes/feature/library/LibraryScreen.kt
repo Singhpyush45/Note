@@ -1,5 +1,7 @@
 package com.appname.notes.feature.library
 
+import androidx.compose.material.icons.outlined.DocumentScanner
+import com.appname.notes.feature.attachments.rememberDocumentScanner
 import android.graphics.Bitmap
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.LinearProgressIndicator
@@ -98,6 +100,7 @@ object LibraryTestTags {
     const val SEARCH = "action_search"
     const val GRID = "notes_grid"
     const val IMPORT_PDF = "action_import_pdf"
+    const val SCAN = "action_scan"
     const val IMPORTING_PDF = "importing_pdf"
 }
 
@@ -120,6 +123,10 @@ fun LibraryRoute(
         if (uri != null) scope.launch { viewModel.importPdf(uri)?.let { onOpenNote(it, NoteType.PDF) } }
     }
     val importingPdf by viewModel.importingPdf.collectAsStateWithLifecycle()
+    val scan = rememberDocumentScanner(
+        onScanned = { file -> scope.launch { viewModel.createNoteFromScan(file)?.let { onOpenNote(it, NoteType.TEXT) } } },
+        onUnavailable = viewModel::scannerUnavailable,
+    )
     // A notebook/tag shown here was deleted elsewhere: go back to All notes.
     LaunchedEffect(state.collection, state.loading, state.collectionName) {
         val c = state.collection
@@ -141,6 +148,7 @@ fun LibraryRoute(
         onImport = { importLauncher.launch(arrayOf("text/markdown", "text/x-markdown", "text/plain", "application/octet-stream")) },
         onImportPdf = { importPdfLauncher.launch(arrayOf("application/pdf")) },
         importingPdf = importingPdf,
+        onScan = scan,
         onManageNotebooks = onManageNotebooks,
         onManageTags = onManageTags,
         actions = NoteActions(
@@ -191,6 +199,7 @@ fun LibraryScreen(
     onImportPdf: () -> Unit = {},
     importingPdf: Boolean = false,
     cover: (suspend (String) -> Bitmap?)? = null,
+    onScan: () -> Unit = {},
 ) {
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(state.message, snackbar, onMessageShown)
@@ -232,6 +241,7 @@ fun LibraryScreen(
                         inTrash = inTrash,
                         onImport = onImport,
                         onImportPdf = onImportPdf,
+                        onScan = onScan,
                         onEmptyTrash = { confirmEmptyTrash = true },
                         onManageNotebooks = onManageNotebooks,
                         onManageTags = onManageTags,
@@ -457,6 +467,7 @@ private fun OverflowMenu(
     inTrash: Boolean,
     onImport: () -> Unit,
     onImportPdf: () -> Unit,
+    onScan: () -> Unit,
     onEmptyTrash: () -> Unit,
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
@@ -476,6 +487,12 @@ private fun OverflowMenu(
                 text = { Text(stringResource(R.string.library_import)) },
                 leadingIcon = { Icon(Icons.Outlined.FileOpen, null) },
                 onClick = { open = false; onImport() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.scan_document)) },
+                leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) },
+                onClick = { open = false; onScan() },
+                modifier = Modifier.testTag(LibraryTestTags.SCAN),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.pdf_import)) },

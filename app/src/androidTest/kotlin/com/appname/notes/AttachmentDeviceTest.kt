@@ -125,6 +125,20 @@ class AttachmentDeviceTest {
         assertThat(a.displayName).isEqualTo("broken.jpg")
     }
 
+    /** What happens after the scanner returns its PDF (the scanner screen itself is Google's, tested on a device). */
+    @Test
+    fun aScannedPdfIsAttachedUnderADatedNameAndIsAPdf() = runBlocking {
+        val when_ = java.util.GregorianCalendar(2026, java.util.Calendar.OCTOBER, 24, 18, 30, 5).time
+        val staged = com.appname.notes.feature.attachments.stageScan(context, Uri.fromFile(onePagePdf()), when_)!!
+        assertThat(staged.name).isEqualTo("Scan 2026-10-24 18.30.05.pdf")
+        val id = (data.notes().createNote(null) as AppResult.Success).value
+        val intents = AttachmentIntents(context, store())
+        val a = Attacher(store(), data.attachments(), dispatchers).attach(id, listOf(intents.uriFor(staged))).added.single()
+        assertThat(a.displayName).isEqualTo("Scan 2026-10-24 18.30.05.pdf")
+        assertThat(a.kind).isEqualTo(AttachmentKind.PDF)
+        assertThat(a.mimeType).isEqualTo("application/pdf")
+    }
+
     @Test
     fun fullStorageIsReportedAndNothingIsAttached() = runBlocking {
         val id = (data.notes().createNote(null) as AppResult.Success).value

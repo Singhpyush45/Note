@@ -140,6 +140,7 @@ class PdfFlowRobolectricTest {
         composeRule.onNodeWithContentDescription(string(R.string.action_more)).performClick()
         composeRule.waitForIdle()
         assertThat(exists(hasTestTag(LibraryTestTags.IMPORT_PDF))).isTrue()
+        assertThat(exists(hasTestTag(LibraryTestTags.SCAN))).isTrue()
     }
 
     /** SRS 7.1 page navigation and page count: the grid jumps to a page, the indicator follows. */

@@ -5,7 +5,10 @@ import androidx.lifecycle.SavedStateHandle
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import com.appname.notes.core.domain.model.AttachmentKind
+import com.appname.notes.feature.attachments.AttachmentIntents
 import com.appname.notes.feature.attachments.AttachmentPreviews
+import com.appname.notes.feature.attachments.Attacher
+import java.io.File
 import com.appname.notes.feature.attachments.StorageCleanup
 import com.appname.notes.feature.pdf.PdfImport
 import com.appname.notes.feature.pdf.PdfImporter
@@ -77,6 +80,8 @@ class LibraryViewModel @Inject constructor(
     private val pdfThumbnails: PdfThumbnails,
     private val storageCleanup: StorageCleanup,
     private val attachmentPreviews: AttachmentPreviews,
+    private val attacher: Attacher,
+    private val attachmentIntents: AttachmentIntents,
 ) : ViewModel() {
 
     // The chosen collection survives rotation and process death via SavedStateHandle.
@@ -138,6 +143,20 @@ class LibraryViewModel @Inject constructor(
     /** Recently drawn thumbnails, keyed by note and its modified time, so scrolling doesn't reload them. */
     private val thumbnails = object : LinkedHashMap<String, InkThumbnail>(32, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, InkThumbnail>?) = size > THUMBNAIL_CACHE
+    }
+
+    /** A scan from the document scanner becomes a new note in the shown notebook (FR-011). */
+    suspend fun createNoteFromScan(file: File): NoteId? {
+        val notebook = (collection.value as? NoteCollection.InNotebook)?.id
+        val (id, outcome) = attacher.createNote(notebook, listOf(attachmentIntents.uriFor(file)))
+        file.delete()
+        outcome.errorMessage?.let { message.value = UserMessage(it) }
+        if (id != null) (collection.value as? NoteCollection.WithTag)?.let { notes.setTags(id, setOf(it.id)) }
+        return id
+    }
+
+    fun scannerUnavailable() {
+        message.value = UserMessage(R.string.scan_unavailable)
     }
 
     /** Cover photo for a text note's card (its first attached image), decoded at card size and cached. */

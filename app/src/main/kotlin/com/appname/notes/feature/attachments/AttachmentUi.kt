@@ -81,6 +81,7 @@ object AttachmentTestTags {
     const val ATTACHING = "attaching_progress"
     const val VIEWER = "image_viewer"
     const val SHEET = "attachment_sheet"
+    const val SCAN = "attach_scan"
     fun item(a: Attachment) = "attachment_${a.id.value}"
 }
 

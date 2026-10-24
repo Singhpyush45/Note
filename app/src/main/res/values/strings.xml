@@ -269,6 +269,8 @@
     <string name="search_in_page">Page %1$d</string>
     <string name="search_in_attachment">In %1$s</string>
     <string name="search_in_attachment_page">In %1$s, page %2$d</string>
+    <string name="scan_document">Scan document</string>
+    <string name="scan_unavailable">The document scanner isn\'t available on this phone (it needs Google Play services).</string>
     <!-- Attachments (Phase 5, FR-009) -->
     <string name="attach_menu">Attach</string>
     <string name="attach_photos">Photos</string>

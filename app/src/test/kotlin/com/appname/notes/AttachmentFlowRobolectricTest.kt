@@ -103,8 +103,11 @@ class AttachmentFlowRobolectricTest {
         waitAdvancing { exists(hasTestTag(AttachmentTestTags.STRIP)) }
         assertThat(exists(hasContentDescription(string(R.string.attach_photo_label, "Board.jpg")), unmerged = true)).isTrue()
         assertThat(exists(hasText("notes.zip"), unmerged = true)).isTrue()
-        // The attach button is there for an editable note.
-        assertThat(exists(hasTestTag(AttachmentTestTags.ATTACH_BUTTON))).isTrue()
+        // The attach button is there for an editable note, with the scanner among its choices.
+        composeRule.onNodeWithTag(AttachmentTestTags.ATTACH_BUTTON).performClick()
+        waitAdvancing { exists(hasTestTag(AttachmentTestTags.SCAN)) }
+        assertThat(exists(hasText(string(R.string.attach_photos)))).isTrue()
+        assertThat(exists(hasText(string(R.string.attach_files)))).isTrue()
     }
 
     @Test
