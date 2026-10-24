@@ -55,6 +55,15 @@ class RoomAttachmentRepository(
         }
     }
 
+    override suspend fun rename(id: AttachmentId, displayName: String): AppResult<Unit> {
+        val name = displayName.trim().take(MAX_NAME)
+        if (name.isEmpty()) return AppResult.Failure(DomainError.Validation("displayName", "blank"))
+        return when (val r = storageCall(logger, "Rename attachment") { dao.rename(id.value, name, clock.now().toEpochMilli()) }) {
+            is AppResult.Failure -> r
+            is AppResult.Success -> if (r.value) AppResult.Success(Unit) else AppResult.Failure(DomainError.NotFound("Attachment", id.value))
+        }
+    }
+
     override suspend fun restore(attachment: Attachment): AppResult<Unit> =
         when (val r = storageCall(logger, "Restore attachment") { dao.restore(attachment.toEntity(), clock.now().toEpochMilli()) }) {
             is AppResult.Failure -> r
@@ -91,6 +100,10 @@ class RoomAttachmentRepository(
 
     override suspend fun referencedFiles(): AppResult<Set<String>> =
         storageCall(logger, "List attachment files") { dao.fileNames().toSet() }
+
+    private companion object {
+        const val MAX_NAME = 200
+    }
 
     private fun NewAttachment.toEntity(noteId: String, now: Long) = AttachmentEntity(
         id = id?.value ?: ids.newId(),

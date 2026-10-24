@@ -3,6 +3,7 @@ package com.appname.notes.feature.attachments
 import android.content.ContentResolver
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.StatFs
 import android.provider.OpenableColumns
@@ -57,9 +58,9 @@ class AttachmentFileStore(
         val temp = File(dir, "${target.name}.part")
         try {
             val size = copy(uri, temp) ?: return AttachResult.Failed(AttachError.TOO_LARGE)
-            val (kind, w, h) = describe(temp, mime)
+            val d = describe(temp, mime)
             if (!temp.renameTo(target)) return AttachResult.Failed(AttachError.STORAGE)
-            return AttachResult.Ok(NewAttachment(kind, target.name, displayName, mime, size, w, h))
+            return AttachResult.Ok(NewAttachment(d.kind, target.name, displayName, mime, size, d.width, d.height, d.durationMs))
         } catch (e: IOException) {
             // Most often the disk filled up while copying.
             val full = freeBytes(dir) < RESERVE_BYTES || e.message?.contains("ENOSPC") == true || e.message?.contains("No space") == true
@@ -144,17 +145,43 @@ class AttachmentFileStore(
         return total
     }
 
-    /** Kind and displayed pixel size. An "image" that can't be decoded is kept as a plain file. */
-    private fun describe(file: File, mime: String): Triple<AttachmentKind, Int?, Int?> {
-        if (mime == "application/pdf") return Triple(AttachmentKind.PDF, null, null)
-        if (!mime.startsWith("image/")) return Triple(AttachmentKind.FILE, null, null)
+    private data class Description(val kind: AttachmentKind, val width: Int? = null, val height: Int? = null, val durationMs: Long? = null)
+
+    /**
+     * Kind, displayed pixel size, and length for audio. An "image" that can't be decoded, or "audio" the phone
+     * can't read (no length), is kept as a plain file that other apps may still open.
+     */
+    private fun describe(file: File, mime: String): Description {
+        if (mime == "application/pdf") return Description(AttachmentKind.PDF)
+        if (mime.startsWith("audio/")) {
+            val duration = audioDurationMs(file) ?: return Description(AttachmentKind.FILE)
+            return Description(AttachmentKind.AUDIO, durationMs = duration)
+        }
+        if (!mime.startsWith("image/")) return Description(AttachmentKind.FILE)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return Triple(AttachmentKind.FILE, null, null)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return Description(AttachmentKind.FILE)
         return if (isRotatedQuarter(file)) {
-            Triple(AttachmentKind.IMAGE, bounds.outHeight, bounds.outWidth)
+            Description(AttachmentKind.IMAGE, bounds.outHeight, bounds.outWidth)
         } else {
-            Triple(AttachmentKind.IMAGE, bounds.outWidth, bounds.outHeight)
+            Description(AttachmentKind.IMAGE, bounds.outWidth, bounds.outHeight)
+        }
+    }
+
+    /** Length of an audio file the phone can decode (M4A/AAC/MP3/WAV/OGG...), or null. */
+    private fun audioDurationMs(file: File): Long? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.path)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.takeIf { it > 0 }
+        } catch (e: RuntimeException) { // not audio after all, or a format this phone can't read
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (e: java.io.IOException) {
+                // nothing to do
+            }
         }
     }
 

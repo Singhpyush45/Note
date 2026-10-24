@@ -361,4 +361,38 @@
     <string name="reminder_snooze">Snooze %1$d min</string>
     <string name="reminder_menu">Reminders (%1$d)</string>
     <string name="card_reminder">Reminder %1$s</string>
+
+    <!-- Audio extras (FR-012) -->
+    <string name="audio_speed">Playback speed %1$s</string>
+    <string name="attach_rename">Rename</string>
+    <string name="attach_name">Name</string>
+    <string name="attach_audio_file">Audio file</string>
+
+    <!-- Voice typing (owner brief §11) -->
+    <string name="action_close">Close</string>
+    <string name="voice_typing">Voice typing</string>
+    <string name="voice_title">Voice typing</string>
+    <string name="voice_lang_in">English (India)</string>
+    <string name="voice_lang_us">English (US)</string>
+    <string name="voice_lang_uk">English (UK)</string>
+    <string name="voice_on_device">Recognised on this phone. Nothing is sent over the internet.</string>
+    <string name="voice_online">Uses your phone\'s speech service, which may send your voice over the internet to recognise it.</string>
+    <string name="voice_hint">Tap Start and speak. The text goes where your cursor is.</string>
+    <string name="voice_speak_now">Speak now…</string>
+    <string name="voice_review">Check and edit</string>
+    <string name="voice_listening">Listening…</string>
+    <string name="voice_paused">Paused</string>
+    <string name="voice_start">Start</string>
+    <string name="voice_resume">Resume</string>
+    <string name="voice_pause">Pause</string>
+    <string name="voice_stop">Stop</string>
+    <string name="voice_insert">Insert</string>
+    <string name="voice_use_online">Use the online speech service instead</string>
+    <string name="voice_unavailable">Voice typing isn\'t available on this phone: it has no speech recognition service.</string>
+    <string name="voice_error_network">No internet connection for speech recognition. Check the connection and tap Resume.</string>
+    <string name="voice_error_permission">Microphone permission is needed for voice typing.</string>
+    <string name="voice_error_busy">The speech service is being used by another app. Try again in a moment.</string>
+    <string name="voice_error_language">This English variant isn\'t installed for on-phone recognition.</string>
+    <string name="voice_error_other">Speech recognition stopped. Tap Resume to try again.</string>
+    <string name="voice_mic_denied">Voice typing needs the microphone. You can allow it in Settings.</string>
 </resources>

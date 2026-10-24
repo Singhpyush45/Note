@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.AlarmAdd
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
@@ -65,6 +66,8 @@ fun FormatToolbar(
     onAudioMarker: (AudioMarker) -> Unit = {},
     /** "Remind me about this task", shown while the cursor is on a checklist item (FR-010). */
     onRemindTask: (() -> Unit)? = null,
+    /** Voice typing (§11); first in the toolbar so it's always visible. */
+    onVoiceTyping: (() -> Unit)? = null,
 ) {
     val active = controller.activeStyles
     val kind = controller.currentKind
@@ -82,6 +85,13 @@ fun FormatToolbar(
                 .semantics { contentDescription = toolbarLabel },
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onVoiceTyping != null) {
+                val voiceLabel = stringResource(R.string.voice_typing)
+                IconButton(onClick = onVoiceTyping, modifier = noFocus.testTag(EditorTestTags.VOICE).semantics { contentDescription = voiceLabel }) {
+                    Icon(Icons.Outlined.Mic, contentDescription = null)
+                }
+                VerticalDivider(Modifier.padding(horizontal = 4.dp).height(24.dp))
+            }
             StyleButton(Icons.Outlined.FormatBold, R.string.fmt_bold, SpanType.BOLD in active) { controller.toggleStyle(SpanType.BOLD) }
             StyleButton(Icons.Outlined.FormatItalic, R.string.fmt_italic, SpanType.ITALIC in active) { controller.toggleStyle(SpanType.ITALIC) }
             StyleButton(Icons.Outlined.FormatUnderlined, R.string.fmt_underline, SpanType.UNDERLINE in active) { controller.toggleStyle(SpanType.UNDERLINE) }

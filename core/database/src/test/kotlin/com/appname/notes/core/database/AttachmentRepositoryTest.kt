@@ -53,6 +53,20 @@ class AttachmentRepositoryTest {
     }
 
     @Test
+    fun `rename changes the shown name only, refuses blank names and marks the note edited`() = runTest {
+        val id = notes.createNote(null).ok()
+        val a = attachments.add(id, listOf(file("a"))).ok().single()
+        clock.advanceMillis(5_000)
+        attachments.rename(a.id, "  Lecture 4 recording  ").ok()
+        val renamed = attachments.list(id).ok().single()
+        assertThat(renamed.displayName).isEqualTo("Lecture 4 recording")
+        assertThat(renamed.fileName).isEqualTo(a.fileName)
+        assertThat(listed().single().updatedAt).isEqualTo(clock.now())
+        assertThat(attachments.rename(a.id, "   ")).isInstanceOf(AppResult.Failure::class.java)
+        assertThat(attachments.rename(com.appname.notes.core.domain.model.AttachmentId("gone"), "x")).isInstanceOf(AppResult.Failure::class.java)
+    }
+
+    @Test
     fun `remove closes the gap and undo puts it back in place`() = runTest {
         val id = notes.createNote(null).ok()
         attachments.add(id, listOf(image("a"), image("b"), image("c"))).ok()

@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.domain.model.Attachment
@@ -182,7 +183,38 @@ class AttachmentFlowRobolectricTest {
         assertThat(exists(hasText("0:00 / 5:00"), unmerged = true)).isTrue()
         // Nothing is recording, so there's no recording bar; "Record audio" is in the attach menu.
         assertThat(exists(hasTestTag(com.appname.notes.feature.audio.AudioTestTags.RECORDING_BAR))).isFalse()
+        // Speed: 1× → 1.25× → 1.5×.
+        assertThat(exists(hasText("1×"), unmerged = true)).isTrue()
+        composeRule.onNodeWithTag(com.appname.notes.feature.audio.AudioTestTags.SPEED).performClick()
+        waitAdvancing { exists(hasText("1.25×"), unmerged = true) }
+        composeRule.onNodeWithTag(com.appname.notes.feature.audio.AudioTestTags.SPEED).performClick()
+        waitAdvancing { exists(hasText("1.5×"), unmerged = true) }
         composeRule.onNodeWithTag(AttachmentTestTags.ATTACH_BUTTON).performClick()
         waitAdvancing { exists(hasTestTag(com.appname.notes.feature.audio.AudioTestTags.RECORD)) }
+        assertThat(exists(hasTestTag(AttachmentTestTags.AUDIO_FILE))).isTrue()
+    }
+
+    @Test
+    fun anAttachmentCanBeRenamed() {
+        val id = noteWithAttachments()
+        openNote(id)
+        waitAdvancing { exists(hasTestTag(AttachmentTestTags.STRIP)) }
+        composeRule.onNodeWithContentDescription(string(R.string.attach_more_for, "notes.zip")).performClick()
+        waitAdvancing { exists(hasTestTag(AttachmentTestTags.RENAME)) }
+        composeRule.onNodeWithTag(AttachmentTestTags.RENAME).performClick()
+        waitAdvancing { exists(hasTestTag(AttachmentTestTags.RENAME_FIELD)) }
+        composeRule.onNodeWithTag(AttachmentTestTags.RENAME_FIELD).performTextReplacement("Week 3 slides.zip")
+        composeRule.onNodeWithTag(AttachmentTestTags.RENAME_SAVE).performClick()
+        waitAdvancing { attachments(id).any { it.displayName == "Week 3 slides.zip" } }
+        waitAdvancing { exists(hasText("Week 3 slides.zip"), unmerged = true) }
+    }
+
+    /** No speech service in the test environment: voice typing says so instead of failing (owner brief §11). */
+    @Test
+    fun voiceTypingWithoutASpeechServiceExplainsIt() {
+        openNote(noteWithAttachments())
+        composeRule.onNodeWithTag(EditorTestTags.VOICE).performClick()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET)) }
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.UNAVAILABLE)) }
     }
 }

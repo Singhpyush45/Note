@@ -29,4 +29,9 @@ interface SettingsRepository {
     suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit>
 
     suspend fun setDocumentText(enabled: Boolean): AppResult<Unit>
+
+    /** Language last used for voice typing (BCP-47 tag, e.g. "en-IN"); null until chosen. */
+    val voiceLanguage: Flow<String?>
+
+    suspend fun setVoiceLanguage(tag: String): AppResult<Unit>
 }

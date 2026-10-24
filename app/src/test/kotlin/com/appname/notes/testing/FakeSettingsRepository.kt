@@ -30,6 +30,11 @@ class FakeSettingsRepository(initial: AppearanceSettings = AppearanceSettings())
 
     override suspend fun setDocumentText(enabled: Boolean): AppResult<Unit> = write { documentTextEnabled.value = enabled }
 
+    val voice = MutableStateFlow<String?>(null)
+    override val voiceLanguage: Flow<String?> = voice
+
+    override suspend fun setVoiceLanguage(tag: String): AppResult<Unit> = write { voice.value = tag }
+
     override suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit> =
         write { inkSettings.value = change(inkSettings.value) }
 

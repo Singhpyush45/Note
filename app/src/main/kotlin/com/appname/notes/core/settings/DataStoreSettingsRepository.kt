@@ -64,6 +64,10 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override suspend fun setDocumentText(enabled: Boolean): AppResult<Unit> = write { it[Keys.DOCUMENT_TEXT] = enabled }
 
+    override val voiceLanguage: Flow<String?> = prefs.map { it[Keys.VOICE_LANGUAGE] }.distinctUntilChanged()
+
+    override suspend fun setVoiceLanguage(tag: String): AppResult<Unit> = write { it[Keys.VOICE_LANGUAGE] = tag }
+
     override suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit> = write { prefs ->
         val new = change(prefs.toInk())
         prefs[Keys.INK_SHAPES] = new.shapeCorrection
@@ -125,6 +129,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val INK_TOOL = stringPreferencesKey("ink_last_tool")
         val INK_ERASER = stringPreferencesKey("ink_eraser_mode")
         val DOCUMENT_TEXT = booleanPreferencesKey("document_text_search")
+        val VOICE_LANGUAGE = stringPreferencesKey("voice_typing_language")
     }
 
     private companion object {

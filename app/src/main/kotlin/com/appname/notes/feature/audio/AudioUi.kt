@@ -59,6 +59,7 @@ object AudioTestTags {
     const val RECORD = "attach_record"
     fun player(a: Attachment) = "audio_player_${a.id.value}"
     fun marker(m: AudioMarker) = "audio_marker_${m.positionMs}"
+    const val SPEED = "audio_speed"
 }
 
 /** Everything a recording's player row needs (FR-012). */
@@ -69,6 +70,7 @@ data class AudioControls(
     val seek: (Attachment, Long) -> Unit,
     val markers: (Attachment) -> List<AudioMarker>,
     val playMarker: (AudioMarker) -> Unit,
+    val setSpeed: (Float) -> Unit = {},
 )
 
 /**
@@ -145,6 +147,12 @@ fun AudioPlayerRow(a: Attachment, controls: AudioControls, onMore: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                val speed = controls.playback.speed
+                val speedDescription = stringResource(R.string.audio_speed, AudioPlayback.label(speed))
+                TextButton(
+                    onClick = { controls.setSpeed(AudioPlayback.nextSpeed(speed)) },
+                    modifier = Modifier.testTag(AudioTestTags.SPEED).semantics { contentDescription = speedDescription },
+                ) { Text(AudioPlayback.label(speed), style = MaterialTheme.typography.labelLarge) }
                 IconButton(onClick = onMore) {
                     Icon(Icons.Outlined.MoreVert, stringResource(R.string.attach_more_for, a.displayName))
                 }

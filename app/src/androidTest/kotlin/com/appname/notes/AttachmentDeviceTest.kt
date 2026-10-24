@@ -88,6 +88,57 @@ class AttachmentDeviceTest {
         assertThat(Color.blue(preview.getPixel(preview.width / 2, preview.height * 3 / 4))).isGreaterThan(200)
     }
 
+    /** One second of a 440 Hz tone: 8 kHz, 16-bit mono PCM in a WAV container. */
+    private fun oneSecondWav(name: String = "Lecture.wav"): File {
+        val rate = 8_000
+        val pcm = java.nio.ByteBuffer.allocate(rate * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until rate) pcm.putShort((Math.sin(2 * Math.PI * 440 * i / rate) * 8_000).toInt().toShort())
+        val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + rate * 2); put("WAVE".toByteArray())
+            put("fmt ".toByteArray()); putInt(16); putShort(1); putShort(1); putInt(rate); putInt(rate * 2); putShort(2); putShort(16)
+            put("data".toByteArray()); putInt(rate * 2)
+        }
+        return File(dir, name).apply { writeBytes(header.array() + pcm.array()) }
+    }
+
+    @Test
+    fun anAudioFileBecomesAPlayableRecordingWithItsLength() {
+        val a = (store().import(Uri.fromFile(oneSecondWav())) as AttachResult.Ok).attachment
+        assertThat(a.kind).isEqualTo(AttachmentKind.AUDIO)
+        assertThat(a.mimeType).startsWith("audio/")
+        assertThat(a.durationMs!!).isIn(900L..1_100L)
+
+        // It plays, and a speed change applies.
+        val s = store()
+        val stored = runBlocking {
+            val id = (data.notes().createNote(null) as AppResult.Success).value
+            (data.attachments().add(id, listOf(a)) as AppResult.Success).value.single()
+        }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        var playback: com.appname.notes.feature.audio.AudioPlayback? = null
+        instrumentation.runOnMainSync {
+            playback = com.appname.notes.feature.audio.AudioPlayback(kotlinx.coroutines.MainScope(), { s.file(it.fileName) }, onError = {})
+            playback!!.setSpeed(1.5f)
+            playback!!.play(stored)
+        }
+        try {
+            val state = playback!!.state.value
+            assertThat(state.playing).isTrue()
+            assertThat(state.speed).isEqualTo(1.5f)
+            assertThat(state.durationMs).isIn(900L..1_100L)
+        } finally {
+            instrumentation.runOnMainSync { playback!!.release() }
+        }
+    }
+
+    @Test
+    fun anAudioFileThePhoneCantReadIsKeptAsAPlainFile() {
+        val junk = File(dir, "Broken.mp3").apply { writeBytes(ByteArray(4_096) { (it * 7).toByte() }) }
+        val a = (store().import(Uri.fromFile(junk)) as AttachResult.Ok).attachment
+        assertThat(a.kind).isEqualTo(AttachmentKind.FILE)
+        assertThat(a.durationMs).isNull()
+    }
+
     @Test
     fun pdfAttachmentGetsAFirstPagePreview() = runBlocking {
         val s = store()

@@ -115,7 +115,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.material.icons.outlined.AlarmAdd
+import androidx.compose.material.icons.outlined.AudioFile
 import com.appname.notes.feature.reminders.RemindersRow
+import com.appname.notes.feature.voice.VoiceTypingActions
+import com.appname.notes.feature.voice.VoiceTypingSheet
 import com.appname.notes.feature.reminders.rememberReminderUi
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
@@ -137,6 +140,7 @@ object EditorTestTags {
     const val STATUS = "editor_status"
     const val TOOLBAR = "editor_toolbar"
     const val REMIND_TASK = "editor_remind_task"
+    const val VOICE = "editor_voice"
 }
 
 @Composable
@@ -162,7 +166,10 @@ fun NoteEditorRoute(
     MessageEffect(message, snackbar, viewModel::messageShown)
 
     // Leaving the app (home button, app switcher, screen off): save now — the process may be killed next.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.flush() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        viewModel.flush()
+        viewModel.voice.value?.pause() // never keep the microphone on in the background
+    }
 
     var showMove by remember { mutableStateOf(false) }
     var showTags by rememberSaveable { mutableStateOf(false) }
@@ -182,6 +189,7 @@ fun NoteEditorRoute(
     // System pickers: they grant access to exactly the chosen items, so no storage/photo permission is needed.
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PICK)) { viewModel.attach(it) }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { viewModel.attach(it) }
+    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { viewModel.attach(it) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
         val path = cameraPath
         cameraPath = null
@@ -202,6 +210,7 @@ fun NoteEditorRoute(
         share = { a -> intents.start(context, intents.shareIntent(a, shareTitle)) },
         remove = if (editable) viewModel::removeAttachment else null,
         annotate = { a -> scope.launch { viewModel.annotatePdf(a)?.let(onOpenPdfNote) } },
+        rename = if (editable) viewModel::renameAttachment else null,
     )
     val hasCamera = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
     val scan = rememberDocumentScanner(onScanned = viewModel::attachScan, onUnavailable = viewModel::scannerUnavailable)
@@ -222,6 +231,7 @@ fun NoteEditorRoute(
             null
         },
         files = { filePicker.launch(arrayOf("*/*")) },
+        audioFile = { audioPicker.launch(arrayOf("audio/*")) },
         scan = scan,
         record = {
             val wanted = buildList {
@@ -247,8 +257,15 @@ fun NoteEditorRoute(
         seek = viewModel.playback::seekTo,
         markers = viewModel::markersFor,
         playMarker = viewModel::playMarker,
+        setSpeed = viewModel.playback::setSpeed,
     )
     var exportWarning by remember { mutableStateOf<ExportResult?>(null) }
+
+    // Voice typing (§11): the microphone is asked for when the user taps Start.
+    val voiceSession by viewModel.voice.collectAsStateWithLifecycle()
+    val voicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.voice.value?.start() else viewModel.voicePermissionDenied()
+    }
 
     // Reminders (FR-010): the dialog, and asking for notifications when one is set.
     val reminders by viewModel.reminders.reminders.collectAsStateWithLifecycle()
@@ -315,12 +332,36 @@ fun NoteEditorRoute(
                 onFixAlerts = reminderUi::fixAlerts,
             )
         },
+        onVoiceTyping = if (editable) viewModel::openVoiceTyping else null,
         onRemindTask = if (editable) {
             { viewModel.taskAtCursor()?.let(reminderUi::add) ?: Unit }
         } else {
             null
         },
     )
+
+    voiceSession?.let { session ->
+        val voiceState by session.state.collectAsStateWithLifecycle()
+        VoiceTypingSheet(
+            state = voiceState,
+            actions = VoiceTypingActions(
+                start = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        session.start()
+                    } else {
+                        voicePermission.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                pause = session::pause,
+                stop = session::stop,
+                edit = session::edit,
+                insert = viewModel::insertVoiceText,
+                language = viewModel::setVoiceLanguage,
+                useOnline = { session.useOnlineService(); session.start() },
+                dismiss = viewModel::closeVoiceTyping,
+            ),
+        )
+    }
 
     viewing?.let { a ->
         // Closed if the photo is removed elsewhere (or by Undo racing): never show a stale item.
@@ -411,6 +452,8 @@ fun NoteEditorScreen(
     reminders: @Composable () -> Unit = {},
     /** "Remind me about this task" on a checklist item; null when the note can't be edited. */
     onRemindTask: (() -> Unit)? = null,
+    /** Opens voice typing; null when the note can't be edited. */
+    onVoiceTyping: (() -> Unit)? = null,
 ) {
     val controller = (load as? EditorLoad.Ready)?.controller
     Scaffold(
@@ -454,7 +497,7 @@ fun NoteEditorScreen(
         },
         bottomBar = {
             if (controller != null && readOnly == null) {
-                FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding(), onAudioMarker = onAudioMarker, onRemindTask = onRemindTask)
+                FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding(), onAudioMarker = onAudioMarker, onRemindTask = onRemindTask, onVoiceTyping = onVoiceTyping)
             }
         },
     ) { padding ->
@@ -688,6 +731,7 @@ data class AttachMenu(
     val files: () -> Unit,
     val scan: () -> Unit = {},
     val record: () -> Unit = {},
+    val audioFile: () -> Unit = {},
 )
 
 @Composable
@@ -715,6 +759,12 @@ private fun AttachButton(menu: AttachMenu) {
                 leadingIcon = { Icon(Icons.Outlined.Mic, null) },
                 onClick = { open = false; menu.record() },
                 modifier = Modifier.testTag(AudioTestTags.RECORD),
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.attach_audio_file)) },
+                leadingIcon = { Icon(Icons.Outlined.AudioFile, null) },
+                onClick = { open = false; menu.audioFile() },
+                modifier = Modifier.testTag(AttachmentTestTags.AUDIO_FILE),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.scan_document)) },

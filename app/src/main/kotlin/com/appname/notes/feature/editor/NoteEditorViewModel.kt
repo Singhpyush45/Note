@@ -18,6 +18,10 @@ import com.appname.notes.core.domain.model.Attachment
 import com.appname.notes.core.domain.model.AudioMarker
 import com.appname.notes.core.domain.document.BlockKind
 import com.appname.notes.feature.reminders.NoteReminders
+import com.appname.notes.core.settings.SettingsRepository
+import com.appname.notes.feature.voice.SpeechEngineFactory
+import com.appname.notes.feature.voice.VoiceLanguage
+import com.appname.notes.feature.voice.VoiceTyping
 import com.appname.notes.feature.audio.AudioPlayback
 import com.appname.notes.feature.audio.RecordingController
 import com.appname.notes.feature.audio.RecordingError
@@ -114,6 +118,8 @@ class NoteEditorViewModel @AssistedInject constructor(
     val attachmentIntents: AttachmentIntents,
     private val recordings: RecordingController,
     reminderFactory: NoteReminders.Factory,
+    private val speechEngines: SpeechEngineFactory,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -263,6 +269,7 @@ class NoteEditorViewModel @AssistedInject constructor(
 
     override fun onCleared() {
         playback.release()
+        _voice.value?.release()
         val snap = if (_readOnly.value == null) snapshot() else null
         appScope.launch {
             if (snap != null) saveSnapshot(snap)
@@ -317,6 +324,11 @@ class NoteEditorViewModel @AssistedInject constructor(
     }
 
     /** Removes an attachment; the snackbar offers Undo (the file stays until cleanup, so undo is instant). */
+    fun renameAttachment(attachment: Attachment, name: String) {
+        if (_readOnly.value != null || name.isBlank() || name == attachment.displayName) return
+        act { attachmentRepository.rename(attachment.id, name) }
+    }
+
     fun removeAttachment(attachment: Attachment) {
         if (_readOnly.value != null) return
         viewModelScope.launch {
@@ -425,6 +437,45 @@ class NoteEditorViewModel @AssistedInject constructor(
     fun markersFor(attachment: Attachment): List<AudioMarker> =
         controller?.links.orEmpty().mapNotNull { AudioMarker.parse(it) }.filter { it.attachmentId == attachment.id }
             .distinct().sortedBy { it.positionMs }
+
+    // ------------------------------------------------------------------ voice typing (owner brief §11)
+
+    private val _voice = MutableStateFlow<VoiceTyping?>(null)
+
+    /** The open voice-typing session, or null when the panel is closed. */
+    val voice: StateFlow<VoiceTyping?> = _voice.asStateFlow()
+
+    /** Opens the voice-typing panel with the language used last time (or the phone's English). */
+    fun openVoiceTyping() {
+        if (_readOnly.value != null || _voice.value != null) return
+        viewModelScope.launch {
+            val language = VoiceLanguage.fromTag(settings.voiceLanguage.first()) ?: VoiceLanguage.defaultFor(java.util.Locale.getDefault())
+            if (_voice.value == null) _voice.value = VoiceTyping(speechEngines.create(), language)
+        }
+    }
+
+    fun setVoiceLanguage(language: VoiceLanguage) {
+        _voice.value?.setLanguage(language)
+        viewModelScope.launch { settings.setVoiceLanguage(language.tag) }
+    }
+
+    /** Puts the recognised text at the cursor as normal text and closes the panel. */
+    fun insertVoiceText() {
+        val v = _voice.value ?: return
+        val text = v.finish()
+        closeVoiceTyping()
+        if (text.isNotEmpty()) controller?.insertText(text)
+    }
+
+    fun closeVoiceTyping() {
+        _voice.value?.release()
+        _voice.value = null
+    }
+
+    fun voicePermissionDenied() {
+        _voice.value?.pause()
+        _message.value = UserMessage(R.string.voice_mic_denied)
+    }
 
     // ------------------------------------------------------------------ reminders (FR-010)
 

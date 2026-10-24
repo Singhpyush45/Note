@@ -32,7 +32,11 @@ import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -48,6 +52,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,6 +89,10 @@ object AttachmentTestTags {
     const val VIEWER = "image_viewer"
     const val SHEET = "attachment_sheet"
     const val SCAN = "attach_scan"
+    const val RENAME = "attach_rename"
+    const val AUDIO_FILE = "attach_audio_file"
+    const val RENAME_FIELD = "attach_rename_field"
+    const val RENAME_SAVE = "attach_rename_save"
     fun item(a: Attachment) = "attachment_${a.id.value}"
 }
 
@@ -94,6 +103,8 @@ data class AttachmentActions(
     val openWith: (Attachment) -> Unit,
     val remove: ((Attachment) -> Unit)?,
     val annotate: ((Attachment) -> Unit)?,
+    /** Null when the note can't be edited. */
+    val rename: ((Attachment, String) -> Unit)? = null,
 )
 
 /**
@@ -112,6 +123,7 @@ fun AttachmentStrip(
 ) {
     if (attachments.isEmpty() && attaching == 0) return
     var sheetFor by remember { mutableStateOf<Attachment?>(null) }
+    var renaming by remember { mutableStateOf<Attachment?>(null) }
     val images = attachments.filter { it.kind == AttachmentKind.IMAGE }
     val files = attachments.filter { it.kind != AttachmentKind.IMAGE }
     Column(modifier.fillMaxWidth().testTag(AttachmentTestTags.STRIP), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -138,7 +150,36 @@ fun AttachmentStrip(
             }
         }
     }
-    sheetFor?.let { a -> AttachmentSheet(a, actions, onDismiss = { sheetFor = null }) }
+    sheetFor?.let { a -> AttachmentSheet(a, actions, onRename = { renaming = it }, onDismiss = { sheetFor = null }) }
+    val rename = actions.rename
+    renaming?.let { a ->
+        if (rename != null) RenameAttachmentDialog(a, onRename = { rename(a, it); renaming = null }, onDismiss = { renaming = null })
+    }
+}
+
+/** Renames what the note shows for a file or recording (the stored file is untouched). */
+@Composable
+private fun RenameAttachmentDialog(a: Attachment, onRename: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by rememberSaveable(a.id.value) { mutableStateOf(a.displayName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.attach_rename)) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.replace('\n', ' ') },
+                singleLine = true,
+                label = { Text(stringResource(R.string.attach_name)) },
+                modifier = Modifier.fillMaxWidth().testTag(AttachmentTestTags.RENAME_FIELD),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onRename(name.trim()) }, enabled = name.isNotBlank(), modifier = Modifier.testTag(AttachmentTestTags.RENAME_SAVE)) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
 }
 
 @Composable
@@ -237,7 +278,7 @@ fun AttachmentPicture(a: Attachment, previews: AttachmentPreviews, targetPx: Int
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AttachmentSheet(a: Attachment, actions: AttachmentActions, onDismiss: () -> Unit) {
+private fun AttachmentSheet(a: Attachment, actions: AttachmentActions, onRename: (Attachment) -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, modifier = Modifier.testTag(AttachmentTestTags.SHEET)) {
         Text(
             a.displayName,
@@ -272,6 +313,13 @@ private fun AttachmentSheet(a: Attachment, actions: AttachmentActions, onDismiss
             leadingContent = { Icon(Icons.Outlined.Share, null) },
             modifier = Modifier.clickable { act(actions.share) },
         )
+        if (actions.rename != null) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.attach_rename)) },
+                leadingContent = { Icon(Icons.Outlined.Edit, null) },
+                modifier = Modifier.clickable { act(onRename) }.testTag(AttachmentTestTags.RENAME),
+            )
+        }
         actions.remove?.let { remove ->
             ListItem(
                 headlineContent = { Text(stringResource(R.string.attach_remove)) },

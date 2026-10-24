@@ -21,6 +21,9 @@ interface AttachmentRepository {
     /** Removes one attachment and returns it, so it can be put back ([restore]) for undo. */
     suspend fun remove(id: AttachmentId): AppResult<Attachment>
 
+    /** Changes the name shown for an attachment (the stored file keeps its name). Blank names are refused. */
+    suspend fun rename(id: AttachmentId, displayName: String): AppResult<Unit>
+
     /** Puts a removed attachment back at its place. */
     suspend fun restore(attachment: Attachment): AppResult<Unit>
 

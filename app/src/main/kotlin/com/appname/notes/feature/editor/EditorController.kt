@@ -114,6 +114,22 @@ class EditorController(
         onValueChange(textFieldValue.copy(selection = TextRange(end + 1), composition = null))
     }
 
+    /**
+     * Inserts [text] at the cursor (replacing a selection), with a space on either side where needed, and puts the
+     * cursor after it (voice typing). Undo removes it like any typing.
+     */
+    fun insertText(text: String) {
+        if (text.isEmpty()) return
+        val v = textFieldValue
+        val before = v.text.substring(0, v.selection.min)
+        val after = v.text.substring(v.selection.max)
+        val prefix = if (before.isNotEmpty() && !before.last().isWhitespace()) " " else ""
+        val suffix = if (after.isNotEmpty() && !after.first().isWhitespace()) " " else ""
+        val inserted = prefix + text + suffix
+        val cursor = before.length + prefix.length + text.length
+        onValueChange(TextFieldValue(before + inserted + after, TextRange(cursor)))
+    }
+
     /** Links in the note, e.g. to find the markers of a recording. */
     val links: List<String> get() = state.spans.mapNotNull { it.url }
 

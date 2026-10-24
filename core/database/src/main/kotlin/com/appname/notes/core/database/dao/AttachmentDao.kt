@@ -39,6 +39,18 @@ abstract class AttachmentDao {
     @Query("DELETE FROM attachments WHERE id = :id")
     protected abstract suspend fun deleteRow(id: String): Int
 
+    @Query("UPDATE attachments SET displayName = :name WHERE id = :id")
+    protected abstract suspend fun setName(id: String, name: String): Int
+
+    /** Renames an attachment and marks its note modified. False if it's gone. */
+    @Transaction
+    open suspend fun rename(id: String, name: String, now: Long): Boolean {
+        val row = get(id) ?: return false
+        if (setName(id, name) == 0) return false
+        touchNote(row.noteId, now)
+        return true
+    }
+
     /** Makes room at [position] (for putting a removed attachment back where it was). */
     @Query("UPDATE attachments SET position = position + 1 WHERE noteId = :noteId AND position >= :position")
     protected abstract suspend fun shiftDown(noteId: String, position: Int)
