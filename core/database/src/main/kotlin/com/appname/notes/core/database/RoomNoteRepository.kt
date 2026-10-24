@@ -30,6 +30,7 @@ import com.appname.notes.core.domain.search.SearchQuery
 import java.time.Duration
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -232,16 +233,30 @@ class RoomNoteRepository(
             ModifiedWithin.WEEK -> now.minus(Duration.ofDays(7))
             ModifiedWithin.MONTH -> now.minus(Duration.ofDays(30))
         }
-        return dao.search(
+        val notesHits = dao.search(
             match = match,
             notebookId = filters.notebookId?.value,
             tagId = filters.tagId?.value,
             noteType = filters.type?.name,
             modifiedSince = since?.toEpochMilli(),
             includeArchived = filters.includeArchived,
-        ).map { rows -> rows.map { it.toDomain() } }.distinctUntilChanged()
+        ).map { rows -> rows.map { it.toDomain() } }
+        val documentHits = db.textIndexDao().searchDocuments(
+            match = match,
+            notebookId = filters.notebookId?.value,
+            tagId = filters.tagId?.value,
+            noteType = filters.type?.name,
+            modifiedSince = since?.toEpochMilli(),
+            includeArchived = filters.includeArchived,
+        ).map { rows -> rows.map { it.toDomain() } }
+        // Matches in a note's own text come first; then where the words appear in its documents (a few per note).
+        return combine(notesHits, documentHits) { inText, inDocs ->
+            inText + inDocs.groupBy { it.note.id }.values.flatMap { it.take(MAX_DOCUMENT_HITS_PER_NOTE) }
+        }.distinctUntilChanged()
     }
 
     override suspend fun rebuildSearchIndex(): AppResult<Unit> =
         storageCall(logger, "Rebuild search index") { db.rebuildSearchIndex() }
 }
+
+private const val MAX_DOCUMENT_HITS_PER_NOTE = 3

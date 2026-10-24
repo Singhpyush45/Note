@@ -120,7 +120,7 @@ fun NotesApp(
                     )
                 }
                 entry<SearchKey>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { DetailPlaceholder() })) {
-                    SearchRoute(onBack = { backStack.pop() }, onOpenNote = openNote)
+                    SearchRoute(onBack = { backStack.pop() }, onOpenNote = { id, type, page -> backStack.openNote(id.value, type, page) })
                 }
                 entry<NoteEditorKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
                     val viewModel = hiltViewModel<NoteEditorViewModel, NoteEditorViewModel.Factory>(
@@ -135,7 +135,7 @@ fun NotesApp(
                 }
                 entry<InkEditorKey> { key ->
                     val viewModel = hiltViewModel<InkEditorViewModel, InkEditorViewModel.Factory>(
-                        creationCallback = { factory -> factory.create(key.noteId) },
+                        creationCallback = { factory -> factory.create(key.noteId, key.page ?: -1) },
                     )
                     InkEditorRoute(viewModel = viewModel, onClose = { backStack.closeNote(key.noteId) })
                 }

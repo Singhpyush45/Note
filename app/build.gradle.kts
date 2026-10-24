@@ -98,6 +98,10 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.exifinterface) // photo orientation for attachments (fixed parser on all API levels)
+    // On-device text recognition, models bundled so it works offline (FR-011, ADR-0011).
+    implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.text.recognition.devanagari)
+    implementation(libs.androidx.work.runtime) // background document indexing (NFR-08)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)

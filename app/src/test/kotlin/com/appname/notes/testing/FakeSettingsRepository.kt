@@ -25,6 +25,11 @@ class FakeSettingsRepository(initial: AppearanceSettings = AppearanceSettings())
     val inkSettings = MutableStateFlow(InkSettings())
     override val ink: Flow<InkSettings> = inkSettings
 
+    val documentTextEnabled = MutableStateFlow(true)
+    override val documentText: Flow<Boolean> = documentTextEnabled
+
+    override suspend fun setDocumentText(enabled: Boolean): AppResult<Unit> = write { documentTextEnabled.value = enabled }
+
     override suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit> =
         write { inkSettings.value = change(inkSettings.value) }
 

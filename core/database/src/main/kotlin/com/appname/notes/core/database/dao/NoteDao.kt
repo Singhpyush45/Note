@@ -134,6 +134,13 @@ abstract class NoteDao {
     @Query("DELETE FROM attachments WHERE noteId IN (:ids)")
     protected abstract suspend fun deleteAttachments(ids: List<String>)
 
+    /** Text extracted from the notes' documents (rows tied to attachments go with them anyway). */
+    @Query("DELETE FROM extracted_text WHERE noteId IN (:ids)")
+    protected abstract suspend fun deleteExtractedText(ids: List<String>)
+
+    @Query("DELETE FROM text_index_jobs WHERE noteId IN (:ids)")
+    protected abstract suspend fun deleteTextJobs(ids: List<String>)
+
     /** Permanent delete: content and handwriting removed, tags unlinked, tombstone kept (SRS 9.2). */
     @Transaction
     open suspend fun deletePermanently(ids: List<String>, now: Long): Int {
@@ -144,6 +151,8 @@ abstract class NoteDao {
             deleteInkItems(chunk)
             deleteInkPages(chunk)
             deletePdfDocuments(chunk)
+            deleteExtractedText(chunk)
+            deleteTextJobs(chunk)
             deleteAttachments(chunk)
             count += tombstone(chunk, now)
         }
@@ -157,6 +166,8 @@ abstract class NoteDao {
         deleteInkItems(listOf(id))
         deleteInkPages(listOf(id))
         deletePdfDocuments(listOf(id))
+        deleteExtractedText(listOf(id))
+        deleteTextJobs(listOf(id))
         deleteAttachments(listOf(id))
         hardDelete(id)
     }

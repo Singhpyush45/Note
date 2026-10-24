@@ -30,12 +30,14 @@ class PdfImporter(
     private val store: PdfFileStore,
     private val pdf: PdfRepository,
     private val dispatchers: DispatcherProvider,
+    /** Called after a PDF note was created (starts text indexing). */
+    private val onImported: () -> Unit = {},
 ) {
     suspend fun import(uri: Uri, notebookId: NotebookId?): PdfImport = withContext(dispatchers.io) {
         when (val r = store.import(uri)) {
             is PdfImportResult.Failed -> PdfImport.Failed(r.error)
             is PdfImportResult.Ok -> when (val created = pdf.createPdfNote(notebookId, r.title, r.document, r.pageSizes)) {
-                is AppResult.Success -> PdfImport.Created(created.value)
+                is AppResult.Success -> PdfImport.Created(created.value).also { onImported() }
                 is AppResult.Failure -> {
                     store.file(r.document.fileName).delete() // no note refers to it
                     PdfImport.Failed(PdfImportError.STORAGE)

@@ -263,6 +263,12 @@
     <string name="pdf_import_too_large">That PDF is too large (the limit is 300 MB).</string>
     <string name="pdf_import_empty">That PDF has no pages.</string>
     <string name="pdf_import_storage">Couldn\'t save the PDF. Check that there is free space and try again.</string>
+    <!-- Document text search (Phase 5, FR-011) -->
+    <string name="settings_document_text">Find text in photos and PDFs</string>
+    <string name="settings_document_text_summary">Reads the text in your photos, scans and PDFs on this phone so search can find it. Nothing is uploaded. Turning this off deletes the text already read.</string>
+    <string name="search_in_page">Page %1$d</string>
+    <string name="search_in_attachment">In %1$s</string>
+    <string name="search_in_attachment_page">In %1$s, page %2$d</string>
     <!-- Attachments (Phase 5, FR-009) -->
     <string name="attach_menu">Attach</string>
     <string name="attach_photos">Photos</string>

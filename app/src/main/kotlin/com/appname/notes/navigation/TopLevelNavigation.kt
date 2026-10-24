@@ -37,12 +37,12 @@ fun MutableList<NavKey>.navigateToTopLevel(destination: TopLevelDestination) {
  * Opens a note in the editor for its type. Any editor already on top is replaced rather than stacked, so
  * on a tablet tapping another note swaps the detail pane, and Back still returns to the list in one step.
  */
-fun MutableList<NavKey>.openNote(noteId: String, type: NoteType = NoteType.TEXT) {
+fun MutableList<NavKey>.openNote(noteId: String, type: NoteType = NoteType.TEXT, page: Int? = null) {
     while (lastOrNull().isEditor()) removeAt(lastIndex)
     add(
         when (type) {
             NoteType.TEXT -> NoteEditorKey(noteId)
-            NoteType.INK, NoteType.PDF -> InkEditorKey(noteId) // a PDF is ink pages over the document's pages
+            NoteType.INK, NoteType.PDF -> InkEditorKey(noteId, page) // a PDF is ink pages over the document's pages
         },
     )
 }
@@ -63,7 +63,7 @@ fun MutableList<NavKey>.pop(): Boolean {
 
 /** Removes the editor of [noteId] (e.g. after the note was trashed from inside the editor). */
 fun MutableList<NavKey>.closeNote(noteId: String) {
-    val index = indexOfLast { it == NoteEditorKey(noteId) || it == InkEditorKey(noteId) }
+    val index = indexOfLast { it == NoteEditorKey(noteId) || (it as? InkEditorKey)?.noteId == noteId }
     if (index > 0) removeAt(index)
 }
 

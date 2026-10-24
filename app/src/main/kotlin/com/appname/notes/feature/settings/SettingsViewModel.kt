@@ -9,6 +9,7 @@ import com.appname.notes.core.settings.HoldDuration
 import com.appname.notes.core.settings.InkSettings
 import com.appname.notes.core.settings.SettingsRepository
 import com.appname.notes.core.settings.ThemeMode
+import com.appname.notes.feature.textindex.DocumentTextSwitch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,8 @@ sealed interface SettingsUiState {
     data class Ready(
         val appearance: AppearanceSettings,
         val ink: InkSettings = InkSettings(),
+        /** "Find text in photos and PDFs". */
+        val documentText: Boolean = true,
         /** True after a save failed, until the screen has shown the message. */
         val showSaveError: Boolean = false,
         /** True after the search index was rebuilt, until the screen has shown the confirmation. */
@@ -45,14 +48,15 @@ fun interface SearchIndexRebuilder {
 class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
     private val indexRebuilder: SearchIndexRebuilder,
+    private val documentTextSwitch: DocumentTextSwitch,
 ) : ViewModel() {
 
     private val saveFailed = MutableStateFlow(false)
     private val indexRebuilt = MutableStateFlow(false)
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(repository.appearance, repository.ink, saveFailed, indexRebuilt) { appearance, ink, failed, rebuilt ->
-            SettingsUiState.Ready(appearance, ink, showSaveError = failed, showIndexRebuilt = rebuilt)
+        combine(repository.appearance, repository.ink, repository.documentText, saveFailed, indexRebuilt) { appearance, ink, docText, failed, rebuilt ->
+            SettingsUiState.Ready(appearance, ink, documentText = docText, showSaveError = failed, showIndexRebuilt = rebuilt)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -77,6 +81,15 @@ class SettingsViewModel @Inject constructor(
 
     fun onFingerModeSelected(mode: FingerMode) {
         viewModelScope.launch { handle(repository.updateInk { it.copy(fingerMode = mode) }) }
+    }
+
+    /** On: documents get indexed in the background. Off: all extracted text is deleted (NFR-12). */
+    fun onDocumentTextChanged(enabled: Boolean) {
+        viewModelScope.launch {
+            val saved = repository.setDocumentText(enabled)
+            handle(saved)
+            if (saved is AppResult.Success) documentTextSwitch.onChanged(enabled)
+        }
     }
 
     fun onSaveErrorShown() {

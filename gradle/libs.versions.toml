@@ -23,6 +23,8 @@ androidxTestExtJunit = "1.3.0"
 androidxTestRunner = "1.7.0"
 room = "2.8.5"
 exifinterface = "1.3.7"
+mlkitTextRecognition = "16.0.1"
+workManager = "2.12.0"
 adaptive = "1.3.0"
 materialIconsExtended = "1.7.8"
 uiautomator = "2.4.0"
@@ -62,6 +64,9 @@ compose-material-icons-extended = { module = "androidx.compose.material:material
 compose-material3-adaptive-navigation3 = { module = "androidx.compose.material3.adaptive:adaptive-navigation3", version.ref = "adaptive" }
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
 
+mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-text-recognition-devanagari = { module = "com.google.mlkit:text-recognition-devanagari", version.ref = "mlkitTextRecognition" }
+androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }

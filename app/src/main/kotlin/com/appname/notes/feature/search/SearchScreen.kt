@@ -69,10 +69,16 @@ object SearchTestTags {
     const val SCREEN = "screen_search"
     const val FIELD = "search_field"
     const val RESULTS = "search_results"
+    const val LOCATION = "search_hit_location"
 }
 
 @Composable
-fun SearchRoute(onBack: () -> Unit, onOpenNote: (NoteId, NoteType) -> Unit, viewModel: SearchViewModel = hiltViewModel()) {
+fun SearchRoute(
+    onBack: () -> Unit,
+    /** Third argument: PDF page to show first (search hits inside a PDF note), or null. */
+    onOpenNote: (NoteId, NoteType, Int?) -> Unit,
+    viewModel: SearchViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     SearchScreen(
         state = state,
@@ -92,7 +98,7 @@ fun SearchScreen(
     state: SearchUiState,
     onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
-    onOpenNote: (NoteId, NoteType) -> Unit,
+    onOpenNote: (NoteId, NoteType, Int?) -> Unit,
     onNotebook: (com.appname.notes.core.domain.model.NotebookId?) -> Unit,
     onTag: (com.appname.notes.core.domain.model.TagId?) -> Unit,
     onModified: (ModifiedWithin) -> Unit,
@@ -152,8 +158,9 @@ fun SearchScreen(
                         modifier = Modifier.align(Alignment.Center),
                     )
                     else -> LazyColumn(Modifier.fillMaxSize().testTag(SearchTestTags.RESULTS)) {
-                        items(results, key = { it.note.id.value }) { hit ->
-                            SearchResultRow(hit, onClick = { onOpenNote(hit.note.id, hit.note.type) })
+                        // A note can match in its text and on several document pages: one row per place.
+                        items(results, key = { "${it.note.id.value}/${it.location?.attachmentId?.value}/${it.location?.page}/${it.location != null}" }) { hit ->
+                            SearchResultRow(hit, onClick = { onOpenNote(hit.note.id, hit.note.type, hit.location?.takeIf { it.attachmentId == null }?.page) })
                             HorizontalDivider()
                         }
                     }
@@ -252,6 +259,20 @@ private fun SearchResultRow(hit: SearchHit, onClick: () -> Unit) {
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
         )
+        hit.location?.let { where ->
+            val page = where.page?.plus(1)
+            Text(
+                when {
+                    where.attachmentName != null && page != null -> stringResource(R.string.search_in_attachment_page, where.attachmentName!!, page)
+                    where.attachmentName != null -> stringResource(R.string.search_in_attachment, where.attachmentName!!)
+                    page != null -> stringResource(R.string.search_in_page, page)
+                    else -> ""
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.testTag(SearchTestTags.LOCATION),
+            )
+        }
         Text(
             listOfNotNull(note.notebookTitle, NoteDates.format(note.updatedAt)).joinToString(" · "),
             style = MaterialTheme.typography.labelSmall,

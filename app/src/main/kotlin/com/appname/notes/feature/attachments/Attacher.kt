@@ -41,12 +41,14 @@ class Attacher(
     private val store: AttachmentFileStore,
     private val repository: AttachmentRepository,
     private val dispatchers: DispatcherProvider,
+    /** Called after files were attached (starts text indexing). */
+    private val onAttached: () -> Unit = {},
 ) {
     suspend fun attach(noteId: NoteId, uris: List<Uri>): AttachOutcome = withContext(dispatchers.io) {
         val (ok, errors) = importAll(uris)
         if (ok.isEmpty()) return@withContext AttachOutcome(emptyList(), errors)
         when (val r = repository.add(noteId, ok)) {
-            is AppResult.Success -> AttachOutcome(r.value, errors)
+            is AppResult.Success -> AttachOutcome(r.value, errors).also { onAttached() }
             is AppResult.Failure -> {
                 ok.forEach { store.file(it.fileName).delete() }
                 AttachOutcome(emptyList(), errors + AttachError.STORAGE)
@@ -59,7 +61,7 @@ class Attacher(
         val (ok, errors) = importAll(uris)
         if (ok.isEmpty()) return@withContext null to AttachOutcome(emptyList(), errors)
         when (val r = repository.createNoteWith(notebookId, "", ok)) {
-            is AppResult.Success -> r.value to AttachOutcome(emptyList(), errors)
+            is AppResult.Success -> (r.value to AttachOutcome(emptyList(), errors)).also { onAttached() }
             is AppResult.Failure -> {
                 ok.forEach { store.file(it.fileName).delete() }
                 null to AttachOutcome(emptyList(), errors + AttachError.STORAGE)

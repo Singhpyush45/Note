@@ -10,6 +10,7 @@ import com.appname.notes.core.database.dao.InkDao
 import com.appname.notes.core.database.dao.NoteDao
 import com.appname.notes.core.database.dao.NotebookDao
 import com.appname.notes.core.database.dao.TagDao
+import com.appname.notes.core.database.dao.TextIndexDao
 import com.appname.notes.core.database.entity.AttachmentEntity
 import com.appname.notes.core.database.entity.InkItemEntity
 import com.appname.notes.core.database.entity.InkPageEntity
@@ -19,6 +20,9 @@ import com.appname.notes.core.database.entity.NoteTagCrossRef
 import com.appname.notes.core.database.entity.NotebookEntity
 import com.appname.notes.core.database.entity.PdfDocumentEntity
 import com.appname.notes.core.database.entity.TagEntity
+import com.appname.notes.core.database.entity.ExtractedTextEntity
+import com.appname.notes.core.database.entity.ExtractedTextFtsEntity
+import com.appname.notes.core.database.entity.TextIndexJobEntity
 
 /**
  * Schema history (every version's schema is committed under schemas/ and tested by MigrationTest):
@@ -26,15 +30,17 @@ import com.appname.notes.core.database.entity.TagEntity
  * - v2 (Phase 3): ink_pages, ink_items. Only new tables, so Room generates the migration.
  * - v3 (Phase 4): pdf_documents; ink_pages.pdfPageIndex (nullable). Generated migration too.
  * - v4 (Phase 5): attachments. New table only; generated migration.
+ * - v5 (Phase 5): extracted_text (+ FTS index), text_index_jobs. New tables only; generated migration.
  */
 @Database(
     entities = [
         NotebookEntity::class, NoteEntity::class, NoteFtsEntity::class, TagEntity::class, NoteTagCrossRef::class,
         InkPageEntity::class, InkItemEntity::class, PdfDocumentEntity::class, AttachmentEntity::class,
+        ExtractedTextEntity::class, ExtractedTextFtsEntity::class, TextIndexJobEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5)],
 )
 abstract class NotesDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
@@ -42,10 +48,12 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
     abstract fun inkDao(): InkDao
     abstract fun attachmentDao(): AttachmentDao
+    abstract fun textIndexDao(): TextIndexDao
 
     /** Recreates the search index from the notes table (SRS 12.1). */
     fun rebuildSearchIndex() {
         openHelper.writableDatabase.execSQL("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')")
+        openHelper.writableDatabase.execSQL("INSERT INTO extracted_text_fts(extracted_text_fts) VALUES('rebuild')")
     }
 
     companion object {

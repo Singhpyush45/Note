@@ -55,6 +55,7 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         onShapeCorrectionChanged = viewModel::onShapeCorrectionChanged,
         onHoldDurationSelected = viewModel::onHoldDurationSelected,
         onFingerModeSelected = viewModel::onFingerModeSelected,
+        onDocumentTextChanged = viewModel::onDocumentTextChanged,
     )
 }
 
@@ -71,6 +72,7 @@ fun SettingsScreen(
     onShapeCorrectionChanged: (Boolean) -> Unit = {},
     onHoldDurationSelected: (HoldDuration) -> Unit = {},
     onFingerModeSelected: (FingerMode) -> Unit = {},
+    onDocumentTextChanged: (Boolean) -> Unit = {},
     dynamicColorSupported: Boolean = supportsDynamicColor(),
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -109,6 +111,8 @@ fun SettingsScreen(
                 SettingsList(
                     appearance = uiState.appearance,
                     ink = uiState.ink,
+                    documentText = uiState.documentText,
+                    onDocumentTextChanged = onDocumentTextChanged,
                     dynamicColorSupported = dynamicColorSupported,
                     onThemeModeSelected = onThemeModeSelected,
                     onDynamicColorChanged = onDynamicColorChanged,
@@ -126,6 +130,8 @@ fun SettingsScreen(
 private fun SettingsList(
     appearance: AppearanceSettings,
     ink: InkSettings,
+    documentText: Boolean,
+    onDocumentTextChanged: (Boolean) -> Unit,
     dynamicColorSupported: Boolean,
     onThemeModeSelected: (ThemeMode) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
@@ -214,6 +220,15 @@ private fun SettingsList(
         item { HorizontalDivider() }
         item { SettingsSectionHeader(stringResource(R.string.settings_section_privacy)) }
         item {
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_document_text),
+                summary = stringResource(R.string.settings_document_text_summary),
+                checked = documentText,
+                onCheckedChange = onDocumentTextChanged,
+                modifier = Modifier.testTag(SettingsTestTags.DOCUMENT_TEXT),
+            )
+        }
+        item {
             SettingsInfoRow(
                 title = stringResource(R.string.settings_storage),
                 value = stringResource(R.string.settings_storage_value),
@@ -259,6 +274,7 @@ private fun ThemeMode.labelRes(): Int = when (this) {
 object SettingsTestTags {
     const val SCREEN = "screen_settings"
     const val LIST = "settings_list"
+    const val DOCUMENT_TEXT = "settings_document_text"
 }
 
 @Preview(showBackground = true)

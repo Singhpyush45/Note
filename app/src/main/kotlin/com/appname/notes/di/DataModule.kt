@@ -11,12 +11,14 @@ import com.appname.notes.core.database.RoomNoteRepository
 import com.appname.notes.core.database.RoomPdfRepository
 import com.appname.notes.core.database.RoomNotebookRepository
 import com.appname.notes.core.database.RoomTagRepository
+import com.appname.notes.core.database.RoomTextIndexRepository
 import com.appname.notes.core.domain.repository.AttachmentRepository
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.PdfRepository
 import com.appname.notes.core.domain.repository.TagRepository
+import com.appname.notes.core.domain.repository.TextIndexRepository
 import com.appname.notes.feature.settings.SearchIndexRebuilder
 import dagger.Module
 import dagger.Provides
@@ -83,4 +85,9 @@ object DataModule {
     @Singleton
     fun provideAttachmentRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): AttachmentRepository =
         RoomAttachmentRepository(db, clock, ids, logger)
+
+    @Provides
+    @Singleton
+    fun provideTextIndexRepository(db: NotesDatabase, clock: AppClock, logger: AppLogger): TextIndexRepository =
+        RoomTextIndexRepository(db, clock, logger)
 }

@@ -6,6 +6,7 @@ import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.PdfRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.TagRepository
+import com.appname.notes.core.domain.repository.TextIndexRepository
 import com.appname.notes.feature.pdf.PdfAnnotationWriter
 import com.appname.notes.feature.pdf.PdfFileStore
 import com.appname.notes.feature.pdf.PdfImporter
@@ -26,6 +27,8 @@ interface AppDataEntryPoint {
     fun ink(): InkRepository
     fun pdf(): PdfRepository
     fun attachments(): AttachmentRepository
+    fun textIndex(): TextIndexRepository
+    fun textIndexer(): com.appname.notes.feature.textindex.TextIndexer
     fun pdfImporter(): PdfImporter
     fun pdfFiles(): PdfFileStore
     fun pdfWriter(): PdfAnnotationWriter

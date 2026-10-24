@@ -16,6 +16,9 @@ interface SettingsRepository {
 
     val ink: Flow<InkSettings>
 
+    /** "Find text in photos and PDFs" (FR-011): extract text on the device for search. On by default. */
+    val documentText: Flow<Boolean>
+
     suspend fun setThemeMode(mode: ThemeMode): AppResult<Unit>
 
     suspend fun setDynamicColor(enabled: Boolean): AppResult<Unit>
@@ -24,4 +27,6 @@ interface SettingsRepository {
 
     /** Reads the current ink settings, applies [change] and saves the result in one transaction. */
     suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit>
+
+    suspend fun setDocumentText(enabled: Boolean): AppResult<Unit>
 }

@@ -57,10 +57,10 @@ class PdfThumbnails(
 }
 
 /**
- * Renders page [pageIndex] of [file] [widthPx] wide on white, as RGB_565 (half the memory; a page has no
- * transparency). Blocking; may throw IOException/SecurityException/RuntimeException for unreadable files.
+ * Renders page [pageIndex] of [file] [widthPx] wide on white, as RGB_565 when [compact] (half the memory; a page
+ * has no transparency), else ARGB_8888 (e.g. for text recognition). Blocking; may throw IOException/SecurityException/RuntimeException for unreadable files.
  */
-internal fun renderPdfPage(file: java.io.File, pageIndex: Int, widthPx: Int): Bitmap? =
+internal fun renderPdfPage(file: java.io.File, pageIndex: Int, widthPx: Int, compact: Boolean = true): Bitmap? =
     ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
         PdfRenderer(fd).use { r ->
             if (pageIndex !in 0 until r.pageCount) return@use null
@@ -69,7 +69,7 @@ internal fun renderPdfPage(file: java.io.File, pageIndex: Int, widthPx: Int): Bi
                 val argb = createBitmap(widthPx, h, Bitmap.Config.ARGB_8888) // the renderer needs ARGB
                 argb.eraseColor(Color.WHITE)
                 page.render(argb, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                argb.copy(Bitmap.Config.RGB_565, false).also { argb.recycle() }
+                if (compact) argb.copy(Bitmap.Config.RGB_565, false).also { argb.recycle() } else argb
             }
         }
     }

@@ -94,7 +94,7 @@ class MigrationTest {
     @Test
     fun `latest schema is committed`() {
         // CI also fails when the exported schema differs from the committed one.
-        assertThat(committedVersions().last()).isEqualTo(4)
+        assertThat(committedVersions().last()).isEqualTo(5)
     }
 
     @Test
@@ -159,6 +159,29 @@ class MigrationTest {
         val attachments = RoomAttachmentRepository(db, clock, ids, NoOpLogger)
         val added = attachments.add(NoteId("n1"), listOf(NewAttachment(AttachmentKind.IMAGE, "a.jpg", "Board.jpg", "image/jpeg", 5, 40, 30)))
         assertThat(added).isInstanceOf(AppResult.Success::class.java)
+        db.close()
+    }
+
+    @Test
+    fun `version 4 attachments survive the upgrade to version 5 and become indexable`() = runTest {
+        val name = "v4-with-attachment.db"
+        val old = createOldDatabase(4, name)
+        val now = clock.now().toEpochMilli()
+        old.insertOrThrow("notes", null, ContentValues().apply {
+            put("id", "n1"); put("title", "Trip"); put("contentJson", "{}"); put("plainText", ""); put("preview", "")
+            put("noteType", "TEXT"); put("isPinned", 0); put("isFavourite", 0); put("isArchived", 0)
+            put("createdAt", now); put("updatedAt", now); put("revision", 1)
+        })
+        old.insertOrThrow("attachments", null, ContentValues().apply {
+            put("id", "a1"); put("noteId", "n1"); put("kind", "IMAGE"); put("fileName", "a.jpg"); put("displayName", "Board.jpg")
+            put("mimeType", "image/jpeg"); put("sizeBytes", 5L); put("width", 4); put("height", 3); put("position", 0); put("createdAt", now)
+        })
+        old.close()
+
+        val db = openCurrent(name)
+        assertThat((RoomAttachmentRepository(db, clock, ids, NoOpLogger).list(NoteId("n1")) as AppResult.Success).value.single().displayName).isEqualTo("Board.jpg")
+        val pending = (RoomTextIndexRepository(db, clock, NoOpLogger).pending(10, clock.now().plusSeconds(1)) as AppResult.Success).value
+        assertThat(pending.map { it.key }).containsExactly("a:a1")
         db.close()
     }
 

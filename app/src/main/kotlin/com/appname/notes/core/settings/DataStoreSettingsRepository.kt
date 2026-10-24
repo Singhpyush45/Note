@@ -60,6 +60,10 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override val ink: Flow<InkSettings> = prefs.map { it.toInk() }.distinctUntilChanged()
 
+    override val documentText: Flow<Boolean> = prefs.map { it[Keys.DOCUMENT_TEXT] ?: true }.distinctUntilChanged()
+
+    override suspend fun setDocumentText(enabled: Boolean): AppResult<Unit> = write { it[Keys.DOCUMENT_TEXT] = enabled }
+
     override suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit> = write { prefs ->
         val new = change(prefs.toInk())
         prefs[Keys.INK_SHAPES] = new.shapeCorrection
@@ -120,6 +124,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val INK_STYLUS_SEEN = booleanPreferencesKey("ink_stylus_seen")
         val INK_TOOL = stringPreferencesKey("ink_last_tool")
         val INK_ERASER = stringPreferencesKey("ink_eraser_mode")
+        val DOCUMENT_TEXT = booleanPreferencesKey("document_text_search")
     }
 
     private companion object {

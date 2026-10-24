@@ -17,13 +17,18 @@ class SettingsViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repository = FakeSettingsRepository()
+    private val switched = mutableListOf<Boolean>()
 
     // Created in @Before, after the rule has installed the test Main dispatcher.
     private lateinit var viewModel: SettingsViewModel
 
     @Before
     fun setUp() {
-        viewModel = SettingsViewModel(repository) { com.appname.notes.core.common.result.AppResult.Success(Unit) }
+        viewModel = SettingsViewModel(
+            repository = repository,
+            indexRebuilder = { com.appname.notes.core.common.result.AppResult.Success(Unit) },
+            documentTextSwitch = { switched += it },
+        )
     }
 
     @Test
@@ -87,4 +92,19 @@ class SettingsViewModelTest {
 
     private suspend fun app.cash.turbine.TurbineTestContext<SettingsUiState>.awaitReady(): SettingsUiState.Ready =
         awaitItem() as SettingsUiState.Ready
+
+    @Test
+    fun `turning document text off saves it and clears the index, on starts indexing`() = runTest {
+        viewModel.onDocumentTextChanged(false)
+        viewModel.onDocumentTextChanged(true)
+        assertThat(switched).containsExactly(false, true).inOrder()
+        assertThat(repository.documentTextEnabled.value).isTrue()
+    }
+
+    @Test
+    fun `a failed save doesn't touch the index`() = runTest {
+        repository.failWrites = true
+        viewModel.onDocumentTextChanged(false)
+        assertThat(switched).isEmpty()
+    }
 }

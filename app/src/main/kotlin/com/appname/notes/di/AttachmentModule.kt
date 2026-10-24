@@ -10,6 +10,7 @@ import com.appname.notes.feature.attachments.AttachmentPreviews
 import com.appname.notes.feature.attachments.Attacher
 import com.appname.notes.feature.attachments.StorageCleanup
 import com.appname.notes.feature.pdf.PdfImporter
+import com.appname.notes.feature.textindex.TextIndexScheduler
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -31,8 +32,8 @@ object AttachmentModule {
 
     @Provides
     @Singleton
-    fun provideAttacher(store: AttachmentFileStore, repository: AttachmentRepository, dispatchers: DispatcherProvider) =
-        Attacher(store, repository, dispatchers)
+    fun provideAttacher(store: AttachmentFileStore, repository: AttachmentRepository, dispatchers: DispatcherProvider, scheduler: TextIndexScheduler) =
+        Attacher(store, repository, dispatchers, onAttached = scheduler::requestRun)
 
     @Provides
     @Singleton

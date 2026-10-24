@@ -117,6 +117,7 @@ sealed interface InkLoad {
 class InkEditorViewModel @AssistedInject constructor(
     // A plain String: Dagger can't use Kotlin value classes in assisted factories (name mangling).
     @Assisted noteIdValue: String,
+    @Assisted private val initialPdfPage: Int,
     private val ink: InkRepository,
     private val notes: NoteRepository,
     private val settings: SettingsRepository,
@@ -132,7 +133,8 @@ class InkEditorViewModel @AssistedInject constructor(
 
     @AssistedFactory
     interface Factory {
-        fun create(noteId: String): InkEditorViewModel
+        /** [initialPdfPage]: PDF page to show first, or -1 (Dagger's assisted factories can't take nullable Ints well). */
+        fun create(noteId: String, initialPdfPage: Int): InkEditorViewModel
     }
 
     /** Declared first: other properties below use it while initialising. */
@@ -236,6 +238,11 @@ class InkEditorViewModel @AssistedInject constructor(
         session.onChanged = { refresh() }
         _ui.update { it.copy(title = note.title, readOnly = readOnly, isPdf = note.type == NoteType.PDF, pdfFailed = note.type == NoteType.PDF && pdfRenderer == null) }
         _load.value = InkLoad.Ready(session, controller, pdfRenderer)
+        // Opened from a search hit: show that PDF page first.
+        if (initialPdfPage >= 0) {
+            val index = session.pages.indexOfFirst { it.pdfPageIndex == initialPdfPage }
+            if (index >= 0) _ui.update { it.copy(scrollRequest = ScrollRequest(index)) }
+        }
         refresh()
     }
 

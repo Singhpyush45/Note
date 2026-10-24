@@ -8,6 +8,7 @@ import com.appname.notes.feature.pdf.PdfAnnotationWriter
 import com.appname.notes.feature.pdf.PdfFileStore
 import com.appname.notes.feature.pdf.PdfImporter
 import com.appname.notes.feature.pdf.PdfThumbnails
+import com.appname.notes.feature.textindex.TextIndexScheduler
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -30,8 +31,8 @@ object PdfModule {
 
     @Provides
     @Singleton
-    fun provideImporter(store: PdfFileStore, pdf: PdfRepository, dispatchers: DispatcherProvider) =
-        PdfImporter(store, pdf, dispatchers)
+    fun provideImporter(store: PdfFileStore, pdf: PdfRepository, dispatchers: DispatcherProvider, scheduler: TextIndexScheduler) =
+        PdfImporter(store, pdf, dispatchers, onImported = scheduler::requestRun)
 
     @Provides
     @Singleton

@@ -94,6 +94,8 @@ data class SearchHit(
     val note: NoteSummary,
     /** Excerpt around the match; matched words are wrapped in [HIGHLIGHT_START]/[HIGHLIGHT_END]. */
     val snippet: String,
+    /** Set when the match is in a document (a PDF page, an attached file) rather than the note's text. */
+    val location: HitLocation? = null,
 ) {
     companion object {
         const val HIGHLIGHT_START = '\u0002'

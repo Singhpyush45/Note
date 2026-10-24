@@ -95,3 +95,30 @@ internal fun NoteWithTags.toDomain(logger: AppLogger) = Note(
     updatedAt = note.updatedAt.toInstant(),
     revision = note.revision,
 )
+
+internal fun com.appname.notes.core.database.entity.DocumentHitRow.toDomain() = SearchHit(
+    note = NoteSummary(
+        id = NoteId(id),
+        title = title,
+        preview = preview,
+        type = noteType.toNoteType(),
+        notebookId = notebookId?.let(::NotebookId),
+        notebookTitle = notebookTitle,
+        tags = tags.map { it.toDomain() }.sortedBy { it.name.lowercase() },
+        isPinned = isPinned,
+        isFavourite = isFavourite,
+        isArchived = isArchived,
+        trashedAt = trashedAt?.toInstant(),
+        createdAt = createdAt.toInstant(),
+        updatedAt = updatedAt.toInstant(),
+        attachmentCount = attachmentCount,
+        coverImage = coverImage,
+    ),
+    snippet = snippet,
+    location = com.appname.notes.core.domain.model.HitLocation(
+        attachmentId = attachmentId?.let { com.appname.notes.core.domain.model.AttachmentId(it) },
+        attachmentName = attachmentName,
+        // A photo has one "page": no page number to show.
+        page = if (attachmentKind == com.appname.notes.core.domain.model.AttachmentKind.IMAGE.name) null else pageIndex,
+    ),
+)

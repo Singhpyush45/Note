@@ -5,6 +5,7 @@ import android.os.StrictMode
 import com.appname.notes.feature.ink.InkCrashGuard
 import com.appname.notes.di.ApplicationScope
 import com.appname.notes.feature.attachments.StorageCleanup
+import com.appname.notes.feature.textindex.TextIndexScheduler
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +16,8 @@ import kotlinx.coroutines.launch
 class NotesApplication : Application() {
 
     @Inject lateinit var storageCleanup: StorageCleanup
+
+    @Inject lateinit var textIndexScheduler: TextIndexScheduler
 
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
@@ -27,6 +30,8 @@ class NotesApplication : Application() {
         appScope.launch {
             delay(STARTUP_CLEANUP_DELAY_MS)
             storageCleanup.run()
+            // Read text in documents added while the app was closed or that failed earlier (FR-011).
+            textIndexScheduler.requestRun()
         }
     }
 

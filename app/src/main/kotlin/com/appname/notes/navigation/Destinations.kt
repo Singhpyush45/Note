@@ -29,7 +29,8 @@ data class NoteEditorKey(val noteId: String) : NavKey
 
 /** A handwritten note. Full screen on every device: writing needs the space (not a detail pane). */
 @Serializable
-data class InkEditorKey(val noteId: String) : NavKey
+/** [page]: a PDF page to show first (0-based PDF page index), e.g. from a search hit; null = the top. */
+data class InkEditorKey(val noteId: String, val page: Int? = null) : NavKey
 
 @Serializable
 data object SearchKey : NavKey

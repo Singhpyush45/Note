@@ -30,10 +30,11 @@ unless stated otherwise.
 | UiAutomator | 2.4.0 | Process-death / force-stop e2e tests | Added Phase 2 |
 | Jetpack Ink (authoring, brush, rendering, strokes) | **1.1.0-alpha09** | Low-latency stylus ink | Added Phase 3 (ADR-0009 Part A). **Preview on purpose** (exception to the stable-only rule): 1.0.0's live-stroke renderer on Android 13+ closes its renderer on the main thread while its render thread may still draw (`CanvasInProgressStrokesRenderHelperV33.discard()`), a native abort ("Cannot drawFrame with no CanvasContext") that kills the app when the handwriting screen closes mid-draw. Seen in 2 of 5 CI runs. 1.1.0-alpha09's source closes it on the render thread after the layers are hidden (verified in its published sources). Move to 1.1.0 stable when released. |
 | ExifInterface (`androidx.exifinterface`) | 1.3.7 | Photo orientation for attachments | Added Phase 5. The platform class has known parsing bugs on older Android versions. |
+| ML Kit Text Recognition (`com.google.mlkit:text-recognition`, `-devanagari`) | 16.0.1 | On-device OCR, bundled models (ADR-0011) | Added Phase 5. Google, free to use (ML Kit terms), no data leaves the device. Larger APK. |
+| WorkManager (`androidx.work:work-runtime-ktx`) | 2.12.0 | Background document indexing | Added Phase 5. |
 | PdfBox-Android (`com.tom-roush:pdfbox-android`) | 2.0.27.0 | Read page boxes; write the annotated export copy | Added Phase 4 (ADR-0009 Part B). Apache-2.0, a port of Apache PDFBox **maintained by one person** (not Google): kept behind `PdfAnnotationWriter` so it can be swapped. Display uses the platform `PdfRenderer` instead. |
 
 ## Watch list (later phases)
 - Room 3 — revisit in Phase 6 (ADR-0008).
-- WorkManager 2.12.0 — Phase 5/6.
 - `androidx.pdf` 1.0.0-beta01 — not stable yet; could replace our renderer/page view once stable (ADR-0009 Part B).
 - Supabase Kotlin client — Phase 6 (licence + maintenance review then).
