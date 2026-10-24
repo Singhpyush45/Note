@@ -196,27 +196,46 @@ class AttachmentFlowRobolectricTest {
 
     @Test
     fun anAttachmentCanBeRenamed() {
-        org.robolectric.shadows.ShadowLog.stream = System.out // logcat into the test report while this is investigated
         val id = noteWithAttachments()
         openNote(id)
         val zip = attachments(id).first { it.kind == AttachmentKind.FILE }
         waitAdvancing { exists(hasTestTag(AttachmentTestTags.item(zip)), unmerged = true) }
+        // The dialog's text cursor blinks for as long as it's open, so Compose is never "idle": step the clock by hand.
+        composeRule.mainClock.autoAdvance = false
         // "Rename" is a TalkBack action on the item, and in its ⋮ sheet (the sheet itself is checked on the device).
         customAction(AttachmentTestTags.item(zip), string(R.string.attach_rename))
-        waitAdvancing { exists(hasTestTag(AttachmentTestTags.RENAME_FIELD)) }
+        composeRule.mainClock.advanceTimeBy(1_000)
+        assertThat(exists(hasTestTag(AttachmentTestTags.RENAME_FIELD))).isTrue()
         composeRule.onNodeWithTag(AttachmentTestTags.RENAME_FIELD).performTextReplacement("Week 3 slides.zip")
+        composeRule.mainClock.advanceTimeBy(200)
         composeRule.onNodeWithTag(AttachmentTestTags.RENAME_SAVE).performClick()
+        composeRule.mainClock.advanceTimeBy(1_000)
+        composeRule.mainClock.autoAdvance = true
         waitAdvancing { attachments(id).any { it.displayName == "Week 3 slides.zip" } }
         waitAdvancing { exists(hasText("Week 3 slides.zip"), unmerged = true) }
     }
 
-    /** No speech service in the test environment: voice typing says so instead of failing (owner brief §11). */
+    /**
+     * Voice typing opens as a panel in place of the toolbar (owner brief §11). Whether a speech service exists depends
+     * on the environment: without one the panel says so; with one it offers the English variants and says where speech
+     * is processed before anything is recorded. Cancel closes it and the toolbar returns.
+     */
     @Test
-    fun voiceTypingWithoutASpeechServiceExplainsIt() {
-        org.robolectric.shadows.ShadowLog.stream = System.out // logcat into the test report while this is investigated
+    fun voiceTypingOpensAPanelThatExplainsItselfBeforeListening() {
         openNote(noteWithAttachments())
         composeRule.onNodeWithTag(EditorTestTags.VOICE).performClick()
         waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET)) }
-        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.UNAVAILABLE)) }
+        assertThat(exists(hasTestTag(EditorTestTags.TOOLBAR))).isFalse()
+        if (exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.UNAVAILABLE))) {
+            composeRule.onNodeWithText(string(R.string.action_close)).performClick()
+        } else {
+            assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.START))).isTrue()
+            assertThat(exists(hasText(string(R.string.voice_lang_in)))).isTrue()
+            assertThat(exists(hasText(string(R.string.voice_on_device)) or hasText(string(R.string.voice_online)))).isTrue()
+            assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.INSERT))).isTrue()
+            composeRule.onNodeWithText(string(R.string.action_cancel)).performClick()
+        }
+        waitAdvancing { exists(hasTestTag(EditorTestTags.TOOLBAR)) }
+        assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET))).isFalse()
     }
 }
