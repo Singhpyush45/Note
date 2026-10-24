@@ -11,10 +11,14 @@ import java.io.File
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Shadows
+import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowMimeTypeMap
 import org.robolectric.annotation.Config
 
-/** FR-009 storage behaviour and SRS 15.1 "storage low": the store's checks, on the JVM. */
+/**
+ * FR-009 storage behaviour and SRS 15.1 "storage low": the store's checks, on the JVM. Image decoding is
+ * faked on the JVM, so photo handling is tested on the emulator (AttachmentDeviceTest).
+ */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [36])
 class AttachmentFileStoreTest {
@@ -25,7 +29,7 @@ class AttachmentFileStoreTest {
     @Before
     fun mimeTypes() {
         // Robolectric's MIME map starts empty; Android's has these.
-        Shadows.shadowOf(MimeTypeMap.getSingleton()).apply {
+        Shadow.extract<ShadowMimeTypeMap>(MimeTypeMap.getSingleton()).apply {
             addExtensionMimeTypeMapping("zip", "application/zip")
             addExtensionMimeTypeMapping("pdf", "application/pdf")
         }
@@ -57,14 +61,6 @@ class AttachmentFileStoreTest {
     fun `a PDF is recognised as a PDF`() {
         val r = store().import(Uri.fromFile(file("Slides.pdf", 100))) as AttachResult.Ok
         assertThat(r.attachment.kind).isEqualTo(AttachmentKind.PDF)
-    }
-
-    @Test
-    fun `an image that can't be decoded is kept as a plain file instead of failing`() {
-        Shadows.shadowOf(MimeTypeMap.getSingleton()).addExtensionMimeTypeMapping("jpg", "image/jpeg")
-        val r = store().import(Uri.fromFile(file("broken.jpg", 64))) as AttachResult.Ok
-        assertThat(r.attachment.kind).isEqualTo(AttachmentKind.FILE)
-        assertThat(r.attachment.width).isNull()
     }
 
     @Test

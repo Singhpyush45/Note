@@ -117,6 +117,15 @@ class AttachmentDeviceTest {
     }
 
     @Test
+    fun aDamagedPhotoIsKeptAsAPlainFileInsteadOfFailing() {
+        val broken = File(dir, "broken.jpg").apply { writeBytes(ByteArray(64) { it.toByte() }) }
+        val a = (store().import(Uri.fromFile(broken)) as AttachResult.Ok).attachment
+        assertThat(a.kind).isEqualTo(AttachmentKind.FILE)
+        assertThat(a.width).isNull()
+        assertThat(a.displayName).isEqualTo("broken.jpg")
+    }
+
+    @Test
     fun fullStorageIsReportedAndNothingIsAttached() = runBlocking {
         val id = (data.notes().createNote(null) as AppResult.Success).value
         val full = store(free = 1_000)
