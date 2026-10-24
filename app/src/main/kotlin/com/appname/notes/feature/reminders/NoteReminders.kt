@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -157,9 +157,16 @@ fun rememberReminderUi(
             openNotificationSettings(context)
         }
     }
-    val needsPermission = {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+    /** Asks for notifications (Android 13+) if not granted yet; returns false when there is nothing to ask. */
+    val askNotifications: () -> Boolean = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            true
+        } else {
+            false
+        }
     }
 
     target?.let { t ->
@@ -180,7 +187,7 @@ fun rememberReminderUi(
                 onSave = { at, repeat ->
                     target = null
                     reminders.save(existing?.id, blockId, at, repeat)
-                    if (needsPermission()) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    askNotifications()
                 },
                 onDelete = existing?.let { r -> { target = null; reminders.delete(r.id) } },
                 onDismiss = { target = null },
@@ -192,7 +199,7 @@ fun rememberReminderUi(
         ReminderUi(
             openTarget = { if (currentEditable) target = it },
             canAlertState = { canAlert },
-            fix = { if (needsPermission()) permission.launch(Manifest.permission.POST_NOTIFICATIONS) else openNotificationSettings(context) },
+            fix = { if (!askNotifications()) openNotificationSettings(context) },
         )
     }
 }
@@ -209,7 +216,7 @@ fun openNotificationSettings(context: Context) {
     try {
         context.startActivity(intent)
     } catch (e: ActivityNotFoundException) {
-        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
     }
 }
 
@@ -217,8 +224,8 @@ fun openNotificationSettings(context: Context) {
 fun openExactAlarmSettings(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
     try {
-        context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")))
+        context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, "package:${context.packageName}".toUri()))
     } catch (e: ActivityNotFoundException) {
-        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
     }
 }
