@@ -9,7 +9,8 @@ import com.appname.notes.core.domain.document.TextBlock
 import com.appname.notes.core.domain.editor.normalizeSpans
 
 /** Features a target format couldn't represent — shown to the user before exporting (FR-007). */
-enum class LostFeature { UNDERLINE, UNSUPPORTED_CONTENT }
+/** Things a Markdown file can't carry; the user is told before exporting (FR-007). */
+enum class LostFeature { UNDERLINE, UNSUPPORTED_CONTENT, ATTACHMENTS }
 
 data class ExportResult(val text: String, val lost: Set<LostFeature>)
 

@@ -1,5 +1,6 @@
 package com.appname.notes.di
 
+import com.appname.notes.core.domain.repository.AttachmentRepository
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.PdfRepository
@@ -24,6 +25,7 @@ interface AppDataEntryPoint {
     fun tags(): TagRepository
     fun ink(): InkRepository
     fun pdf(): PdfRepository
+    fun attachments(): AttachmentRepository
     fun pdfImporter(): PdfImporter
     fun pdfFiles(): PdfFileStore
     fun pdfWriter(): PdfAnnotationWriter

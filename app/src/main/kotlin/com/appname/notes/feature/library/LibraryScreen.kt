@@ -1,5 +1,6 @@
 package com.appname.notes.feature.library
 
+import android.graphics.Bitmap
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.zIndex
@@ -133,6 +134,7 @@ fun LibraryRoute(
         onNewNote = { scope.launch { viewModel.createNote()?.let { onOpenNote(it, NoteType.TEXT) } } },
         onNewInkNote = { scope.launch { viewModel.createInkNote()?.let { onOpenNote(it, NoteType.INK) } } },
         inkThumbnail = viewModel::inkThumbnail,
+        cover = viewModel::cover,
         onOpenSearch = onOpenSearch,
         onSelectCollection = viewModel::selectCollection,
         onSort = viewModel::setSort,
@@ -188,6 +190,7 @@ fun LibraryScreen(
     onMessageShown: () -> Unit,
     onImportPdf: () -> Unit = {},
     importingPdf: Boolean = false,
+    cover: (suspend (String) -> Bitmap?)? = null,
 ) {
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(state.message, snackbar, onMessageShown)
@@ -270,6 +273,7 @@ fun LibraryScreen(
                     selectedNoteId = selectedNoteId,
                     onOpenNote = onOpenNote,
                     inkThumbnail = inkThumbnail,
+                    cover = cover,
                     onLongPress = { actionsFor = it },
                     accessibilityActions = { note ->
                         noteActions(note, state.collection, actions, onMove = { moveFor = it }, onDelete = { confirmDeleteFor = it })
@@ -335,6 +339,7 @@ private fun NotesGrid(
     selectedNoteId: String?,
     onOpenNote: (NoteId, NoteType) -> Unit,
     inkThumbnail: suspend (NoteSummary) -> InkThumbnail?,
+    cover: (suspend (String) -> Bitmap?)?,
     onLongPress: (NoteSummary) -> Unit,
     accessibilityActions: @Composable (NoteSummary) -> List<CardAction>,
 ) {
@@ -349,14 +354,14 @@ private fun NotesGrid(
         if (state.pinned.isNotEmpty()) {
             item(key = "h_pinned", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.library_pinned)) }
             items(state.pinned, key = { it.id.value }) { note ->
-                NoteCard(note, { onOpenNote(note.id, note.type) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId, inkThumbnail = inkThumbnail)
+                NoteCard(note, { onOpenNote(note.id, note.type) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId, inkThumbnail = inkThumbnail, cover = cover)
             }
             if (state.others.isNotEmpty()) {
                 item(key = "h_others", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.library_others)) }
             }
         }
         items(state.others, key = { it.id.value }) { note ->
-            NoteCard(note, { onOpenNote(note.id, note.type) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId, inkThumbnail = inkThumbnail)
+            NoteCard(note, { onOpenNote(note.id, note.type) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId, inkThumbnail = inkThumbnail, cover = cover)
         }
     }
 }

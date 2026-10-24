@@ -43,6 +43,10 @@ data class NoteSummary(
     val trashedAt: Instant?,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** Number of attached files (FR-009). */
+    val attachmentCount: Int = 0,
+    /** Stored file name of the first attached image, for the card preview. */
+    val coverImage: String? = null,
 )
 
 /** A full note, as opened in the editor. */

@@ -16,6 +16,8 @@ import com.appname.notes.core.domain.document.NoteDocument
 import com.appname.notes.core.domain.document.RichText
 import com.appname.notes.core.domain.document.TextBlock
 import com.appname.notes.core.domain.model.NoteCollection
+import com.appname.notes.core.domain.model.AttachmentKind
+import com.appname.notes.core.domain.model.NewAttachment
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.domain.model.SearchFilters
@@ -92,7 +94,7 @@ class MigrationTest {
     @Test
     fun `latest schema is committed`() {
         // CI also fails when the exported schema differs from the committed one.
-        assertThat(committedVersions().last()).isEqualTo(3)
+        assertThat(committedVersions().last()).isEqualTo(4)
     }
 
     @Test
@@ -133,6 +135,30 @@ class MigrationTest {
         assertThat(page.items).containsExactly(stroke)
         assertThat(page.info.template).isEqualTo(PageTemplate.LINED)
         assertThat(page.info.pdfPageIndex).isNull()
+        db.close()
+    }
+
+    @Test
+    fun `version 3 PDF notes survive the upgrade to version 4 and can take attachments`() = runTest {
+        val name = "v3-with-pdf.db"
+        val old = createOldDatabase(3, name)
+        val now = clock.now().toEpochMilli()
+        old.insertOrThrow("notes", null, ContentValues().apply {
+            put("id", "n1"); put("title", "Lecture"); put("contentJson", "{}"); put("plainText", ""); put("preview", "")
+            put("noteType", "PDF"); put("isPinned", 0); put("isFavourite", 0); put("isArchived", 0)
+            put("createdAt", now); put("updatedAt", now); put("revision", 1)
+        })
+        old.insertOrThrow("pdf_documents", null, ContentValues().apply {
+            put("noteId", "n1"); put("fileName", "f.pdf"); put("displayName", "Lecture.pdf"); put("sha256", "ab")
+            put("sizeBytes", 10L); put("pageCount", 1); put("importedAt", now)
+        })
+        old.close()
+
+        val db = openCurrent(name)
+        assertThat((RoomPdfRepository(db, clock, ids, NoOpLogger).document(NoteId("n1")) as AppResult.Success).value!!.fileName).isEqualTo("f.pdf")
+        val attachments = RoomAttachmentRepository(db, clock, ids, NoOpLogger)
+        val added = attachments.add(NoteId("n1"), listOf(NewAttachment(AttachmentKind.IMAGE, "a.jpg", "Board.jpg", "image/jpeg", 5, 40, 30)))
+        assertThat(added).isInstanceOf(AppResult.Success::class.java)
         db.close()
     }
 

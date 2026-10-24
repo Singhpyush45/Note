@@ -3,6 +3,9 @@ package com.appname.notes
 import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
+import com.appname.notes.R
+import com.appname.notes.core.domain.model.NoteType
+import com.appname.notes.feature.attachments.Attacher
 import com.appname.notes.feature.pdf.PdfImport
 import com.appname.notes.feature.pdf.PdfImporter
 import com.appname.notes.feature.pdf.messageRes
@@ -26,40 +29,57 @@ sealed interface MainUiState {
     data class Ready(val appearance: AppearanceSettings) : MainUiState
 }
 
-/** A PDF opened or shared from another app ("Open with", "Share"). */
-sealed interface SharedPdf {
-    data object Importing : SharedPdf
-    data class Opened(val noteId: String) : SharedPdf
-    data class Failed(@param:StringRes val message: Int) : SharedPdf
+/** Content opened or shared from another app ("Open with", "Share"): a PDF, or photos. */
+sealed interface SharedImport {
+    data class Importing(@param:StringRes val message: Int) : SharedImport
+    /** [notice]: something to tell the user anyway (e.g. one of several photos couldn't be read). */
+    data class Opened(val noteId: String, val type: NoteType, @param:StringRes val notice: Int? = null) : SharedImport
+    data class Failed(@param:StringRes val message: Int) : SharedImport
 }
 
 @HiltViewModel
 class MainActivityViewModel @Inject constructor(
     settingsRepository: SettingsRepository,
     private val pdfImporter: PdfImporter,
+    private val attacher: Attacher,
 ) : ViewModel() {
 
-    private val _sharedPdf = MutableStateFlow<SharedPdf?>(null)
-    val sharedPdf: StateFlow<SharedPdf?> = _sharedPdf.asStateFlow()
+    private val _shared = MutableStateFlow<SharedImport?>(null)
+    val shared: StateFlow<SharedImport?> = _shared.asStateFlow()
 
     /**
      * Imports a PDF another app handed us and asks the UI to open it. Runs in the ViewModel so rotation
      * doesn't restart it; the read permission lasts as long as this activity.
      */
-    fun importShared(uri: Uri) {
-        if (_sharedPdf.value == SharedPdf.Importing) return
-        _sharedPdf.value = SharedPdf.Importing
+    fun importSharedPdf(uri: Uri) {
+        if (_shared.value is SharedImport.Importing) return
+        _shared.value = SharedImport.Importing(R.string.pdf_importing)
         viewModelScope.launch {
-            _sharedPdf.value = when (val r = pdfImporter.import(uri, notebookId = null)) {
-                is PdfImport.Created -> SharedPdf.Opened(r.noteId.value)
-                is PdfImport.Failed -> SharedPdf.Failed(r.error.messageRes)
+            _shared.value = when (val r = pdfImporter.import(uri, notebookId = null)) {
+                is PdfImport.Created -> SharedImport.Opened(r.noteId.value, NoteType.PDF)
+                is PdfImport.Failed -> SharedImport.Failed(r.error.messageRes)
             }
         }
     }
 
-    fun sharedPdfHandled() {
-        if (_sharedPdf.value != SharedPdf.Importing) _sharedPdf.value = null
+    /** Photos shared from another app (Gallery, Camera, a chat): a new note with them attached (FR-009). */
+    fun importSharedImages(uris: List<Uri>) {
+        if (uris.isEmpty() || _shared.value is SharedImport.Importing) return
+        _shared.value = SharedImport.Importing(R.string.attach_importing_shared)
+        viewModelScope.launch {
+            val (noteId, outcome) = attacher.createNote(notebookId = null, uris = uris)
+            _shared.value = when {
+                // Some of several photos may have failed: the note still opens, and the problem is said.
+                noteId != null -> SharedImport.Opened(noteId.value, NoteType.TEXT, notice = outcome.errorMessage)
+                else -> SharedImport.Failed(outcome.errorMessage ?: R.string.attach_error_storage)
+            }
+        }
     }
+
+    fun sharedHandled() {
+        if (_shared.value !is SharedImport.Importing) _shared.value = null
+    }
+
 
     // Eagerly: the splash screen reads `.value` before any UI subscribes.
     val uiState: StateFlow<MainUiState> = settingsRepository.appearance

@@ -25,6 +25,7 @@ import org.junit.runner.RunWith
  * - write → background → force-stop → relaunch: note is in the library (FR-002, NFR-04).
  * - handwrite → background → process killed → reopen: the ink is still on the page (Phase 3).
  * - PDF from another app → annotate → process killed → reopen: the ink is still on the PDF page (Phase 4).
+ * - photo shared from another app → new note → process killed → reopen: the photo is still attached (Phase 5).
  */
 @RunWith(AndroidJUnit4::class)
 class LifecycleE2ETest {
@@ -127,6 +128,40 @@ class LifecycleE2ETest {
         device.pressBack()
         assertThat(device.wait(Until.hasObject(By.text("Lecture notes")), TIMEOUT_MS)).isTrue()
         assertThat(device.findObjects(By.text("Lecture notes"))).hasSize(1) // not imported twice
+    }
+
+    /**
+     * A photo shared from another app (Gallery/Camera "Share") becomes a new note with it attached, and
+     * survives the process being killed (FR-009, SRS 16.2 lifecycle).
+     */
+    @Test
+    fun photoSharedFromAnotherAppBecomesANoteThatSurvivesProcessDeath() {
+        val photo = File(File(context.cacheDir, "shared").apply { mkdirs() }, "Lecture board.jpg")
+        val bmp = android.graphics.Bitmap.createBitmap(640, 480, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.DKGRAY) }
+        photo.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+        val uri = FileProvider.getUriForFile(context, "com.appname.notes.e2e.files", photo)
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("image/jpeg")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .setPackage(PACKAGE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        send.clipData = android.content.ClipData.newRawUri("photo", uri)
+        context.startActivity(send)
+
+        val label = "Photo: Lecture board.jpg"
+        assertThat(device.wait(Until.hasObject(By.desc(label)), TIMEOUT_MS)).isTrue()
+
+        device.pressHome()
+        Thread.sleep(SAVE_WAIT_MS)
+        device.executeShellCommand("am kill $PACKAGE")
+        waitUntilProcessGone()
+
+        launch(clearTask = false)
+        checkNotNull(device.wait(Until.findObject(By.desc(label)), TIMEOUT_MS)) { "Photo gone after process death. ${diagnostics()}" }
+        device.pressBack()
+        // One note in the library, with its attachment counted (not imported twice on relaunch).
+        assertThat(device.wait(Until.hasObject(By.descContains("1 attachment")), TIMEOUT_MS)).isTrue()
+        assertThat(device.findObjects(By.descContains("1 attachment"))).hasSize(1)
     }
 
     /** A one-page A4 PDF made with Android's own PDF writer, in the folder the FileProvider shares. */

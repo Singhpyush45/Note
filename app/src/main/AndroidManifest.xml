@@ -36,6 +36,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
+            <!-- "Share" of photos from Gallery, Camera or chats: a new note with them attached (FR-009). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
         <!-- Hands annotated PDF copies to the app the user picks in the share sheet (read-only, that file only). -->
         <provider

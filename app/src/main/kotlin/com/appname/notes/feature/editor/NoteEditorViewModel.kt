@@ -1,6 +1,7 @@
 package com.appname.notes.feature.editor
 
 import android.net.Uri
+import java.io.File
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,7 +12,18 @@ import com.appname.notes.core.domain.document.NoteDocument
 import com.appname.notes.core.domain.document.isBlank
 import com.appname.notes.core.domain.editor.EditorState
 import com.appname.notes.core.domain.markdown.ExportResult
+import com.appname.notes.core.domain.markdown.LostFeature
 import com.appname.notes.core.domain.markdown.Markdown
+import com.appname.notes.core.domain.model.Attachment
+import com.appname.notes.core.domain.repository.AttachmentRepository
+import com.appname.notes.feature.attachments.AttachmentFileStore
+import com.appname.notes.feature.attachments.AttachmentIntents
+import com.appname.notes.feature.attachments.AttachmentPreviews
+import com.appname.notes.feature.attachments.Attacher
+import com.appname.notes.feature.attachments.StorageCleanup
+import com.appname.notes.feature.pdf.PdfImport
+import com.appname.notes.feature.pdf.PdfImporter
+import com.appname.notes.feature.pdf.messageRes
 import com.appname.notes.core.domain.model.Note
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.model.Notebook
@@ -41,7 +53,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -84,6 +98,13 @@ class NoteEditorViewModel @AssistedInject constructor(
     private val ids: IdGenerator,
     private val files: DocumentFiles,
     @param:ApplicationScope private val appScope: CoroutineScope,
+    private val attachmentRepository: AttachmentRepository,
+    private val attacher: Attacher,
+    private val pdfImporter: PdfImporter,
+    private val attachmentStore: AttachmentFileStore,
+    private val storageCleanup: StorageCleanup,
+    val previews: AttachmentPreviews,
+    val attachmentIntents: AttachmentIntents,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -115,6 +136,14 @@ class NoteEditorViewModel @AssistedInject constructor(
 
     val allTags: StateFlow<List<Tag>> =
         tagRepository.observeTags().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Files attached to this note (FR-009), in order; updates live. */
+    val attachments: StateFlow<List<Attachment>> =
+        attachmentRepository.observe(noteId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** How many files are being copied in right now (shows progress). */
+    private val _attaching = MutableStateFlow(0)
+    val attaching: StateFlow<Int> = _attaching.asStateFlow()
 
     private data class Snapshot(val title: String, val document: NoteDocument)
 
@@ -216,8 +245,12 @@ class NoteEditorViewModel @AssistedInject constructor(
         val snap = if (_readOnly.value == null) snapshot() else null
         appScope.launch {
             if (snap != null) saveSnapshot(snap)
-            // A note the user opened but never typed into shouldn't clutter the list.
-            if (snap == null || (snap.title.isBlank() && snap.document.isBlank())) notes.discardIfBlank(noteId)
+            // A note the user opened but never typed into shouldn't clutter the list. Files still being
+            // attached count as content: wait for them first, or the note would be discarded under them.
+            if (snap == null || (snap.title.isBlank() && snap.document.isBlank())) {
+                _attaching.first { it == 0 }
+                notes.discardIfBlank(noteId)
+            }
         }
     }
 
@@ -240,7 +273,73 @@ class NoteEditorViewModel @AssistedInject constructor(
         notes.restoreFromTrash(setOf(noteId)).also { if (it is AppResult.Success) _readOnly.value = null }
     }
 
-    suspend fun deleteForever(): Boolean = notes.deletePermanently(setOf(noteId)) is AppResult.Success
+    suspend fun deleteForever(): Boolean = (notes.deletePermanently(setOf(noteId)) is AppResult.Success).also { deleted ->
+        if (deleted) appScope.launch { storageCleanup.run() }
+    }
+
+    // ------------------------------------------------------------------ attachments (FR-009)
+
+    /**
+     * Copies the picked files into app storage and attaches them. Runs in the app scope: a large file
+     * still finishes attaching if the user leaves the note meanwhile.
+     */
+    fun attach(uris: List<Uri>) {
+        if (uris.isEmpty() || _readOnly.value != null) return
+        _attaching.update { it + uris.size }
+        appScope.launch {
+            val outcome = attacher.attach(noteId, uris)
+            _attaching.update { it - uris.size }
+            outcome.errorMessage?.let { _message.value = UserMessage(it) }
+        }
+    }
+
+    /** Removes an attachment; the snackbar offers Undo (the file stays until cleanup, so undo is instant). */
+    fun removeAttachment(attachment: Attachment) {
+        if (_readOnly.value != null) return
+        viewModelScope.launch {
+            when (val r = attachmentRepository.remove(attachment.id)) {
+                is AppResult.Success -> _message.value = UserMessage(
+                    R.string.attach_removed,
+                    listOf(attachment.displayName),
+                    undo = { viewModelScope.launch { attachmentRepository.restore(r.value) } },
+                )
+                is AppResult.Failure -> _message.value = r.error.toUserMessage()
+            }
+        }
+    }
+
+    /** "Annotate": an attached PDF becomes its own PDF note to write on (the attachment stays as it is). */
+    suspend fun annotatePdf(attachment: Attachment): NoteId? {
+        val notebook = meta.value?.notebookId
+        return when (val r = pdfImporter.import(Uri.fromFile(attachmentStore.file(attachment.fileName)), notebook)) {
+            is PdfImport.Created -> r.noteId
+            is PdfImport.Failed -> { _message.value = UserMessage(r.error.messageRes); null }
+        }
+    }
+
+    /** The camera app finished: attach the photo if one was taken, and remove the temporary file either way. */
+    fun attachCameraPhoto(path: String, taken: Boolean) {
+        val file = File(path)
+        if (!taken || _readOnly.value != null) {
+            file.delete()
+            return
+        }
+        _attaching.update { it + 1 }
+        appScope.launch {
+            val outcome = attacher.attach(noteId, listOf(attachmentIntents.uriFor(file)))
+            file.delete()
+            _attaching.update { it - 1 }
+            outcome.errorMessage?.let { _message.value = UserMessage(it) }
+        }
+    }
+
+    fun cameraUnavailable() {
+        _message.value = UserMessage(R.string.attach_camera_unavailable)
+    }
+
+    fun noAppToOpen() {
+        _message.value = UserMessage(R.string.attach_no_app)
+    }
 
     suspend fun duplicate(): NoteId? {
         save()
@@ -265,7 +364,11 @@ class NoteEditorViewModel @AssistedInject constructor(
         }
     }
 
-    fun markdownExport(): ExportResult? = snapshot()?.let { Markdown.export(it.title, it.document) }
+    fun markdownExport(): ExportResult? = snapshot()?.let {
+        val export = Markdown.export(it.title, it.document)
+        // Markdown text can't carry files: say so before exporting (FR-007).
+        if (attachments.value.isNotEmpty()) export.copy(lost = export.lost + LostFeature.ATTACHMENTS) else export
+    }
 
     fun shareText(): String? = snapshot()?.let { Markdown.plainText(it.title, it.document) }
 

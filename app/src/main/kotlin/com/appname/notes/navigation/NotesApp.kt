@@ -54,15 +54,15 @@ import com.appname.notes.feature.settings.SettingsRoute
 @Composable
 fun NotesApp(
     modifier: Modifier = Modifier,
-    /** A note to open now (e.g. a PDF shared from another app); [onOpenNoteRequestHandled] is called after. */
-    openNoteRequest: String? = null,
+    /** A note to open now (e.g. a PDF or photos shared from another app); [onOpenNoteRequestHandled] is called after. */
+    openNoteRequest: Pair<String, NoteType>? = null,
     onOpenNoteRequestHandled: () -> Unit = {},
 ) {
     // Saved across rotation and process death because every key is @Serializable.
     val backStack = rememberNavBackStack(HomeKey)
     LaunchedEffect(openNoteRequest) {
         if (openNoteRequest != null) {
-            backStack.openNote(openNoteRequest, NoteType.PDF)
+            backStack.openNote(openNoteRequest.first, openNoteRequest.second)
             onOpenNoteRequestHandled()
         }
     }
@@ -130,6 +130,7 @@ fun NotesApp(
                         viewModel = viewModel,
                         onClose = { backStack.closeNote(key.noteId) },
                         onOpenNote = { openNote(it, NoteType.TEXT) },
+                        onOpenPdfNote = { openNote(it, NoteType.PDF) },
                     )
                 }
                 entry<InkEditorKey> { key ->

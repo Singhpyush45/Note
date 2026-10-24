@@ -40,6 +40,8 @@ internal fun NoteListRow.toDomain() = NoteSummary(
     trashedAt = trashedAt?.toInstant(),
     createdAt = createdAt.toInstant(),
     updatedAt = updatedAt.toInstant(),
+    attachmentCount = attachmentCount,
+    coverImage = coverImage,
 )
 
 internal fun SearchRow.toDomain() = SearchHit(
@@ -57,6 +59,8 @@ internal fun SearchRow.toDomain() = SearchHit(
         trashedAt = trashedAt?.toInstant(),
         createdAt = createdAt.toInstant(),
         updatedAt = updatedAt.toInstant(),
+        attachmentCount = attachmentCount,
+        coverImage = coverImage,
     ),
     snippet = snippet,
 )

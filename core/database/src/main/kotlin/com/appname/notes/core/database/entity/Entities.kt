@@ -115,6 +115,8 @@ data class NoteListRow(
     val trashedAt: Long?,
     val createdAt: Long,
     val updatedAt: Long,
+    val attachmentCount: Int,
+    val coverImage: String?,
     @Relation(
         parentColumn = "id",
         entityColumn = "id",
@@ -136,6 +138,8 @@ data class SearchRow(
     val trashedAt: Long?,
     val createdAt: Long,
     val updatedAt: Long,
+    val attachmentCount: Int,
+    val coverImage: String?,
     val snippet: String,
     @Relation(
         parentColumn = "id",

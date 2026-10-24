@@ -1,5 +1,6 @@
 package com.appname.notes.core.database
 
+import androidx.room.withTransaction
 import com.appname.notes.core.common.id.IdGenerator
 import com.appname.notes.core.common.logging.AppLogger
 import com.appname.notes.core.common.result.AppResult
@@ -129,7 +130,8 @@ class RoomNoteRepository(
             NoteType.INK -> db.inkDao().itemCount(note.note.id) == 0
             NoteType.PDF -> false // an imported document is content
         }
-        val blank = note.note.title.isBlank() && contentBlank && note.tags.isEmpty()
+        val blank = note.note.title.isBlank() && contentBlank && note.tags.isEmpty() &&
+            db.attachmentDao().count(note.note.id) == 0 // attached files are content too
         if (blank) storageCall(logger, "Discard empty note") { dao.deleteUnusedNote(id.value) }
         return blank
     }
@@ -139,7 +141,16 @@ class RoomNoteRepository(
         return storageCall(logger, "Duplicate note") { copyOf(source) }
     }
 
-    private suspend fun copyOf(source: com.appname.notes.core.database.entity.NoteWithTags): NoteId {
+    private suspend fun copyOf(source: com.appname.notes.core.database.entity.NoteWithTags): NoteId = db.withTransaction {
+        val copy = copyNoteOnly(source)
+        // Attachments: new rows pointing at the same (never modified) files.
+        val now = clock.now().toEpochMilli()
+        val attachments = db.attachmentDao().list(source.note.id).map { it.copy(id = ids.newId(), noteId = copy.value, createdAt = now) }
+        if (attachments.isNotEmpty()) db.attachmentDao().insertCopies(attachments)
+        copy
+    }
+
+    private suspend fun copyNoteOnly(source: com.appname.notes.core.database.entity.NoteWithTags): NoteId {
         if (source.note.noteType.toNoteType() != NoteType.TEXT) return copyOfInkNote(source)
         val document = decodeDocument(source.note.contentJson, source.note.id, logger)
         // Fresh block IDs so the copy is independent for future per-block sync.
