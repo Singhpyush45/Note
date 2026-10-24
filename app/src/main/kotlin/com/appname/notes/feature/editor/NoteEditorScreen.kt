@@ -118,7 +118,7 @@ import androidx.compose.material.icons.outlined.AlarmAdd
 import androidx.compose.material.icons.outlined.AudioFile
 import com.appname.notes.feature.reminders.RemindersRow
 import com.appname.notes.feature.voice.VoiceTypingActions
-import com.appname.notes.feature.voice.VoiceTypingSheet
+import com.appname.notes.feature.voice.VoiceTypingPanel
 import com.appname.notes.feature.reminders.rememberReminderUi
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
@@ -306,6 +306,35 @@ fun NoteEditorRoute(
         onRemind = { reminderUi.add() },
     )
 
+    val session = voiceSession
+    val voicePanel: (@Composable (Modifier) -> Unit)? = if (session == null) {
+        null
+    } else {
+        { panelModifier ->
+            val voiceState by session.state.collectAsStateWithLifecycle()
+            VoiceTypingPanel(
+                modifier = panelModifier,
+                state = voiceState,
+                actions = VoiceTypingActions(
+                    start = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            session.start()
+                        } else {
+                            voicePermission.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    pause = session::pause,
+                    stop = session::stop,
+                    edit = session::edit,
+                    insert = viewModel::insertVoiceText,
+                    language = viewModel::setVoiceLanguage,
+                    useOnline = { session.useOnlineService(); session.start() },
+                    dismiss = viewModel::closeVoiceTyping,
+                ),
+            )
+        }
+    }
+
     NoteEditorScreen(
         load = load,
         readOnly = readOnly,
@@ -333,35 +362,13 @@ fun NoteEditorRoute(
             )
         },
         onVoiceTyping = if (editable) viewModel::openVoiceTyping else null,
+        voicePanel = voicePanel,
         onRemindTask = if (editable) {
             { viewModel.taskAtCursor()?.let(reminderUi::add) ?: Unit }
         } else {
             null
         },
     )
-
-    voiceSession?.let { session ->
-        val voiceState by session.state.collectAsStateWithLifecycle()
-        VoiceTypingSheet(
-            state = voiceState,
-            actions = VoiceTypingActions(
-                start = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                        session.start()
-                    } else {
-                        voicePermission.launch(Manifest.permission.RECORD_AUDIO)
-                    }
-                },
-                pause = session::pause,
-                stop = session::stop,
-                edit = session::edit,
-                insert = viewModel::insertVoiceText,
-                language = viewModel::setVoiceLanguage,
-                useOnline = { session.useOnlineService(); session.start() },
-                dismiss = viewModel::closeVoiceTyping,
-            ),
-        )
-    }
 
     viewing?.let { a ->
         // Closed if the photo is removed elsewhere (or by Undo racing): never show a stale item.
@@ -454,6 +461,8 @@ fun NoteEditorScreen(
     onRemindTask: (() -> Unit)? = null,
     /** Opens voice typing; null when the note can't be edited. */
     onVoiceTyping: (() -> Unit)? = null,
+    /** The open voice-typing panel, shown in place of the formatting toolbar. */
+    voicePanel: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val controller = (load as? EditorLoad.Ready)?.controller
     Scaffold(
@@ -496,7 +505,9 @@ fun NoteEditorScreen(
             }
         },
         bottomBar = {
-            if (controller != null && readOnly == null) {
+            if (voicePanel != null) {
+                voicePanel(Modifier.navigationBarsPadding().imePadding())
+            } else if (controller != null && readOnly == null) {
                 FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding(), onAudioMarker = onAudioMarker, onRemindTask = onRemindTask, onVoiceTyping = onVoiceTyping)
             }
         },

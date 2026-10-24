@@ -139,14 +139,14 @@ fun AttachmentStrip(
         }
         if (images.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(images, key = { it.id.value }) { a -> ImageTile(a, previews, actions, onMore = { sheetFor = a }) }
+                items(images, key = { it.id.value }) { a -> ImageTile(a, previews, actions, onMore = { sheetFor = a }, onRename = { renaming = a }) }
             }
         }
         files.forEach { a ->
             if (a.kind == AttachmentKind.AUDIO && audio != null) {
                 AudioPlayerRow(a, audio, onMore = { sheetFor = a })
             } else {
-                FileRow(a, previews, actions, onMore = { sheetFor = a })
+                FileRow(a, previews, actions, onMore = { sheetFor = a }, onRename = { renaming = a })
             }
         }
     }
@@ -183,12 +183,14 @@ private fun RenameAttachmentDialog(a: Attachment, onRename: (String) -> Unit, on
 }
 
 @Composable
-private fun accessibilityActions(a: Attachment, actions: AttachmentActions, onMore: () -> Unit): List<CustomAccessibilityAction> {
+private fun accessibilityActions(a: Attachment, actions: AttachmentActions, onMore: () -> Unit, onRename: () -> Unit): List<CustomAccessibilityAction> {
     val share = stringResource(R.string.attach_share)
     val remove = stringResource(R.string.attach_remove)
+    val rename = stringResource(R.string.attach_rename)
     val more = stringResource(R.string.attach_more)
     return listOfNotNull(
         CustomAccessibilityAction(share) { actions.share(a); true },
+        actions.rename?.let { CustomAccessibilityAction(rename) { onRename(); true } },
         actions.remove?.let { r -> CustomAccessibilityAction(remove) { r(a); true } },
         CustomAccessibilityAction(more) { onMore(); true },
     )
@@ -196,12 +198,12 @@ private fun accessibilityActions(a: Attachment, actions: AttachmentActions, onMo
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ImageTile(a: Attachment, previews: AttachmentPreviews, actions: AttachmentActions, onMore: () -> Unit) {
+private fun ImageTile(a: Attachment, previews: AttachmentPreviews, actions: AttachmentActions, onMore: () -> Unit, onRename: () -> Unit) {
     val w = a.width
     val h = a.height
     val ratio = if (w != null && h != null && h > 0) (w.toFloat() / h).coerceIn(0.6f, 1.8f) else 1f
     val label = stringResource(R.string.attach_photo_label, a.displayName)
-    val custom = accessibilityActions(a, actions, onMore)
+    val custom = accessibilityActions(a, actions, onMore, onRename)
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -222,7 +224,7 @@ private fun ImageTile(a: Attachment, previews: AttachmentPreviews, actions: Atta
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileRow(a: Attachment, previews: AttachmentPreviews, actions: AttachmentActions, onMore: () -> Unit) {
+private fun FileRow(a: Attachment, previews: AttachmentPreviews, actions: AttachmentActions, onMore: () -> Unit, onRename: () -> Unit) {
     val context = LocalContext.current
     val size = Formatter.formatShortFileSize(context, a.sizeBytes)
     val type = stringResource(
@@ -232,7 +234,7 @@ private fun FileRow(a: Attachment, previews: AttachmentPreviews, actions: Attach
             else -> R.string.attach_type_file
         },
     )
-    val custom = accessibilityActions(a, actions, onMore)
+    val custom = accessibilityActions(a, actions, onMore, onRename)
     OutlinedCard(
         Modifier
             .fillMaxWidth()

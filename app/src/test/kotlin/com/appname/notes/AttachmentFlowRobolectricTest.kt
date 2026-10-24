@@ -198,10 +198,10 @@ class AttachmentFlowRobolectricTest {
     fun anAttachmentCanBeRenamed() {
         val id = noteWithAttachments()
         openNote(id)
-        waitAdvancing { exists(hasTestTag(AttachmentTestTags.STRIP)) }
-        composeRule.onNodeWithContentDescription(string(R.string.attach_more_for, "notes.zip")).performClick()
-        waitAdvancing { exists(hasTestTag(AttachmentTestTags.RENAME)) }
-        composeRule.onNodeWithTag(AttachmentTestTags.RENAME).performClick()
+        val zip = attachments(id).first { it.kind == AttachmentKind.FILE }
+        waitAdvancing { exists(hasTestTag(AttachmentTestTags.item(zip)), unmerged = true) }
+        // "Rename" is a TalkBack action on the item, and in its ⋮ sheet (the sheet itself is checked on the device).
+        customAction(AttachmentTestTags.item(zip), string(R.string.attach_rename))
         waitAdvancing { exists(hasTestTag(AttachmentTestTags.RENAME_FIELD)) }
         composeRule.onNodeWithTag(AttachmentTestTags.RENAME_FIELD).performTextReplacement("Week 3 slides.zip")
         composeRule.onNodeWithTag(AttachmentTestTags.RENAME_SAVE).performClick()

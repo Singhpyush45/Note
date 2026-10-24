@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,16 +15,16 @@ import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.CornerSize
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,21 +63,23 @@ data class VoiceTypingActions(
 )
 
 /**
- * Voice typing (§11): choose English (India/US/UK), see whether speech stays on the phone or goes to the phone's
- * speech service, then Start. Words appear as they're recognised; Pause/Resume, Stop to check and edit, Insert to
- * put the text at the cursor as normal editable text.
+ * Voice typing (§11), docked at the bottom of the editor in place of the formatting toolbar so the note stays
+ * visible while speaking. Choose English (India/US/UK), see whether speech stays on the phone or goes to the
+ * phone's speech service, then Start. Words appear as they're recognised; Pause/Resume, Stop to check and edit,
+ * Insert to put the text at the cursor as normal editable text. Back closes it.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VoiceTypingSheet(state: VoiceTypingState, actions: VoiceTypingActions) {
-    ModalBottomSheet(
-        onDismissRequest = actions.dismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.testTag(VoiceTestTags.SHEET),
+fun VoiceTypingPanel(state: VoiceTypingState, actions: VoiceTypingActions, modifier: Modifier = Modifier) {
+    BackHandler(onBack = actions.dismiss)
+    Surface(
+        tonalElevation = 3.dp,
+        shadowElevation = 6.dp,
+        shape = MaterialTheme.shapes.extraLarge.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)),
+        modifier = modifier.fillMaxWidth().testTag(VoiceTestTags.SHEET),
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp).navigationBarsPadding().padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(stringResource(R.string.voice_title), style = MaterialTheme.typography.titleLarge)
             if (state.status == Status.UNAVAILABLE) {
