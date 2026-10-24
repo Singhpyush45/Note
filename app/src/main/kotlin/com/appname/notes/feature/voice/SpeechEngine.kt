@@ -78,11 +78,15 @@ class AndroidSpeechEngine(private val context: Context) : SpeechEngine {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
     } catch (e: RuntimeException) { // some phones have no configuration for it at all
         false
+    } catch (e: LinkageError) { // an API this Android build doesn't have
+        false
     }
 
     private fun serviceAvailable(): Boolean = try {
         SpeechRecognizer.isRecognitionAvailable(context)
     } catch (e: RuntimeException) {
+        false
+    } catch (e: LinkageError) {
         false
     }
 

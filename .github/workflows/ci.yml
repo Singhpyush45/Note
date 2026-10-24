@@ -56,6 +56,10 @@ jobs:
           [ -d app/build/screenshots ] && cp -r app/build/screenshots ci-output/
           [ -d core/database/schemas ] && cp -r core/database/schemas ci-output/
           cp build.log ci-output/ 2>/dev/null || true
+          # JUnit XML of failed test classes (stack traces and logs), readable without downloading artifacts.
+          mkdir -p ci-output/test-failures
+          grep -l "<failure" $(find . -path "*/build/test-results/*" -name "*.xml" -not -path "./ci-output/*") 2>/dev/null \
+            | head -n 20 | xargs -r -I{} cp {} ci-output/test-failures/ || true
           mkdir -p ci-output/apk && cp app/build/outputs/apk/release/app-release.apk ci-output/apk/APP_NAME-test.apk 2>/dev/null || true
           # Dependency versions for review (docs/dependency-review.md), read from Google's Maven repository.
           mkdir -p ci-output/versions

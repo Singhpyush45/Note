@@ -196,6 +196,7 @@ class AttachmentFlowRobolectricTest {
 
     @Test
     fun anAttachmentCanBeRenamed() {
+        org.robolectric.shadows.ShadowLog.stream = System.out // logcat into the test report while this is investigated
         val id = noteWithAttachments()
         openNote(id)
         val zip = attachments(id).first { it.kind == AttachmentKind.FILE }
@@ -212,6 +213,7 @@ class AttachmentFlowRobolectricTest {
     /** No speech service in the test environment: voice typing says so instead of failing (owner brief §11). */
     @Test
     fun voiceTypingWithoutASpeechServiceExplainsIt() {
+        org.robolectric.shadows.ShadowLog.stream = System.out // logcat into the test report while this is investigated
         openNote(noteWithAttachments())
         composeRule.onNodeWithTag(EditorTestTags.VOICE).performClick()
         waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET)) }
