@@ -17,14 +17,7 @@ import com.appname.notes.core.domain.markdown.Markdown
 import com.appname.notes.core.domain.model.Attachment
 import com.appname.notes.core.domain.model.AudioMarker
 import com.appname.notes.core.domain.document.BlockKind
-import com.appname.notes.core.domain.model.Reminder
-import com.appname.notes.core.domain.model.ReminderId
-import com.appname.notes.core.domain.model.ReminderRepeat
-import com.appname.notes.core.domain.repository.ReminderRepository
-import com.appname.notes.feature.reminders.ReminderNotifier
-import com.appname.notes.feature.reminders.ReminderScheduler
-import java.time.LocalDateTime
-import java.time.ZoneId
+import com.appname.notes.feature.reminders.NoteReminders
 import com.appname.notes.feature.audio.AudioPlayback
 import com.appname.notes.feature.audio.RecordingController
 import com.appname.notes.feature.audio.RecordingError
@@ -120,9 +113,7 @@ class NoteEditorViewModel @AssistedInject constructor(
     val previews: AttachmentPreviews,
     val attachmentIntents: AttachmentIntents,
     private val recordings: RecordingController,
-    private val reminderRepository: ReminderRepository,
-    private val reminderScheduler: ReminderScheduler,
-    private val reminderNotifier: ReminderNotifier,
+    reminderFactory: NoteReminders.Factory,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -159,9 +150,8 @@ class NoteEditorViewModel @AssistedInject constructor(
     val attachments: StateFlow<List<Attachment>> =
         attachmentRepository.observe(noteId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** This note's reminders (FR-010), pending first; updates live. */
-    val reminders: StateFlow<List<Reminder>?> = // null until loaded
-        reminderRepository.observe(noteId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    /** This note's reminders (FR-010). Setting one on a checklist item saves the note first, so the task's text is stored. */
+    val reminders = reminderFactory.create(noteId, viewModelScope, beforeSave = { if (it != null) flush() }) { _message.value = it }
 
     /** The recording in progress anywhere in the app (only one at a time), FR-012. */
     val recording: StateFlow<RecordingState> = recordings.state
@@ -438,11 +428,6 @@ class NoteEditorViewModel @AssistedInject constructor(
 
     // ------------------------------------------------------------------ reminders (FR-010)
 
-    /** Notifications are allowed, so reminders can alert. Read again when the screen resumes (the user may change it). */
-    fun remindersCanAlert(): Boolean = reminderNotifier.canAlert
-
-    fun remindersExact(): Boolean = reminderScheduler.canScheduleExact
-
     /** The checklist item under the cursor, for "Remind me about this task"; null elsewhere. */
     fun taskAtCursor(): String? {
         val state = controller?.state ?: return null
@@ -455,37 +440,6 @@ class NoteEditorViewModel @AssistedInject constructor(
         val state = controller?.state ?: return null
         val line = state.paragraphs.indexOfFirst { it.id == blockId }.takeIf { it >= 0 } ?: return null
         return state.lineText(line).trim().ifEmpty { null }
-    }
-
-    /** Sets a new reminder ([existing] null) or changes one. */
-    fun saveReminder(existing: ReminderId?, blockId: String?, at: LocalDateTime, repeat: ReminderRepeat) {
-        if (_readOnly.value != null) return
-        // The task's text must be in the saved note for the notification to show it.
-        if (blockId != null) flush()
-        viewModelScope.launch {
-            val zone = ZoneId.systemDefault()
-            val r = if (existing == null) {
-                reminderRepository.add(noteId, blockId, at, repeat, zone)
-            } else {
-                reminderRepository.update(existing, at, repeat, zone)
-            }
-            _message.value = when (r) {
-                is AppResult.Success -> UserMessage(R.string.reminder_set)
-                is AppResult.Failure -> r.error.toUserMessage()
-            }
-        }
-    }
-
-    fun deleteReminder(id: ReminderId) {
-        viewModelScope.launch {
-            when (val r = reminderRepository.remove(id)) {
-                is AppResult.Success -> {
-                    reminderNotifier.cancel(id)
-                    _message.value = UserMessage(R.string.reminder_removed, undo = { viewModelScope.launch { reminderRepository.restore(r.value) } })
-                }
-                is AppResult.Failure -> _message.value = r.error.toUserMessage()
-            }
-        }
     }
 
     fun noAppToOpen() {

@@ -129,6 +129,7 @@ class InkEditorViewModel @AssistedInject constructor(
     private val dispatchers: DispatcherProvider,
     private val logger: AppLogger,
     @param:ApplicationContext private val appContext: Context,
+    reminderFactory: com.appname.notes.feature.reminders.NoteReminders.Factory,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -148,6 +149,9 @@ class InkEditorViewModel @AssistedInject constructor(
 
     private val _message = MutableStateFlow<UserMessage?>(null)
     val message: StateFlow<UserMessage?> = _message.asStateFlow()
+
+    /** This note's reminders (FR-010). */
+    val reminders = reminderFactory.create(noteId, viewModelScope) { _message.value = it }
 
     /** Where the canvas was looking (kept across rotation). */
     var viewState: InkViewState? = null

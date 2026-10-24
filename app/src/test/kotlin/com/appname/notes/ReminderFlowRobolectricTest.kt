@@ -148,6 +148,25 @@ class ReminderFlowRobolectricTest {
     }
 
     @Test
+    fun aHandwrittenNoteGetsRemindersFromItsMenu() {
+        val id = runBlocking {
+            (data.ink().createInkNote(null, com.appname.notes.core.ink.model.PageTemplate.BLANK) as AppResult.Success).value
+        }
+        waitAdvancing { exists(hasTestTag("note_card_${id.value}")) }
+        composeRule.onNodeWithTag("note_card_${id.value}").performClick()
+        waitAdvancing { exists(hasContentDescription(string(R.string.ink_more_options))) }
+        // No reminders yet: no alarm button in the top bar.
+        assertThat(exists(hasTestTag(ReminderTestTags.MENU))).isFalse()
+        composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
+        composeRule.onNodeWithText(string(R.string.reminder_add)).performClick()
+        waitAdvancing { exists(hasTestTag(ReminderTestTags.DIALOG)) }
+        composeRule.onNodeWithTag(ReminderTestTags.preset(ReminderPresets.Kind.TOMORROW_MORNING)).performClick()
+        composeRule.onNodeWithTag(ReminderTestTags.SAVE).performClick()
+        waitAdvancing { reminders(id).isNotEmpty() }
+        waitAdvancing { exists(hasTestTag(ReminderTestTags.MENU)) }
+    }
+
+    @Test
     fun theLibraryCardShowsTheNextReminderAndDeniedNotificationsAreExplained() {
         val id = note()
         runBlocking {

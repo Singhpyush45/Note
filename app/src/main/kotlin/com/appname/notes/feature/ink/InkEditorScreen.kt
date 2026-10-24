@@ -1,5 +1,7 @@
 package com.appname.notes.feature.ink
 
+import com.appname.notes.feature.reminders.ReminderMenuButton
+import com.appname.notes.feature.reminders.rememberReminderUi
 import android.content.ClipData
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
@@ -147,6 +149,9 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) viewModel.exportPdf(uri)
     }
+    // Reminders (FR-010).
+    val reminders by viewModel.reminders.reminders.collectAsStateWithLifecycle()
+    val reminderUi = rememberReminderUi(viewModel.reminders, editable = load is InkLoad.Ready && ui.readOnly == null)
 
     Scaffold(
         modifier = Modifier.testTag(InkTestTags.SCREEN),
@@ -168,6 +173,8 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 onSharePdf = viewModel::sharePdf,
                 onGoToPage = { showPages = true },
                 onFit = viewModel::fit,
+                onAddReminder = { reminderUi.add() },
+                reminderButton = { ReminderMenuButton(reminders.orEmpty(), reminderUi, editable = load is InkLoad.Ready && ui.readOnly == null) },
             )
         },
         bottomBar = {
@@ -336,6 +343,8 @@ private fun InkTopBar(
     onSharePdf: () -> Unit,
     onGoToPage: () -> Unit,
     onFit: (FitMode) -> Unit,
+    onAddReminder: () -> Unit = {},
+    reminderButton: @Composable () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
     var templates by remember { mutableStateOf(false) }
@@ -359,12 +368,14 @@ private fun InkTopBar(
                 IconButton(onClick = onUndo, enabled = ui.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo)) }
                 IconButton(onClick = onRedo, enabled = ui.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo)) }
             }
+            reminderButton()
             if (ready) {
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.ink_more_options)) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         if (editable) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.reminder_add)) }, onClick = { menu = false; onAddReminder() })
                         }
                         // Viewing (works read-only too): page navigation and zoom presets (SRS 7.1).
                         if (ui.pageCount > 1) {

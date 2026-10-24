@@ -79,7 +79,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -115,16 +114,9 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.lifecycle.compose.LifecycleResumeEffect
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import android.net.Uri
-import android.provider.Settings
 import androidx.compose.material.icons.outlined.AlarmAdd
-import androidx.core.app.ActivityCompat
-import com.appname.notes.feature.reminders.ReminderDialog
 import com.appname.notes.feature.reminders.RemindersRow
+import com.appname.notes.feature.reminders.rememberReminderUi
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
 import com.appname.notes.core.designsystem.component.EmptyState
@@ -258,39 +250,9 @@ fun NoteEditorRoute(
     )
     var exportWarning by remember { mutableStateOf<ExportResult?>(null) }
 
-    // Reminders (FR-010). Whether alerts / exact timing are allowed can change in system settings: re-read on resume.
-    val loadedReminders by viewModel.reminders.collectAsStateWithLifecycle()
-    val reminders = loadedReminders.orEmpty()
-    var canAlert by remember { mutableStateOf(viewModel.remindersCanAlert()) }
-    var canExact by remember { mutableStateOf(viewModel.remindersExact()) }
-    LifecycleResumeEffect(Unit) {
-        canAlert = viewModel.remindersCanAlert()
-        canExact = viewModel.remindersExact()
-        onPauseOrDispose {}
-    }
-    // "new:<checklist item id or empty>" or "edit:<reminder id>"; saved so rotation keeps the dialog.
-    var reminderDialog by rememberSaveable { mutableStateOf<String?>(null) }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        canAlert = viewModel.remindersCanAlert()
-        val activity = context.findActivity()
-        // Refused for good ("Don't ask again", or twice): only the system settings can change it now.
-        if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && activity != null &&
-            !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)
-        ) {
-            openNotificationSettings(context)
-        }
-    }
-    val needsNotificationPermission = {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-    }
-    val remindTask: () -> Unit = {
-        val task = viewModel.taskAtCursor()
-        if (task != null) reminderDialog = "new:$task"
-    }
-    val fixAlerts = {
-        if (needsNotificationPermission()) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) else openNotificationSettings(context)
-    }
+    // Reminders (FR-010): the dialog, and asking for notifications when one is set.
+    val reminders by viewModel.reminders.reminders.collectAsStateWithLifecycle()
+    val reminderUi = rememberReminderUi(viewModel.reminders, editable, taskText = viewModel::taskText)
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
         val export = pendingExport
@@ -324,7 +286,7 @@ fun NoteEditorRoute(
                 if (export.lost.isEmpty()) startExport(export) else exportWarning = export
             }
         },
-        onRemind = { reminderDialog = "new:" },
+        onRemind = { reminderUi.add() },
     )
 
     NoteEditorScreen(
@@ -346,38 +308,19 @@ fun NoteEditorRoute(
         onAudioMarker = viewModel::playMarker,
         reminders = {
             RemindersRow(
-                reminders = reminders,
+                reminders = reminders.orEmpty(),
                 taskText = viewModel::taskText,
-                canAlert = canAlert,
-                onEdit = { if (editable) reminderDialog = "edit:${it.id.value}" },
-                onFixAlerts = fixAlerts,
+                canAlert = reminderUi.canAlert,
+                onEdit = reminderUi::edit,
+                onFixAlerts = reminderUi::fixAlerts,
             )
         },
-        onRemindTask = if (editable) remindTask else null,
-    )
-
-    reminderDialog?.let { target ->
-        val existing = if (target.startsWith("edit:")) reminders.firstOrNull { it.id.value == target.removePrefix("edit:") } else null
-        if (target.startsWith("edit:") && existing == null) {
-            // Deleted meanwhile (once loaded; right after rotation the list may not be read yet).
-            if (loadedReminders != null) LaunchedEffect(target) { reminderDialog = null }
+        onRemindTask = if (editable) {
+            { viewModel.taskAtCursor()?.let(reminderUi::add) ?: Unit }
         } else {
-            val blockId = existing?.blockId ?: target.removePrefix("new:").ifEmpty { null }
-            ReminderDialog(
-                existing = existing,
-                taskText = blockId?.let { viewModel.taskText(it) },
-                canScheduleExact = canExact,
-                onAllowExact = { openExactAlarmSettings(context) },
-                onSave = { at, repeat ->
-                    reminderDialog = null
-                    viewModel.saveReminder(existing?.id, blockId, at, repeat)
-                    if (needsNotificationPermission()) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                },
-                onDelete = existing?.let { r -> { reminderDialog = null; viewModel.deleteReminder(r.id) } },
-                onDismiss = { reminderDialog = null },
-            )
-        }
-    }
+            null
+        },
+    )
 
     viewing?.let { a ->
         // Closed if the photo is removed elsewhere (or by Undo racing): never show a stale item.
@@ -789,29 +732,3 @@ private fun AttachButton(menu: AttachMenu) {
 }
 
 private const val MAX_PICK = 20
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
-
-/** The app's notification settings, where a refused or switched-off notification permission can be turned on. */
-internal fun openNotificationSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-    try {
-        context.startActivity(intent)
-    } catch (e: ActivityNotFoundException) {
-        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-    }
-}
-
-/** "Alarms & reminders" access for this app (Android 12+), so reminders go off on the minute. */
-internal fun openExactAlarmSettings(context: Context) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-    try {
-        context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")))
-    } catch (e: ActivityNotFoundException) {
-        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-    }
-}

@@ -359,5 +359,6 @@
     <string name="reminder_in_note">In %1$s</string>
     <string name="reminder_missed">Missed · was due %1$s</string>
     <string name="reminder_snooze">Snooze %1$d min</string>
+    <string name="reminder_menu">Reminders (%1$d)</string>
     <string name="card_reminder">Reminder %1$s</string>
 </resources>

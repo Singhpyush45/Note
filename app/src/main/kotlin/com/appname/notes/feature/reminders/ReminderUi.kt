@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.AlarmOff
+import androidx.compose.material.icons.outlined.AlarmAdd
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Repeat
@@ -72,6 +73,7 @@ object ReminderTestTags {
     const val SAVE = "reminder_save"
     const val DELETE = "reminder_delete"
     const val EXACT_HINT = "reminder_exact_hint"
+    const val MENU = "reminder_menu"
     fun chip(r: Reminder) = "reminder_${r.id.value}"
     fun preset(kind: ReminderPresets.Kind) = "reminder_preset_${kind.name}"
 }
@@ -295,4 +297,54 @@ private fun presetLabel(kind: ReminderPresets.Kind) = when (kind) {
     ReminderPresets.Kind.THIS_EVENING -> R.string.reminder_preset_evening
     ReminderPresets.Kind.TOMORROW_MORNING -> R.string.reminder_preset_tomorrow
     ReminderPresets.Kind.NEXT_WEEK -> R.string.reminder_preset_next_week
+}
+
+/**
+ * For handwritten and PDF notes, where the page has no room for chips: an alarm button in the top bar (only
+ * when the note has reminders) listing them, each opening the dialog, plus "Remind me" and the alerts warning.
+ */
+@Composable
+fun ReminderMenuButton(reminders: List<Reminder>, ui: ReminderUi, editable: Boolean) {
+    if (reminders.isEmpty()) return
+    val context = LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    val pending = reminders.any { it.isPending }
+    Box {
+        androidx.compose.material3.IconButton(onClick = { open = true }, modifier = Modifier.testTag(ReminderTestTags.MENU)) {
+            Icon(
+                if (!ui.canAlert && pending) Icons.Outlined.NotificationsOff else Icons.Outlined.Alarm,
+                stringResource(R.string.reminder_menu, reminders.size),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (!ui.canAlert && pending) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.reminder_alerts_off), color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = { Icon(Icons.Outlined.NotificationsOff, null) },
+                    onClick = { open = false; ui.fixAlerts() },
+                )
+            }
+            reminders.forEach { r ->
+                val time = ReminderDates.format(context, LocalDateTime.ofInstant(r.triggerAt, ZoneId.systemDefault()))
+                DropdownMenuItem(
+                    text = { Text(time, textDecoration = if (r.isPending) null else TextDecoration.LineThrough) },
+                    leadingIcon = { Icon(if (r.isPending) Icons.Outlined.Alarm else Icons.Outlined.AlarmOff, null) },
+                    trailingIcon = if (r.repeat != ReminderRepeat.NONE) {
+                        { Icon(Icons.Outlined.Repeat, stringResource(ReminderDates.repeatLabel(r.repeat))) }
+                    } else {
+                        null
+                    },
+                    enabled = editable,
+                    onClick = { open = false; ui.edit(r) },
+                )
+            }
+            if (editable) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.reminder_add)) },
+                    leadingIcon = { Icon(Icons.Outlined.AlarmAdd, null) },
+                    onClick = { open = false; ui.add() },
+                )
+            }
+        }
+    }
 }
