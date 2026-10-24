@@ -74,6 +74,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.appname.notes.R
 import com.appname.notes.core.domain.model.Attachment
 import com.appname.notes.core.domain.model.AttachmentKind
+import com.appname.notes.feature.audio.AudioControls
+import com.appname.notes.feature.audio.AudioPlayerRow
 
 object AttachmentTestTags {
     const val STRIP = "attachment_strip"
@@ -105,6 +107,8 @@ fun AttachmentStrip(
     previews: AttachmentPreviews,
     actions: AttachmentActions,
     modifier: Modifier = Modifier,
+    /** Player controls for recordings; without them, recordings show as plain files. */
+    audio: AudioControls? = null,
 ) {
     if (attachments.isEmpty() && attaching == 0) return
     var sheetFor by remember { mutableStateOf<Attachment?>(null) }
@@ -126,7 +130,13 @@ fun AttachmentStrip(
                 items(images, key = { it.id.value }) { a -> ImageTile(a, previews, actions, onMore = { sheetFor = a }) }
             }
         }
-        files.forEach { a -> FileRow(a, previews, actions, onMore = { sheetFor = a }) }
+        files.forEach { a ->
+            if (a.kind == AttachmentKind.AUDIO && audio != null) {
+                AudioPlayerRow(a, audio, onMore = { sheetFor = a })
+            } else {
+                FileRow(a, previews, actions, onMore = { sheetFor = a })
+            }
+        }
     }
     sheetFor?.let { a -> AttachmentSheet(a, actions, onDismiss = { sheetFor = null }) }
 }
@@ -174,7 +184,13 @@ private fun ImageTile(a: Attachment, previews: AttachmentPreviews, actions: Atta
 private fun FileRow(a: Attachment, previews: AttachmentPreviews, actions: AttachmentActions, onMore: () -> Unit) {
     val context = LocalContext.current
     val size = Formatter.formatShortFileSize(context, a.sizeBytes)
-    val type = stringResource(if (a.kind == AttachmentKind.PDF) R.string.attach_type_pdf else R.string.attach_type_file)
+    val type = stringResource(
+        when (a.kind) {
+            AttachmentKind.PDF -> R.string.attach_type_pdf
+            AttachmentKind.AUDIO -> R.string.attach_type_audio
+            else -> R.string.attach_type_file
+        },
+    )
     val custom = accessibilityActions(a, actions, onMore)
     OutlinedCard(
         Modifier

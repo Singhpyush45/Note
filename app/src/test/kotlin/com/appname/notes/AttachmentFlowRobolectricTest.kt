@@ -149,4 +149,40 @@ class AttachmentFlowRobolectricTest {
         val all = runBlocking { data.notes().observeNotes(NoteCollection.All, NoteSort.MODIFIED).first() }
         assertThat(all.map { it.id }).contains(id)
     }
+
+    /** FR-012: a recording shows a player; markers written in the text appear as chips on it. */
+    @Test
+    fun aRecordingShowsAPlayerWithItsMarkers() {
+        val recordingId = com.appname.notes.core.domain.model.AttachmentId("rec-42")
+        val marker = com.appname.notes.core.domain.model.AudioMarker(recordingId, 125_000)
+        val id = runBlocking {
+            val dir = File(composeRule.activity.filesDir, "attachments").apply { mkdirs() }
+            File(dir, "r.aac").writeBytes(ByteArray(100))
+            val note = (data.notes().createNote(null) as AppResult.Success).value
+            val text = "Exam topic ${marker.label}"
+            val doc = com.appname.notes.core.domain.document.NoteDocument(
+                blocks = listOf(
+                    com.appname.notes.core.domain.document.TextBlock(
+                        "b1",
+                        text = com.appname.notes.core.domain.document.RichText(
+                            text,
+                            listOf(com.appname.notes.core.domain.document.StyleSpan(11, text.length, com.appname.notes.core.domain.document.SpanType.LINK, marker.url)),
+                        ),
+                    ),
+                ),
+            )
+            data.notes().saveContent(note, "Lecture", doc)
+            data.attachments().add(note, listOf(NewAttachment(AttachmentKind.AUDIO, "r.aac", "Recording.aac", "audio/aac", 100, durationMs = 300_000, id = recordingId)))
+            note
+        }
+        openNote(id)
+        val player = attachments(id).single()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.audio.AudioTestTags.player(player)), unmerged = true) }
+        assertThat(exists(hasTestTag(com.appname.notes.feature.audio.AudioTestTags.marker(marker)), unmerged = true)).isTrue()
+        assertThat(exists(hasText("0:00 / 5:00"), unmerged = true)).isTrue()
+        // Nothing is recording, so there's no recording bar; "Record audio" is in the attach menu.
+        assertThat(exists(hasTestTag(com.appname.notes.feature.audio.AudioTestTags.RECORDING_BAR))).isFalse()
+        composeRule.onNodeWithTag(AttachmentTestTags.ATTACH_BUTTON).performClick()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.audio.AudioTestTags.RECORD)) }
+    }
 }

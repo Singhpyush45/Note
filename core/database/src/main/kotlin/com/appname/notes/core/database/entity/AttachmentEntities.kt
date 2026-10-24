@@ -29,4 +29,6 @@ data class AttachmentEntity(
     val height: Int?,
     val position: Int,
     val createdAt: Long,
+    /** Length of a recording (schema v6). */
+    val durationMs: Long? = null,
 )

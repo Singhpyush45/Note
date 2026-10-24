@@ -5,6 +5,7 @@ import android.os.StrictMode
 import com.appname.notes.feature.ink.InkCrashGuard
 import com.appname.notes.di.ApplicationScope
 import com.appname.notes.feature.attachments.StorageCleanup
+import com.appname.notes.feature.audio.RecordingController
 import com.appname.notes.feature.textindex.TextIndexScheduler
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -19,6 +20,8 @@ class NotesApplication : Application() {
 
     @Inject lateinit var textIndexScheduler: TextIndexScheduler
 
+    @Inject lateinit var recordings: RecordingController
+
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     override fun onCreate() {
@@ -30,6 +33,8 @@ class NotesApplication : Application() {
         appScope.launch {
             delay(STARTUP_CLEANUP_DELAY_MS)
             storageCleanup.run()
+            // A recording cut off by the app being killed is still attached to its note (FR-012, FR-008).
+            recordings.recoverInterrupted()
             // Read text in documents added while the app was closed or that failed earlier (FR-011).
             textIndexScheduler.requestRun()
         }

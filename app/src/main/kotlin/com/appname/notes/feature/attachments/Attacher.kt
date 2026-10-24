@@ -10,7 +10,10 @@ import androidx.core.content.FileProvider
 import com.appname.notes.R
 import com.appname.notes.core.common.coroutines.DispatcherProvider
 import com.appname.notes.core.common.result.AppResult
+import com.appname.notes.core.common.result.DomainError
 import com.appname.notes.core.domain.model.Attachment
+import com.appname.notes.core.domain.model.AttachmentId
+import com.appname.notes.core.domain.model.AttachmentKind
 import com.appname.notes.core.domain.model.NewAttachment
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.model.NotebookId
@@ -68,6 +71,37 @@ class Attacher(
             }
         }
     }
+
+    /**
+     * Attaches a finished recording (FR-012) with the id its markers already use. Safe to repeat: if it is
+     * already attached (an earlier try succeeded), or its note no longer exists, that counts as done.
+     */
+    suspend fun attachRecording(noteId: NoteId, file: File, id: AttachmentId, displayName: String, durationMs: Long): AttachOutcome =
+        withContext(dispatchers.io) {
+            val existing = (repository.list(noteId) as? AppResult.Success)?.value
+            if (existing != null && existing.any { it.id == id }) return@withContext AttachOutcome(emptyList(), emptyList())
+            when (val r = store.import(Uri.fromFile(file))) {
+                is AttachResult.Failed -> AttachOutcome(emptyList(), listOf(r.error))
+                is AttachResult.Ok -> {
+                    val recording = r.attachment.copy(
+                        kind = AttachmentKind.AUDIO,
+                        displayName = displayName,
+                        mimeType = "audio/aac",
+                        durationMs = durationMs,
+                        id = id,
+                    )
+                    when (val added = repository.add(noteId, listOf(recording))) {
+                        is AppResult.Success -> AttachOutcome(added.value, emptyList())
+                        is AppResult.Failure -> {
+                            store.file(recording.fileName).delete()
+                            // The note was deleted meanwhile: nothing to attach to, nothing to retry.
+                            if (added.error is DomainError.NotFound) AttachOutcome(emptyList(), emptyList())
+                            else AttachOutcome(emptyList(), listOf(AttachError.STORAGE))
+                        }
+                    }
+                }
+            }
+        }
 
     private fun importAll(uris: List<Uri>): Pair<List<NewAttachment>, List<AttachError>> {
         val ok = ArrayList<NewAttachment>()

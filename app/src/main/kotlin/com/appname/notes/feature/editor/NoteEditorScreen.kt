@@ -1,5 +1,13 @@
 package com.appname.notes.feature.editor
 
+import android.Manifest
+import android.os.Build
+import androidx.core.content.ContextCompat
+import androidx.compose.material.icons.outlined.Mic
+import com.appname.notes.core.domain.model.AudioMarker
+import com.appname.notes.feature.audio.AudioControls
+import com.appname.notes.feature.audio.AudioTestTags
+import com.appname.notes.feature.audio.RecordingBar
 import androidx.compose.material.icons.outlined.DocumentScanner
 import com.appname.notes.feature.attachments.rememberDocumentScanner
 import android.content.ActivityNotFoundException
@@ -157,6 +165,12 @@ fun NoteEditorRoute(
     var confirmDelete by remember { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf<ExportResult?>(null) }
     val attachments by viewModel.attachments.collectAsStateWithLifecycle()
+    val recording by viewModel.recording.collectAsStateWithLifecycle()
+    val playback by viewModel.playback.state.collectAsStateWithLifecycle()
+    // Microphone (and, on Android 13+, the "Recording" notification), asked only when recording starts.
+    val recordPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted[Manifest.permission.RECORD_AUDIO] == true) viewModel.startRecording() else viewModel.microphoneDenied()
+    }
     val attaching by viewModel.attaching.collectAsStateWithLifecycle()
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     // Where the camera app writes the photo; saved because the camera may outlive our process.
@@ -205,6 +219,26 @@ fun NoteEditorRoute(
         },
         files = { filePicker.launch(arrayOf("*/*")) },
         scan = scan,
+        record = {
+            val wanted = buildList {
+                add(Manifest.permission.RECORD_AUDIO)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                viewModel.startRecording()
+                if (wanted.size > 1) recordPermissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            } else {
+                recordPermissions.launch(wanted.toTypedArray())
+            }
+        },
+    )
+    val audioControls = AudioControls(
+        playback = playback,
+        play = { viewModel.playback.play(it) },
+        pause = viewModel.playback::pause,
+        seek = viewModel.playback::seekTo,
+        markers = viewModel::markersFor,
+        playMarker = viewModel::playMarker,
     )
     var exportWarning by remember { mutableStateOf<ExportResult?>(null) }
 
@@ -253,8 +287,12 @@ fun NoteEditorRoute(
         actions = actions,
         attachMenu = if (editable) attachMenu else null,
         attachments = {
-            AttachmentStrip(attachments, attaching, viewModel.previews, attachmentActions)
+            AttachmentStrip(attachments, attaching, viewModel.previews, attachmentActions, audio = audioControls)
         },
+        recordingBar = {
+            RecordingBar(recording, viewModel.noteId, onAddMarker = viewModel::addMarker, onStop = viewModel::stopRecording)
+        },
+        onAudioMarker = viewModel::playMarker,
     )
 
     viewing?.let { a ->
@@ -337,6 +375,10 @@ fun NoteEditorScreen(
     attachMenu: AttachMenu? = null,
     /** Shown between the title and the text. */
     attachments: @Composable () -> Unit = {},
+    /** Shown under the top bar while recording. */
+    recordingBar: @Composable () -> Unit = {},
+    /** The cursor is on an audio marker and "Play from" was tapped. */
+    onAudioMarker: (AudioMarker) -> Unit = {},
 ) {
     val controller = (load as? EditorLoad.Ready)?.controller
     Scaffold(
@@ -344,40 +386,43 @@ fun NoteEditorScreen(
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    if (showBack) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+            Column {
+                TopAppBar(
+                    navigationIcon = {
+                        if (showBack) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                            }
                         }
-                    }
-                },
-                title = { if (readOnly == null && controller != null) SaveStatusLabel(saveStatus) },
-                actions = {
-                    if (controller != null && readOnly == null) {
-                        IconButton(onClick = controller::undo, enabled = controller.canUndo) {
-                            Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo))
+                    },
+                    title = { if (readOnly == null && controller != null) SaveStatusLabel(saveStatus) },
+                    actions = {
+                        if (controller != null && readOnly == null) {
+                            IconButton(onClick = controller::undo, enabled = controller.canUndo) {
+                                Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo))
+                            }
+                            IconButton(onClick = controller::redo, enabled = controller.canRedo) {
+                                Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo))
+                            }
                         }
-                        IconButton(onClick = controller::redo, enabled = controller.canRedo) {
-                            Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo))
+                        attachMenu?.let { AttachButton(it) }
+                        if (meta != null && !meta.inTrash) {
+                            IconButton(onClick = actions.onPin) {
+                                Icon(
+                                    if (meta.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                                    stringResource(if (meta.isPinned) R.string.note_unpin else R.string.note_pin),
+                                )
+                            }
                         }
-                    }
-                    attachMenu?.let { AttachButton(it) }
-                    if (meta != null && !meta.inTrash) {
-                        IconButton(onClick = actions.onPin) {
-                            Icon(
-                                if (meta.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                                stringResource(if (meta.isPinned) R.string.note_unpin else R.string.note_pin),
-                            )
-                        }
-                    }
-                    if (meta != null) EditorOverflowMenu(meta, actions)
-                },
-            )
+                        if (meta != null) EditorOverflowMenu(meta, actions)
+                    },
+                )
+                recordingBar()
+            }
         },
         bottomBar = {
             if (controller != null && readOnly == null) {
-                FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding())
+                FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding(), onAudioMarker = onAudioMarker)
             }
         },
     ) { padding ->
@@ -601,8 +646,14 @@ private fun EditorOverflowMenu(meta: NoteMeta, actions: EditorMenuActions) {
     }
 }
 
-/** The ways to add an attachment (FR-009, FR-011). [camera] is null on devices without a camera. */
-data class AttachMenu(val photos: () -> Unit, val camera: (() -> Unit)?, val files: () -> Unit, val scan: () -> Unit = {})
+/** The ways to add an attachment (FR-009, FR-011, FR-012). [camera] is null on devices without a camera. */
+data class AttachMenu(
+    val photos: () -> Unit,
+    val camera: (() -> Unit)?,
+    val files: () -> Unit,
+    val scan: () -> Unit = {},
+    val record: () -> Unit = {},
+)
 
 @Composable
 private fun AttachButton(menu: AttachMenu) {
@@ -624,6 +675,12 @@ private fun AttachButton(menu: AttachMenu) {
                     onClick = { open = false; camera() },
                 )
             }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.audio_record)) },
+                leadingIcon = { Icon(Icons.Outlined.Mic, null) },
+                onClick = { open = false; menu.record() },
+                modifier = Modifier.testTag(AudioTestTags.RECORD),
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.scan_document)) },
                 leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) },

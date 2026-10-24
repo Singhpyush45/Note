@@ -98,6 +98,25 @@ class EditorController(
 
     fun removeLink() = apply(state.removeLink())
 
+    /**
+     * Inserts [label] as a link to [url] at the cursor, followed by a space, and puts the cursor after it
+     * (audio markers, FR-012). Undo removes it like any typing.
+     */
+    fun insertLink(label: String, url: String) {
+        val v = textFieldValue
+        val at = v.selection.max
+        val before = v.text.substring(0, at)
+        val prefix = if (before.isNotEmpty() && !before.last().isWhitespace()) " " else ""
+        val start = at + prefix.length
+        val end = start + label.length
+        onValueChange(TextFieldValue(before + prefix + label + " " + v.text.substring(at), TextRange(start, end)))
+        setLink(url)
+        onValueChange(textFieldValue.copy(selection = TextRange(end + 1), composition = null))
+    }
+
+    /** Links in the note, e.g. to find the markers of a recording. */
+    val links: List<String> get() = state.spans.mapNotNull { it.url }
+
     fun undo() {
         history.undo(state)?.let { replace(it) }
     }

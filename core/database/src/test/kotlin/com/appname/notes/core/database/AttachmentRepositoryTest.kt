@@ -125,4 +125,15 @@ class AttachmentRepositoryTest {
     fun `unknown kinds from a newer version are read as plain files`() {
         assertThat(AttachmentKind.fromName("HOLOGRAM")).isEqualTo(AttachmentKind.FILE)
     }
+
+    @Test
+    fun `a recording keeps its preset id and duration`() = runTest {
+        val id = notes.createNote(null).ok()
+        val preset = com.appname.notes.core.domain.model.AttachmentId("rec-1")
+        attachments.add(id, listOf(NewAttachment(AttachmentKind.AUDIO, "r.aac", "Recording.aac", "audio/aac", 99, durationMs = 61_000, id = preset))).ok()
+        val a = attachments.list(id).ok().single()
+        assertThat(a.id).isEqualTo(preset)
+        assertThat(a.kind).isEqualTo(AttachmentKind.AUDIO)
+        assertThat(a.durationMs).isEqualTo(61_000)
+    }
 }

@@ -93,7 +93,7 @@ class RoomAttachmentRepository(
         storageCall(logger, "List attachment files") { dao.fileNames().toSet() }
 
     private fun NewAttachment.toEntity(noteId: String, now: Long) = AttachmentEntity(
-        id = ids.newId(),
+        id = id?.value ?: ids.newId(),
         noteId = noteId,
         kind = kind.name,
         fileName = fileName,
@@ -104,6 +104,7 @@ class RoomAttachmentRepository(
         height = height,
         position = 0, // assigned by the DAO
         createdAt = now,
+        durationMs = durationMs,
     )
 }
 
@@ -119,6 +120,7 @@ internal fun AttachmentEntity.toDomain() = Attachment(
     height = height,
     position = position,
     createdAt = Instant.ofEpochMilli(createdAt),
+    durationMs = durationMs,
 )
 
 internal fun Attachment.toEntity() = AttachmentEntity(
@@ -133,4 +135,5 @@ internal fun Attachment.toEntity() = AttachmentEntity(
     height = height,
     position = position,
     createdAt = createdAt.toEpochMilli(),
+    durationMs = durationMs,
 )

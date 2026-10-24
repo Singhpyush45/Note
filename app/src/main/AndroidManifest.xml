@@ -6,6 +6,13 @@
       Device-to-device transfer (user-initiated phone switch) is allowed by data_extraction_rules.
       Revisit with FR-025 (backup/restore) in Phase 6.
     -->
+    <!-- Audio notes (FR-012): asked for only when the user starts a recording. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- The "Recording" notification (Android 13+); recording works without it. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".NotesApplication"
         android:allowBackup="false"
@@ -44,6 +51,11 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".feature.audio.AudioRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <!-- Hands annotated PDF copies to the app the user picks in the share sheet (read-only, that file only). -->
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -33,7 +33,7 @@ class AttachmentPreviews(
     suspend fun load(fileName: String, kind: AttachmentKind, targetPx: Int): Bitmap? {
         val key = "$fileName@$targetPx"
         cache.get(key)?.let { return it }
-        if (kind == AttachmentKind.FILE) return null
+        if (kind == AttachmentKind.FILE || kind == AttachmentKind.AUDIO) return null
         val bitmap = permits.withPermit {
             withContext(dispatchers.io) {
                 val file = store.file(fileName)
@@ -41,7 +41,7 @@ class AttachmentPreviews(
                     when (kind) {
                         AttachmentKind.IMAGE -> decodeImage(file, targetPx)
                         AttachmentKind.PDF -> renderPdfPage(file, 0, targetPx)
-                        AttachmentKind.FILE -> null
+                        AttachmentKind.FILE, AttachmentKind.AUDIO -> null
                     }
                 } catch (e: IOException) {
                     null

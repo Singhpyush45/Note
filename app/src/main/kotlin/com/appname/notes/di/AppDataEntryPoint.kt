@@ -28,6 +28,7 @@ interface AppDataEntryPoint {
     fun pdf(): PdfRepository
     fun attachments(): AttachmentRepository
     fun textIndex(): TextIndexRepository
+    fun recordings(): com.appname.notes.feature.audio.RecordingController
     fun settings(): com.appname.notes.core.settings.SettingsRepository
     fun textIndexer(): com.appname.notes.feature.textindex.TextIndexer
     fun pdfImporter(): PdfImporter

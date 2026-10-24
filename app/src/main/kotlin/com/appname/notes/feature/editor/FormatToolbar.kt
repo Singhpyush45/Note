@@ -1,5 +1,7 @@
 package com.appname.notes.feature.editor
 
+import com.appname.notes.core.domain.model.AudioMarker
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,7 +58,7 @@ import com.appname.notes.core.domain.document.SpanType
  * keyboard or moves the cursor out of the note.
  */
 @Composable
-fun FormatToolbar(controller: EditorController, modifier: Modifier = Modifier) {
+fun FormatToolbar(controller: EditorController, modifier: Modifier = Modifier, onAudioMarker: (AudioMarker) -> Unit = {}) {
     val active = controller.activeStyles
     val kind = controller.currentKind
     val linkUrl = controller.currentLinkUrl
@@ -78,7 +80,15 @@ fun FormatToolbar(controller: EditorController, modifier: Modifier = Modifier) {
             StyleButton(Icons.Outlined.FormatUnderlined, R.string.fmt_underline, SpanType.UNDERLINE in active) { controller.toggleStyle(SpanType.UNDERLINE) }
             StyleButton(Icons.Outlined.FormatStrikethrough, R.string.fmt_strike, SpanType.STRIKETHROUGH in active) { controller.toggleStyle(SpanType.STRIKETHROUGH) }
             StyleButton(Icons.Outlined.Code, R.string.fmt_code, SpanType.CODE in active) { controller.toggleStyle(SpanType.CODE) }
-            if (linkUrl != null) {
+            val marker = linkUrl?.let(AudioMarker::parse)
+            if (marker != null) {
+                // An audio marker (FR-012): play the recording from that moment.
+                val label = stringResource(R.string.audio_play_from, marker.label)
+                IconButton(onClick = { onAudioMarker(marker) }, modifier = noFocus.semantics { contentDescription = label }) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                }
+                ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
+            } else if (linkUrl != null) {
                 ToolbarIcon(Icons.AutoMirrored.Outlined.OpenInNew, R.string.fmt_open_link) { runCatching { uriHandler.openUri(linkUrl) } }
                 ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
             } else {

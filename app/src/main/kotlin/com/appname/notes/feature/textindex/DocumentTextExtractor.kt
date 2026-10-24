@@ -48,7 +48,7 @@ class DocumentTextExtractor(
         is TextSource.AttachmentSource -> when (source.kind) {
             AttachmentKind.IMAGE -> image(attachments.file(source.fileName))
             AttachmentKind.PDF -> pdf(attachments.file(source.fileName))
-            AttachmentKind.FILE -> Extraction(emptyList(), IndexStatus.EMPTY)
+            AttachmentKind.FILE, AttachmentKind.AUDIO -> Extraction(emptyList(), IndexStatus.EMPTY)
         }
     }
 

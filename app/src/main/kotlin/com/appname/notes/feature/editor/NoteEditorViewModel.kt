@@ -15,6 +15,11 @@ import com.appname.notes.core.domain.markdown.ExportResult
 import com.appname.notes.core.domain.markdown.LostFeature
 import com.appname.notes.core.domain.markdown.Markdown
 import com.appname.notes.core.domain.model.Attachment
+import com.appname.notes.core.domain.model.AudioMarker
+import com.appname.notes.feature.audio.AudioPlayback
+import com.appname.notes.feature.audio.RecordingController
+import com.appname.notes.feature.audio.RecordingError
+import com.appname.notes.feature.audio.RecordingState
 import com.appname.notes.core.domain.repository.AttachmentRepository
 import com.appname.notes.feature.attachments.AttachmentFileStore
 import com.appname.notes.feature.attachments.AttachmentIntents
@@ -105,6 +110,7 @@ class NoteEditorViewModel @AssistedInject constructor(
     private val storageCleanup: StorageCleanup,
     val previews: AttachmentPreviews,
     val attachmentIntents: AttachmentIntents,
+    private val recordings: RecordingController,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -140,6 +146,14 @@ class NoteEditorViewModel @AssistedInject constructor(
     /** Files attached to this note (FR-009), in order; updates live. */
     val attachments: StateFlow<List<Attachment>> =
         attachmentRepository.observe(noteId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The recording in progress anywhere in the app (only one at a time), FR-012. */
+    val recording: StateFlow<RecordingState> = recordings.state
+
+    /** Plays this note's recordings; marker taps seek here. */
+    val playback = AudioPlayback(viewModelScope, { attachmentStore.file(it.fileName) }) {
+        _message.value = UserMessage(R.string.audio_cant_play)
+    }
 
     /** How many files are being copied in right now (shows progress). */
     private val _attaching = MutableStateFlow(0)
@@ -242,6 +256,7 @@ class NoteEditorViewModel @AssistedInject constructor(
     }
 
     override fun onCleared() {
+        playback.release()
         val snap = if (_readOnly.value == null) snapshot() else null
         appScope.launch {
             if (snap != null) saveSnapshot(snap)
@@ -249,7 +264,9 @@ class NoteEditorViewModel @AssistedInject constructor(
             // attached count as content: wait for them first, or the note would be discarded under them.
             if (snap == null || (snap.title.isBlank() && snap.document.isBlank())) {
                 _attaching.first { it == 0 }
-                notes.discardIfBlank(noteId)
+                // A recording into this note is content too (it is attached when it stops).
+                val recordingHere = (recordings.state.value as? RecordingState.Recording)?.recording?.noteId == noteId
+                if (!recordingHere) notes.discardIfBlank(noteId)
             }
         }
     }
@@ -355,6 +372,53 @@ class NoteEditorViewModel @AssistedInject constructor(
     fun cameraUnavailable() {
         _message.value = UserMessage(R.string.attach_camera_unavailable)
     }
+
+    // ------------------------------------------------------------------ audio (FR-012)
+
+    /** The microphone permission was granted: start recording into this note. */
+    fun startRecording() {
+        if (_readOnly.value != null) return
+        if (recordings.start(noteId)) viewModelScope.launch { watchRecordingErrors() }
+    }
+
+    private suspend fun watchRecordingErrors() {
+        recordings.errors.first { it != null }?.let { error ->
+            _message.value = UserMessage(
+                when (error) {
+                    RecordingError.ALREADY_RECORDING -> R.string.audio_already_recording
+                    RecordingError.MICROPHONE_UNAVAILABLE -> R.string.audio_mic_unavailable
+                    RecordingError.STORAGE -> R.string.audio_save_failed
+                },
+            )
+            recordings.errorShown()
+        }
+    }
+
+    fun stopRecording() = recordings.stop()
+
+    fun microphoneDenied() {
+        _message.value = UserMessage(R.string.audio_permission_denied)
+    }
+
+    /** Writes a timestamp of the running recording into the text at the cursor. */
+    fun addMarker() {
+        val active = (recordings.state.value as? RecordingState.Recording)?.recording ?: return
+        if (active.noteId != noteId) return
+        val marker = AudioMarker(active.attachmentId, recordings.elapsedMs())
+        controller?.insertLink(marker.label, marker.url)
+        _message.value = UserMessage(R.string.audio_marker_added, listOf(marker.label))
+    }
+
+    /** Plays the recording a marker belongs to, from the marker's time. */
+    fun playMarker(marker: AudioMarker) {
+        val a = attachments.value.firstOrNull { it.id == marker.attachmentId } ?: return
+        playback.play(a, marker.positionMs)
+    }
+
+    /** Markers in the text for [attachment], in time order (shown as chips on its player). */
+    fun markersFor(attachment: Attachment): List<AudioMarker> =
+        controller?.links.orEmpty().mapNotNull { AudioMarker.parse(it) }.filter { it.attachmentId == attachment.id }
+            .distinct().sortedBy { it.positionMs }
 
     fun noAppToOpen() {
         _message.value = UserMessage(R.string.attach_no_app)

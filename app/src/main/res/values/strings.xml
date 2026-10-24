@@ -271,6 +271,26 @@
     <string name="search_in_attachment_page">In %1$s, page %2$d</string>
     <string name="scan_document">Scan document</string>
     <string name="scan_unavailable">The document scanner isn\'t available on this phone (it needs Google Play services).</string>
+    <!-- Audio notes (Phase 5, FR-012) -->
+    <string name="audio_record">Record audio</string>
+    <string name="audio_recording">Recording</string>
+    <string name="audio_recording_elapsed">Recording %1$s</string>
+    <string name="audio_recording_elsewhere">Recording in another note</string>
+    <string name="audio_stop">Stop</string>
+    <string name="audio_add_marker">Add marker</string>
+    <string name="audio_marker_added">Marker added at %1$s</string>
+    <string name="audio_play">Play</string>
+    <string name="audio_pause">Pause</string>
+    <string name="audio_play_from">Play from %1$s</string>
+    <string name="audio_position">Position in recording</string>
+    <string name="audio_channel">Recording</string>
+    <string name="audio_channel_description">Shown while the app records audio</string>
+    <string name="audio_permission_denied">Recording needs the microphone. You can allow it in the app\'s Android settings.</string>
+    <string name="audio_already_recording">A recording is already running. Stop it first.</string>
+    <string name="audio_mic_unavailable">The microphone isn\'t available right now (another app may be using it).</string>
+    <string name="audio_save_failed">The recording couldn\'t be attached yet. It is kept and will be attached when you next open the app.</string>
+    <string name="audio_cant_play">This recording can\'t be played.</string>
+    <string name="attach_type_audio">Recording</string>
     <!-- Attachments (Phase 5, FR-009) -->
     <string name="attach_menu">Attach</string>
     <string name="attach_photos">Photos</string>
