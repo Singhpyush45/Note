@@ -38,3 +38,12 @@ Device: ________  Android version: ________
 - [ ] Settings → Apps → APP_NAME → Notifications off → the note shows "Notifications are off… Turn on".
 - [ ] Handwritten note ⋮ → Remind me → alarm button appears in the top bar.
 - [ ] Library card shows the next reminder time.
+
+## Audio extras and voice typing
+- [ ] 📎 → Audio file → pick an MP3/M4A from your phone → a player with its length appears.
+- [ ] Tap the speed button (1× → 1.25× → 1.5×…) while playing → speed changes.
+- [ ] ⋮ on an attachment → Rename → new name shows.
+- [ ] Toolbar 🎤 → English (India) → read the line about where speech is processed → Start → allow microphone.
+- [ ] Speak two sentences → words appear while you speak; Pause, Resume, Stop, edit a word, Insert → the text
+      is in the note at the cursor; Undo removes it.
+- [ ] Turn on airplane mode and try again → either it works on the phone, or a clear "no internet" message.

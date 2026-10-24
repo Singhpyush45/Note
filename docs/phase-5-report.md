@@ -1,4 +1,4 @@
-# Phase 5 — Capture (attachments, scanner/OCR, audio, reminders): report
+# Phase 5 — Capture (attachments, scanner/OCR, audio, reminders, voice typing): report
 
 Status: **done on CI** — build 73 (run 40119708826): 340 JVM/Robolectric tests, 35 emulator tests, 0 failures,
 lint 0 errors, test APK published.
@@ -58,6 +58,19 @@ Device checks by a person: `phase-5-device-checklist.md` (pending, like the Phas
   Duplicating a note doesn't copy its reminders (no double alerts). Trashed notes don't remind; restoring does.
 - Database v7 (`reminders`), generated migration.
 
+### 5e — Audio extras and English voice typing (FR-012, owner brief §10–11)
+- **Audio files**: attach menu → *Audio file* (or any picked/shared audio). M4A/AAC/MP3/WAV/OGG that the phone
+  can decode become recordings with a player and their length; audio the phone can't read stays a plain file.
+- **Speed**: 1× / 1.25× / 1.5× / 2× / 0.75× button on the player (kept while the note is open).
+- **Rename** any attachment from its ⋮ sheet (only the shown name changes; the stored file is untouched).
+- **Voice typing**: 🎤 first in the formatting toolbar. Choose English (India / US / UK, remembered); the panel
+  says before starting whether speech is recognised **on the phone** (Android 12+ with an on-device model) or
+  by the **phone's speech service, which may send audio over the internet**. Start → words appear live →
+  Pause / Resume / Stop → edit → *Insert* puts the text at the cursor as normal, undoable text. Keeps listening
+  across sentences; pauses itself after a few silent stretches; network/busy/language/permission problems are
+  explained, and a missing on-device English pack offers the online service. Microphone asked on Start;
+  listening stops when the app goes to the background.
+
 ## Tests
 - JVM: domain rules (repeat maths incl. DST and month ends, quick choices), repositories (attachments, text
   index, reminders), Robolectric flows through the real app (attachments, document search, audio player,
@@ -71,11 +84,17 @@ Device checks by a person: `phase-5-device-checklist.md` (pending, like the Phas
 ## Known limitations (deliberate, with follow-up)
 1. Pictures can't sit between paragraphs (attachments are a strip) — the multimodal note (Phase 8a) does that.
 2. OCR reads printed text, not handwriting; scanned PDFs are OCR'd up to 40 pages.
-3. Audio files picked from storage attach as files, not playable recordings; no playback speed or rename yet → 5e.
-4. Reminders: changing time zone keeps a repeating reminder's *next* time at the old moment; after it rings it
+3. Reminders: changing time zone keeps a repeating reminder's *next* time at the old moment; after it rings it
    follows the new zone's wall clock. Snooze length is fixed at 10 minutes.
-5. Reminder notifications can't tick a task ("Done"); the note opens instead (an open editor could overwrite it).
-6. The test APK is larger (bundled OCR models); the Play Store build will be split per device.
+4. Reminder notifications can't tick a task ("Done"); the note opens instead (an open editor could overwrite it).
+5. The test APK is larger (bundled OCR models); the Play Store build will be split per device.
+6. **Transcribing an existing recording** is not built: Android's recogniser only listens to the microphone
+   (file input exists from Android 13 on some recognisers, which can't be tested here). Planned with cloud
+   transcription in the AI phase, with explicit consent.
+7. Voice typing can't keep the spoken audio as a recording at the same time (the recogniser owns the microphone);
+   record an audio note separately if the audio matters.
+8. Voice typing was tested with a fake recogniser and for the "no speech service" case; real recognition quality
+   depends on the phone's speech service → device checklist.
 
 ## Owner actions
 - Run `phase-5-device-checklist.md` on your phone (and the pending Phase 3/4 checklists); report any ✗.
