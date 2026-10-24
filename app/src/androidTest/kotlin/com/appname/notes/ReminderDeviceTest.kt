@@ -37,9 +37,11 @@ class ReminderDeviceTest {
     private val data = EntryPointAccessors.fromApplication(context.applicationContext as Application, AppDataEntryPoint::class.java)
     private val notifications = context.getSystemService(NotificationManager::class.java)
 
-    private fun shell(command: String) {
-        instrumentation.uiAutomation.executeShellCommand(command).close()
-    }
+    /** Runs [command] and waits for it to finish (the output must be read, or it may not have run yet). */
+    private fun shell(command: String): String =
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use {
+            it.readBytes().decodeToString()
+        }
 
     private fun waitFor(timeoutMs: Long, condition: () -> Boolean): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
@@ -65,7 +67,10 @@ class ReminderDeviceTest {
     @Test
     fun aReminderRingsAndShowsItsNotification() = runBlocking {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            assertWithMessage("exact alarms allowed for the test").that(context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()).isTrue()
+            val alarms = context.getSystemService(AlarmManager::class.java)
+            val allowed = waitFor(10_000) { alarms.canScheduleExactAlarms() }
+            assertWithMessage("exact alarms allowed for the test (appops: ${shell("appops get ${context.packageName} SCHEDULE_EXACT_ALARM")})")
+                .that(allowed).isTrue()
         }
         val id = (data.notes().createNote(null) as AppResult.Success).value
         data.notes().saveContent(id, "Call the lab", NoteDocument(blocks = listOf(TextBlock("b1", text = RichText("Ask about Friday's slot")))))
