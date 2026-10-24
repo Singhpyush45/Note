@@ -57,6 +57,13 @@ jobs:
           [ -d core/database/schemas ] && cp -r core/database/schemas ci-output/
           cp build.log ci-output/ 2>/dev/null || true
           mkdir -p ci-output/apk && cp app/build/outputs/apk/release/app-release.apk ci-output/apk/APP_NAME-test.apk 2>/dev/null || true
+          # Dependency versions for review (docs/dependency-review.md), read from Google's Maven repository.
+          mkdir -p ci-output/versions
+          for g in com/google/android/gms/play-services-mlkit-document-scanner com/google/mlkit/text-recognition \
+                   com/google/mlkit/text-recognition-devanagari com/google/android/gms/play-services-mlkit-text-recognition \
+                   com/google/android/gms/play-services-mlkit-text-recognition-devanagari; do
+            curl -sfL "https://dl.google.com/android/maven2/$g/maven-metadata.xml" -o "ci-output/versions/$(basename $g).xml" || true
+          done
           cd ci-output
           git init -q -b ci-output
           git add .
