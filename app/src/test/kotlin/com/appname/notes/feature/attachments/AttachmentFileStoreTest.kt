@@ -26,6 +26,7 @@ class AttachmentFileStoreTest {
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
     private val source = File(context.cacheDir, "source").apply { mkdirs() }
 
+    @Suppress("DEPRECATION") // Robolectric's MIME-map shadow: still the documented way to seed the map
     @Before
     fun mimeTypes() {
         // Robolectric's MIME map starts empty; Android's has these.

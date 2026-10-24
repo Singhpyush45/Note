@@ -99,6 +99,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     private var pageSizesKey: List<Pair<Float, Float>> = emptyList()
     private var viewport: Viewport? = null
     private var pendingState: InkViewState? = null
+
+    /** A page to show once the view has a size (requests can arrive before the first layout). */
+    private var pendingPage: Int? = null
     private var reportedPage = -1
 
     private val renderer = InkRenderer()
@@ -209,7 +212,8 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     }
 
     fun scrollToPage(index: Int) {
-        val v = viewport ?: return
+        // Not laid out yet (e.g. opened from a search hit): apply once the size is known.
+        val v = viewport ?: run { pendingPage = index; return }
         if (index !in 0 until stack.count) return
         viewport = rules.scrollTo(v, index, width.toDouble(), height.toDouble(), stack)
         surface.invalidate()
@@ -234,6 +238,10 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         } else {
             val s = rules.fitScale(w, stack) * state.zoom
             rules.clamp(Viewport(s, w / 2 - state.centerX * s, h / 2 - state.centerY * s), w, h, stack)
+        }
+        pendingPage?.let { page ->
+            pendingPage = null
+            if (page in 0 until stack.count) viewport = rules.scrollTo(viewport!!, page, w, h, stack)
         }
         reportPage()
     }
