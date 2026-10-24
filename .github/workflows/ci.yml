@@ -145,6 +145,7 @@ jobs:
     permissions:
       contents: write # only to update the "test-build" pre-release
     steps:
+      - uses: actions/checkout@v5 # for the test signing key
       - uses: actions/download-artifact@v5
         with:
           name: apks
@@ -154,12 +155,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          cp "$(find apks -name app-release.apk | head -1)" APP_NAME-test.apk
+          cp "$(find apks -name app-release.apk | head -1)" APP_NAME-test-universal.apk
+          # Phone-sized APK: only 64-bit ARM native code (every modern phone/tablet), re-signed with the same
+          # test key. The universal APK (all CPU types, incl. emulators and old 32-bit phones) is kept too.
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          cp APP_NAME-test-universal.apk stripped.apk
+          zip -q -d stripped.apk 'lib/x86/*' 'lib/x86_64/*' 'lib/armeabi-v7a/*' || true
+          "$BT/zipalign" -f -p 4 stripped.apk aligned.apk
+          "$BT/apksigner" sign --ks signing/test-builds.jks --ks-pass pass:test-builds-only --ks-key-alias test --key-pass pass:test-builds-only --out APP_NAME-test.apk aligned.apk
+          "$BT/apksigner" verify APP_NAME-test.apk
+          ls -l APP_NAME-test*.apk
           notes="Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::7}, $(date -u '+%Y-%m-%d %H:%M UTC'). All CI tests passed.
+          APP_NAME-test.apk: for phones and tablets (64-bit ARM). APP_NAME-test-universal.apk: every device type (larger).
           For testing only: signed with the test key (signing/README.md). Installs over earlier test builds and keeps your notes."
           if gh release view test-build >/dev/null 2>&1; then
             gh release edit test-build --notes "$notes"
           else
             gh release create test-build --prerelease --title "Latest test build" --notes "$notes" --target "$GITHUB_SHA"
           fi
-          gh release upload test-build APP_NAME-test.apk --clobber
+          gh release upload test-build APP_NAME-test.apk APP_NAME-test-universal.apk --clobber

@@ -6,7 +6,8 @@ the device + stylus model and any ✗.
 
 ## Install
 1. On your phone or tablet, open **https://github.com/Singhpyush45/Note/releases/tag/test-build** and tap
-   **APP_NAME-test.apk** (no GitHub login needed). It is the newest build that passed every CI test.
+   **APP_NAME-test.apk** (no GitHub login needed; ~20 MB, for phones and tablets). It is the newest build that passed
+   every CI test. (`APP_NAME-test-universal.apk` is the same app for every device type, if the first won't install.)
    The same file is also sent in our chat when a phase is ready.
 2. Open the downloaded file. The first time, Android asks to allow installs from your browser/Files app:
    allow it (Settings → *Install unknown apps*), then **Install**. If Play Protect warns about an unknown
