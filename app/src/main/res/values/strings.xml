@@ -324,4 +324,40 @@
         <item quantity="one">%d attachment</item>
         <item quantity="other">%d attachments</item>
     </plurals>
+
+    <!-- Reminders (FR-010) -->
+    <string name="action_ok">OK</string>
+    <string name="reminder_add">Remind me</string>
+    <string name="reminder_add_task">Remind me about this task</string>
+    <string name="reminder_edit">Edit reminder</string>
+    <string name="reminder_delete">Delete</string>
+    <string name="reminder_for_task">Task: %1$s</string>
+    <string name="reminder_preset_later">Later today</string>
+    <string name="reminder_preset_evening">This evening</string>
+    <string name="reminder_preset_tomorrow">Tomorrow morning</string>
+    <string name="reminder_preset_next_week">Next week</string>
+    <string name="reminder_repeat_none">Doesn't repeat</string>
+    <string name="reminder_repeat_daily">Every day</string>
+    <string name="reminder_repeat_weekly">Every week</string>
+    <string name="reminder_repeat_monthly">Every month</string>
+    <string name="reminder_repeat_yearly">Every year</string>
+    <string name="reminder_in_past">Pick a time in the future.</string>
+    <string name="reminder_inexact">Reminders may arrive a few minutes late unless this app is allowed to set exact alarms.</string>
+    <string name="reminder_allow_exact">Allow exact timing</string>
+    <string name="reminder_today">Today</string>
+    <string name="reminder_tomorrow">Tomorrow</string>
+    <string name="reminder_yesterday">Yesterday</string>
+    <string name="reminder_set">Reminder set</string>
+    <string name="reminder_removed">Reminder deleted</string>
+    <string name="reminder_task_removed">Deleted task</string>
+    <string name="reminder_chip_pending">Reminder: %1$s</string>
+    <string name="reminder_chip_past">Past reminder: %1$s</string>
+    <string name="reminder_alerts_off">Notifications are off, so reminders can't alert you.</string>
+    <string name="reminder_turn_on">Turn on</string>
+    <string name="reminder_channel">Reminders</string>
+    <string name="reminder_channel_description">Reminders you set on notes and tasks</string>
+    <string name="reminder_in_note">In %1$s</string>
+    <string name="reminder_missed">Missed · was due %1$s</string>
+    <string name="reminder_snooze">Snooze %1$d min</string>
+    <string name="card_reminder">Reminder %1$s</string>
 </resources>

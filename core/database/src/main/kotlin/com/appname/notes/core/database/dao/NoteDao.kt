@@ -35,7 +35,8 @@ abstract class NoteDao {
                n.createdAt, n.updatedAt,
                (SELECT COUNT(*) FROM attachments a WHERE a.noteId = n.id) AS attachmentCount,
                (SELECT a.fileName FROM attachments a WHERE a.noteId = n.id AND a.kind = 'IMAGE'
-                ORDER BY a.position LIMIT 1) AS coverImage
+                ORDER BY a.position LIMIT 1) AS coverImage,
+               (SELECT MIN(r.triggerAt) FROM reminders r WHERE r.noteId = n.id AND r.firedAt IS NULL) AS nextReminderAt
         FROM notes n
         LEFT JOIN notebooks nb ON nb.id = n.notebookId AND nb.deletedAt IS NULL
         WHERE n.deletedAt IS NULL
@@ -141,6 +142,9 @@ abstract class NoteDao {
     @Query("DELETE FROM text_index_jobs WHERE noteId IN (:ids)")
     protected abstract suspend fun deleteTextJobs(ids: List<String>)
 
+    @Query("DELETE FROM reminders WHERE noteId IN (:ids)")
+    protected abstract suspend fun deleteReminders(ids: List<String>)
+
     /** Permanent delete: content and handwriting removed, tags unlinked, tombstone kept (SRS 9.2). */
     @Transaction
     open suspend fun deletePermanently(ids: List<String>, now: Long): Int {
@@ -153,6 +157,7 @@ abstract class NoteDao {
             deletePdfDocuments(chunk)
             deleteExtractedText(chunk)
             deleteTextJobs(chunk)
+            deleteReminders(chunk)
             deleteAttachments(chunk)
             count += tombstone(chunk, now)
         }
@@ -204,6 +209,7 @@ abstract class NoteDao {
                (SELECT COUNT(*) FROM attachments a WHERE a.noteId = n.id) AS attachmentCount,
                (SELECT a.fileName FROM attachments a WHERE a.noteId = n.id AND a.kind = 'IMAGE'
                 ORDER BY a.position LIMIT 1) AS coverImage,
+               (SELECT MIN(r.triggerAt) FROM reminders r WHERE r.noteId = n.id AND r.firedAt IS NULL) AS nextReminderAt,
                snippet(notes_fts, char(2), char(3), '…', -1, 12) AS snippet
         FROM notes_fts
         JOIN notes n ON n.rowid = notes_fts.rowid

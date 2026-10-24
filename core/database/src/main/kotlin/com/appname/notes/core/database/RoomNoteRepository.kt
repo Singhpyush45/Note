@@ -132,7 +132,8 @@ class RoomNoteRepository(
             NoteType.PDF -> false // an imported document is content
         }
         val blank = note.note.title.isBlank() && contentBlank && note.tags.isEmpty() &&
-            db.attachmentDao().count(note.note.id) == 0 // attached files are content too
+            db.attachmentDao().count(note.note.id) == 0 && // attached files are content too
+            db.reminderDao().list(note.note.id).isEmpty() // so is a reminder the user set
         if (blank) storageCall(logger, "Discard empty note") { dao.deleteUnusedNote(id.value) }
         return blank
     }

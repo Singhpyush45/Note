@@ -83,6 +83,7 @@ data class DocumentHitRow(
     val updatedAt: Long,
     val attachmentCount: Int,
     val coverImage: String?,
+    val nextReminderAt: Long?,
     val snippet: String,
     val attachmentId: String?,
     val attachmentName: String?,

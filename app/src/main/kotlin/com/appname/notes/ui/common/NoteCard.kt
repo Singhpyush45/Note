@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.draw.clip
@@ -137,6 +138,7 @@ fun NoteCard(
                 note.notebookTitle?.let { MetaChip(it, emphasised = true) }
                 note.tags.take(3).forEach { MetaChip("#${it.name}") }
                 if (note.attachmentCount > 0) AttachmentCountChip(note.attachmentCount)
+                note.nextReminderAt?.let { ReminderChip(it) }
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = NoteDates.format(note.updatedAt),
@@ -176,6 +178,30 @@ private fun CoverPhoto(fileName: String, load: suspend (String) -> Bitmap?) {
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxWidth().height(140.dp).clip(MaterialTheme.shapes.small),
     )
+}
+
+/** When the note's next reminder goes off (FR-010), e.g. "Tomorrow, 9:00 AM". */
+@Composable
+private fun ReminderChip(at: java.time.Instant) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val text = com.appname.notes.feature.reminders.ReminderDates.format(context, java.time.LocalDateTime.ofInstant(at, java.time.ZoneId.systemDefault()))
+    val label = stringResource(R.string.card_reminder, text)
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = label },
+    ) {
+        Row(Modifier.padding(horizontal = 6.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Alarm, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onTertiaryContainer)
+            Text(
+                text,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 2.dp),
+            )
+        }
+    }
 }
 
 @Composable

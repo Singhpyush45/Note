@@ -47,6 +47,8 @@ data class NoteSummary(
     val attachmentCount: Int = 0,
     /** Stored file name of the first attached image, for the card preview. */
     val coverImage: String? = null,
+    /** When the note's next reminder goes off (FR-010). */
+    val nextReminderAt: Instant? = null,
 )
 
 /** A full note, as opened in the editor. */

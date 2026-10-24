@@ -101,6 +101,7 @@ abstract class TextIndexDao {
                (SELECT COUNT(*) FROM attachments a2 WHERE a2.noteId = n.id) AS attachmentCount,
                (SELECT a3.fileName FROM attachments a3 WHERE a3.noteId = n.id AND a3.kind = 'IMAGE'
                 ORDER BY a3.position LIMIT 1) AS coverImage,
+               (SELECT MIN(r.triggerAt) FROM reminders r WHERE r.noteId = n.id AND r.firedAt IS NULL) AS nextReminderAt,
                snippet(extracted_text_fts, char(2), char(3), '…', -1, 12) AS snippet,
                e.attachmentId, a.displayName AS attachmentName, e.pageIndex, a.kind AS attachmentKind
         FROM extracted_text_fts

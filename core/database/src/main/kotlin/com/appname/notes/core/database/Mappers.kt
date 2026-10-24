@@ -42,6 +42,7 @@ internal fun NoteListRow.toDomain() = NoteSummary(
     updatedAt = updatedAt.toInstant(),
     attachmentCount = attachmentCount,
     coverImage = coverImage,
+    nextReminderAt = nextReminderAt?.toInstant(),
 )
 
 internal fun SearchRow.toDomain() = SearchHit(
@@ -61,6 +62,7 @@ internal fun SearchRow.toDomain() = SearchHit(
         updatedAt = updatedAt.toInstant(),
         attachmentCount = attachmentCount,
         coverImage = coverImage,
+        nextReminderAt = nextReminderAt?.toInstant(),
     ),
     snippet = snippet,
 )
@@ -113,6 +115,7 @@ internal fun com.appname.notes.core.database.entity.DocumentHitRow.toDomain() = 
         updatedAt = updatedAt.toInstant(),
         attachmentCount = attachmentCount,
         coverImage = coverImage,
+        nextReminderAt = nextReminderAt?.toInstant(),
     ),
     snippet = snippet,
     location = com.appname.notes.core.domain.model.HitLocation(

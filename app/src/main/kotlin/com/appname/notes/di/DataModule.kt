@@ -12,6 +12,8 @@ import com.appname.notes.core.database.RoomPdfRepository
 import com.appname.notes.core.database.RoomNotebookRepository
 import com.appname.notes.core.database.RoomTagRepository
 import com.appname.notes.core.database.RoomTextIndexRepository
+import com.appname.notes.core.database.RoomReminderRepository
+import com.appname.notes.core.domain.repository.ReminderRepository
 import com.appname.notes.core.domain.repository.AttachmentRepository
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
@@ -90,4 +92,9 @@ object DataModule {
     @Singleton
     fun provideTextIndexRepository(db: NotesDatabase, clock: AppClock, logger: AppLogger): TextIndexRepository =
         RoomTextIndexRepository(db, clock, logger)
+
+    @Provides
+    @Singleton
+    fun provideReminderRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): ReminderRepository =
+        RoomReminderRepository(db, clock, ids, logger)
 }

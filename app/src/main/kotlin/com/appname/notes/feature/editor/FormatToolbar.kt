@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.AlarmAdd
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
@@ -58,7 +59,13 @@ import com.appname.notes.core.domain.document.SpanType
  * keyboard or moves the cursor out of the note.
  */
 @Composable
-fun FormatToolbar(controller: EditorController, modifier: Modifier = Modifier, onAudioMarker: (AudioMarker) -> Unit = {}) {
+fun FormatToolbar(
+    controller: EditorController,
+    modifier: Modifier = Modifier,
+    onAudioMarker: (AudioMarker) -> Unit = {},
+    /** "Remind me about this task", shown while the cursor is on a checklist item (FR-010). */
+    onRemindTask: (() -> Unit)? = null,
+) {
     val active = controller.activeStyles
     val kind = controller.currentKind
     val linkUrl = controller.currentLinkUrl
@@ -101,6 +108,12 @@ fun FormatToolbar(controller: EditorController, modifier: Modifier = Modifier, o
             StyleButton(Icons.AutoMirrored.Outlined.FormatListBulleted, R.string.fmt_bullet, kind == BlockKind.BULLET) { controller.toggleKind(BlockKind.BULLET) }
             StyleButton(Icons.Outlined.FormatListNumbered, R.string.fmt_numbered, kind == BlockKind.NUMBERED) { controller.toggleKind(BlockKind.NUMBERED) }
             StyleButton(Icons.Outlined.CheckBox, R.string.fmt_checklist, kind == BlockKind.CHECKLIST) { controller.toggleKind(BlockKind.CHECKLIST) }
+            if (kind == BlockKind.CHECKLIST && onRemindTask != null) {
+                val remindLabel = stringResource(R.string.reminder_add_task)
+                IconButton(onClick = onRemindTask, modifier = noFocus.testTag(EditorTestTags.REMIND_TASK).semantics { contentDescription = remindLabel }) {
+                    Icon(Icons.Outlined.AlarmAdd, contentDescription = null)
+                }
+            }
             StyleButton(Icons.Outlined.FormatQuote, R.string.fmt_quote, kind == BlockKind.QUOTE) { controller.toggleKind(BlockKind.QUOTE) }
         }
     }

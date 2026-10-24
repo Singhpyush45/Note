@@ -11,6 +11,8 @@ import com.appname.notes.core.database.dao.NoteDao
 import com.appname.notes.core.database.dao.NotebookDao
 import com.appname.notes.core.database.dao.TagDao
 import com.appname.notes.core.database.dao.TextIndexDao
+import com.appname.notes.core.database.dao.ReminderDao
+import com.appname.notes.core.database.entity.ReminderEntity
 import com.appname.notes.core.database.entity.AttachmentEntity
 import com.appname.notes.core.database.entity.InkItemEntity
 import com.appname.notes.core.database.entity.InkPageEntity
@@ -32,16 +34,17 @@ import com.appname.notes.core.database.entity.TextIndexJobEntity
  * - v4 (Phase 5): attachments. New table only; generated migration.
  * - v5 (Phase 5): extracted_text (+ FTS index), text_index_jobs. New tables only; generated migration.
  * - v6 (Phase 5): attachments.durationMs (nullable) for recordings. Generated migration.
+ * - v7 (Phase 5): reminders. New table only; generated migration.
  */
 @Database(
     entities = [
         NotebookEntity::class, NoteEntity::class, NoteFtsEntity::class, TagEntity::class, NoteTagCrossRef::class,
         InkPageEntity::class, InkItemEntity::class, PdfDocumentEntity::class, AttachmentEntity::class,
-        ExtractedTextEntity::class, ExtractedTextFtsEntity::class, TextIndexJobEntity::class,
+        ExtractedTextEntity::class, ExtractedTextFtsEntity::class, TextIndexJobEntity::class, ReminderEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7)],
 )
 abstract class NotesDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
@@ -50,6 +53,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun inkDao(): InkDao
     abstract fun attachmentDao(): AttachmentDao
     abstract fun textIndexDao(): TextIndexDao
+    abstract fun reminderDao(): ReminderDao
 
     /** Recreates the search index from the notes table (SRS 12.1). */
     fun rebuildSearchIndex() {

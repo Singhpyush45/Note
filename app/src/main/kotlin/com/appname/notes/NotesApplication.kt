@@ -7,6 +7,7 @@ import com.appname.notes.di.ApplicationScope
 import com.appname.notes.feature.attachments.StorageCleanup
 import com.appname.notes.feature.audio.RecordingController
 import com.appname.notes.feature.textindex.TextIndexScheduler
+import com.appname.notes.feature.reminders.ReminderScheduler
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -22,12 +23,16 @@ class NotesApplication : Application() {
 
     @Inject lateinit var recordings: RecordingController
 
+    @Inject lateinit var reminders: ReminderScheduler
+
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     override fun onCreate() {
         if (BuildConfig.DEBUG) enableStrictMode()
         super.onCreate() // Hilt injects the fields above here
         InkCrashGuard.install()
+        // Keeps the alarm set for the next reminder (FR-010); anything missed while the app was stopped goes off now.
+        reminders.start()
         // Remove stored PDFs and attachments no note uses any more (e.g. the app was killed during a delete).
         // Off the startup path.
         appScope.launch {

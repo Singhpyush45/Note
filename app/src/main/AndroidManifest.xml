@@ -12,6 +12,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- The "Recording" notification (Android 13+); recording works without it. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+      Reminders (FR-010). Exact timing is a user-controlled special access on Android 12+ ("Alarms & reminders");
+      without it reminders are inexact (may be a few minutes late). USE_EXACT_ALARM is not requested: Play reserves it
+      for alarm-clock and calendar apps. Boot: alarms are cleared on restart and must be set again.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".NotesApplication"
@@ -51,6 +58,20 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".feature.reminders.ReminderAlarmReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".feature.reminders.SystemEventsReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <service
             android:name=".feature.audio.AudioRecordingService"
             android:exported="false"

@@ -27,6 +27,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.core.designsystem.theme.AppTheme
 import com.appname.notes.core.settings.ThemeMode
 import com.appname.notes.navigation.NotesApp
+import com.appname.notes.core.domain.model.NoteType
+import com.appname.notes.feature.reminders.ReminderNotifier
 import dagger.hilt.android.AndroidEntryPoint
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -91,9 +93,17 @@ class MainActivity : ComponentActivity() {
     /**
      * Content from another app:
      * - "Open with" (VIEW) or "Share" (SEND) of a PDF → a new PDF note (SRS 7.1);
-     * - "Share" of one or more photos (SEND / SEND_MULTIPLE) → a new note with them attached (FR-009).
+     * - "Share" of one or more photos (SEND / SEND_MULTIPLE) → a new note with them attached (FR-009);
+     * - a tapped reminder notification → its note.
      */
     private fun handleIncoming(intent: Intent?) {
+        // A reminder notification was tapped: open its note (FR-010).
+        if (intent?.action == ReminderNotifier.ACTION_OPEN_NOTE) {
+            val noteId = intent.getStringExtra(ReminderNotifier.EXTRA_NOTE_ID) ?: return
+            val type = NoteType.entries.firstOrNull { it.name == intent.getStringExtra(ReminderNotifier.EXTRA_NOTE_TYPE) } ?: NoteType.TEXT
+            viewModel.openNote(noteId, type)
+            return
+        }
         val uris: List<Uri> = when (intent?.action) {
             Intent.ACTION_VIEW -> listOfNotNull(intent.data)
             Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))

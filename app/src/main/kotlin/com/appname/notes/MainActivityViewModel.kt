@@ -76,6 +76,12 @@ class MainActivityViewModel @Inject constructor(
         }
     }
 
+    /** Opens a note from outside the app's screens (a tapped reminder notification). */
+    fun openNote(noteId: String, type: NoteType) {
+        if (_shared.value is SharedImport.Importing) return
+        _shared.value = SharedImport.Opened(noteId, type)
+    }
+
     fun sharedHandled() {
         if (_shared.value !is SharedImport.Importing) _shared.value = null
     }

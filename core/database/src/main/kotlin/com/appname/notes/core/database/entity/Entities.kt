@@ -117,6 +117,8 @@ data class NoteListRow(
     val updatedAt: Long,
     val attachmentCount: Int,
     val coverImage: String?,
+    /** Next pending reminder (epoch millis), FR-010. */
+    val nextReminderAt: Long?,
     @Relation(
         parentColumn = "id",
         entityColumn = "id",
@@ -140,6 +142,8 @@ data class SearchRow(
     val updatedAt: Long,
     val attachmentCount: Int,
     val coverImage: String?,
+    /** Next pending reminder (epoch millis), FR-010. */
+    val nextReminderAt: Long?,
     val snippet: String,
     @Relation(
         parentColumn = "id",
