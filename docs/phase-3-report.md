@@ -80,6 +80,14 @@ exception on Ink's render thread (any other crash still crashes), and the canvas
 layer when it becomes visible again. No ink is lost either way (strokes are saved on pen-up). The e2e test
 now passes; remove the workaround once an Ink release fixes it.
 
+**Follow-up (found during Phase 4/5, fixed):** the same race also has a native form that no Java guard can
+catch. Ink 1.0.0's `discard()` closes the renderer on the main thread while Ink's render thread may still be
+drawing; Android's renderer then aborts the process ("Cannot drawFrame with no CanvasContext"). It showed
+up in 2 of 5 CI runs, read from the 1.0.0 sources. Fixed by moving to **Ink 1.1.0-alpha09**, whose source
+closes the renderer on the render thread after its layers are hidden (a documented exception to the
+stable-only rule; see `dependency-review.md`). `InkLifecycleStressTest` (write and leave via Back/Home,
+repeatedly, under memory pressure) now guards this path on every CI run.
+
 ## Known limitations (deliberate, with follow-up)
 - **Real-device latency and feel** (NFR-03) not measured yet — needs the owner's stylus device.
 - No textured pencil brush yet (not among Ink 1.0's stock brushes); pen, marker and highlighter only.
