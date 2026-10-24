@@ -226,7 +226,11 @@ fun NoteEditorRoute(
             }
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 viewModel.startRecording()
-                if (wanted.size > 1) recordPermissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    recordPermissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                }
             } else {
                 recordPermissions.launch(wanted.toTypedArray())
             }
