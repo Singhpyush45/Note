@@ -8,7 +8,7 @@ status=0
 crash_report() {
   local text
   text=$( {
-    echo "== crash buffer =="; adb logcat -d -b crash | tail -n 60
+    echo "== crash buffer (Java frames first) =="; adb logcat -d -b crash | grep -E "Abort message|name:|  at |#[0-9]+ pc .*(\.apk|\.oat|\.odex|\.vdex|base\.|androidx|ink|hwui)" | head -n 120
     echo "== process deaths / low memory =="; adb logcat -d | grep -E "lowmemorykiller|Low on memory|has died|Process .* \(pid|FATAL|SIGSEGV|SIGABRT|OutOfMemory" | tail -n 30
     echo "== TestRunner =="; adb logcat -d -s TestRunner | tail -n 20
   } 2>/dev/null )
