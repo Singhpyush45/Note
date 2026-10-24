@@ -57,14 +57,6 @@ jobs:
           [ -d core/database/schemas ] && cp -r core/database/schemas ci-output/
           cp build.log ci-output/ 2>/dev/null || true
           mkdir -p ci-output/apk && cp app/build/outputs/apk/release/app-release.apk ci-output/apk/APP_NAME-test.apk 2>/dev/null || true
-          # Investigation (Ink native crash, see docs/phase-5 notes): the exact library sources we ship, for reading.
-          mkdir -p ci-output/sources
-          for v in 1.0.0 1.1.0-alpha09; do
-            curl -sfL "https://dl.google.com/android/maven2/androidx/ink/ink-authoring-android/$v/ink-authoring-android-$v-sources.jar" -o "ci-output/sources/ink-authoring-android-$v-sources.jar" || rm -f "ci-output/sources/ink-authoring-android-$v-sources.jar"
-            curl -sfL "https://dl.google.com/android/maven2/androidx/ink/ink-authoring-android/$v/ink-authoring-android-$v.pom" -o "ci-output/sources/ink-authoring-android-$v.pom" || true
-          done
-          curl -sfL "https://dl.google.com/android/maven2/androidx/ink/ink-authoring/maven-metadata.xml" -o ci-output/sources/ink-authoring-versions.xml || true
-          find ~/.gradle/caches/modules-2/files-2.1 -path '*androidx.graphics/graphics-core/*' -name '*.aar' | head -3 > ci-output/sources/graphics-core-versions.txt || true
           cd ci-output
           git init -q -b ci-output
           git add .

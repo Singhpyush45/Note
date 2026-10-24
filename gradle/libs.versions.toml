@@ -25,7 +25,8 @@ room = "2.8.5"
 adaptive = "1.3.0"
 materialIconsExtended = "1.7.8"
 uiautomator = "2.4.0"
-ink = "1.0.0"
+# 1.1.0 preview on purpose: 1.0.0 can abort natively when the handwriting screen closes mid-draw (see docs/dependency-review.md)
+ink = "1.1.0-alpha09"
 pdfboxAndroid = "2.0.27.0"
 
 [libraries]
