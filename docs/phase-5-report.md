@@ -1,6 +1,7 @@
 # Phase 5 — Capture (attachments, scanner/OCR, audio, reminders): report
 
-Status: **done on CI** (build, JVM tests, lint, emulator tests and APK publish green from a clean checkout).
+Status: **done on CI** — build 73 (run 40119708826): 340 JVM/Robolectric tests, 35 emulator tests, 0 failures,
+lint 0 errors, test APK published.
 Device checks by a person: `phase-5-device-checklist.md` (pending, like the Phase 3 and 4 checklists).
 
 ## What was built
