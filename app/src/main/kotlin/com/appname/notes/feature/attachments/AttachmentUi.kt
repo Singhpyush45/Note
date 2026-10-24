@@ -145,7 +145,9 @@ private fun accessibilityActions(a: Attachment, actions: AttachmentActions, onMo
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ImageTile(a: Attachment, previews: AttachmentPreviews, actions: AttachmentActions, onMore: () -> Unit) {
-    val ratio = if (a.width != null && a.height != null && a.height > 0) (a.width.toFloat() / a.height).coerceIn(0.6f, 1.8f) else 1f
+    val w = a.width
+    val h = a.height
+    val ratio = if (w != null && h != null && h > 0) (w.toFloat() / h).coerceIn(0.6f, 1.8f) else 1f
     val label = stringResource(R.string.attach_photo_label, a.displayName)
     val custom = accessibilityActions(a, actions, onMore)
     Surface(
