@@ -29,6 +29,7 @@ unless stated otherwise.
 | Lifecycle process | 2.11.0 | App-level lifecycle | Added Phase 2 |
 | UiAutomator | 2.4.0 | Process-death / force-stop e2e tests | Added Phase 2 |
 | Jetpack Ink (authoring, brush, rendering, strokes) | 1.0.0 | Low-latency stylus ink | Added Phase 3 (ADR-0009 Part A) |
+| ExifInterface (`androidx.exifinterface`) | 1.3.7 | Photo orientation for attachments | Added Phase 5. The platform class has known parsing bugs on older Android versions. |
 | PdfBox-Android (`com.tom-roush:pdfbox-android`) | 2.0.27.0 | Read page boxes; write the annotated export copy | Added Phase 4 (ADR-0009 Part B). Apache-2.0, a port of Apache PDFBox **maintained by one person** (not Google): kept behind `PdfAnnotationWriter` so it can be swapped. Display uses the platform `PdfRenderer` instead. |
 
 ## Watch list (later phases)

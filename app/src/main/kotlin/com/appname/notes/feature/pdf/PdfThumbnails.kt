@@ -35,19 +35,7 @@ class PdfThumbnails(
         withContext(dispatchers.io) {
             val doc = (pdf.document(noteId) as? AppResult.Success)?.value ?: return@withContext null
             try {
-                ParcelFileDescriptor.open(store.file(doc.fileName), ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
-                    PdfRenderer(fd).use { r ->
-                        if (pageIndex !in 0 until r.pageCount) return@use null
-                        r.openPage(pageIndex).use { page ->
-                            val h = (widthPx.toFloat() * page.height / page.width).roundToInt().coerceIn(1, widthPx * 4)
-                            val argb = createBitmap(widthPx, h, Bitmap.Config.ARGB_8888) // the renderer needs ARGB
-                            argb.eraseColor(Color.WHITE)
-                            page.render(argb, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                            // Half the memory for the cache: a white page has no transparency to keep.
-                            argb.copy(Bitmap.Config.RGB_565, false).also { argb.recycle() }
-                        }
-                    }
-                }
+                renderPdfPage(store.file(doc.fileName), pageIndex, widthPx)
             } catch (e: IOException) {
                 logger.warn(TAG, "PDF thumbnail failed", e)
                 null
@@ -67,3 +55,21 @@ class PdfThumbnails(
         const val PARALLEL = 2
     }
 }
+
+/**
+ * Renders page [pageIndex] of [file] [widthPx] wide on white, as RGB_565 (half the memory; a page has no
+ * transparency). Blocking; may throw IOException/SecurityException/RuntimeException for unreadable files.
+ */
+internal fun renderPdfPage(file: java.io.File, pageIndex: Int, widthPx: Int): Bitmap? =
+    ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+        PdfRenderer(fd).use { r ->
+            if (pageIndex !in 0 until r.pageCount) return@use null
+            r.openPage(pageIndex).use { page ->
+                val h = (widthPx.toFloat() * page.height / page.width).roundToInt().coerceIn(1, widthPx * 4)
+                val argb = createBitmap(widthPx, h, Bitmap.Config.ARGB_8888) // the renderer needs ARGB
+                argb.eraseColor(Color.WHITE)
+                page.render(argb, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                argb.copy(Bitmap.Config.RGB_565, false).also { argb.recycle() }
+            }
+        }
+    }

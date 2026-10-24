@@ -1,5 +1,17 @@
 package com.appname.notes.ui.common
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +63,8 @@ fun NoteCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     inkThumbnail: (suspend (NoteSummary) -> InkThumbnail?)? = null,
+    /** Loads the cover photo (first attached image) by stored file name. */
+    cover: (suspend (String) -> Bitmap?)? = null,
 ) {
     val spacing = AppTheme.spacing
     // PDF notes are ink pages over the document's pages: same thumbnail, with the PDF page under the ink.
@@ -102,6 +116,10 @@ fun NoteCard(
             if (isInk && inkThumbnail != null) {
                 InkThumbnailView(note, inkThumbnail)
             }
+            val coverFile = note.coverImage
+            if (!isInk && coverFile != null && cover != null) {
+                CoverPhoto(coverFile, cover)
+            }
             if (body.isNotBlank()) {
                 Text(
                     text = body,
@@ -118,6 +136,7 @@ fun NoteCard(
             ) {
                 note.notebookTitle?.let { MetaChip(it, emphasised = true) }
                 note.tags.take(3).forEach { MetaChip("#${it.name}") }
+                if (note.attachmentCount > 0) AttachmentCountChip(note.attachmentCount)
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = NoteDates.format(note.updatedAt),
@@ -143,5 +162,33 @@ private fun MetaChip(text: String, emphasised: Boolean = false) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
+    }
+}
+
+/** First attached photo of a text note, cropped to a band (FR-009 previews). */
+@Composable
+private fun CoverPhoto(fileName: String, load: suspend (String) -> Bitmap?) {
+    val bitmap by produceState<Bitmap?>(null, fileName) { value = load(fileName) }
+    val b = bitmap ?: return
+    Image(
+        b.asImageBitmap(),
+        contentDescription = null, // decorative: the attachment count chip says there are attachments
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxWidth().height(140.dp).clip(MaterialTheme.shapes.small),
+    )
+}
+
+@Composable
+private fun AttachmentCountChip(count: Int) {
+    val label = pluralStringResource(R.plurals.card_attachments, count, count)
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = label },
+    ) {
+        Row(Modifier.padding(horizontal = 6.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.AttachFile, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("$count", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 2.dp))
+        }
     }
 }

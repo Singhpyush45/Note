@@ -263,4 +263,37 @@
     <string name="pdf_import_too_large">That PDF is too large (the limit is 300 MB).</string>
     <string name="pdf_import_empty">That PDF has no pages.</string>
     <string name="pdf_import_storage">Couldn\'t save the PDF. Check that there is free space and try again.</string>
+    <!-- Attachments (Phase 5, FR-009) -->
+    <string name="attach_menu">Attach</string>
+    <string name="attach_photos">Photos</string>
+    <string name="attach_camera">Take photo</string>
+    <string name="attach_files">Files</string>
+    <plurals name="attach_in_progress">
+        <item quantity="one">Attaching %d file…</item>
+        <item quantity="other">Attaching %d files…</item>
+    </plurals>
+    <string name="attach_importing_shared">Adding to a new note…</string>
+    <string name="attach_open">Open</string>
+    <string name="attach_open_with">Open with…</string>
+    <string name="attach_share">Share</string>
+    <string name="attach_remove">Remove from note</string>
+    <string name="attach_more">More options</string>
+    <string name="attach_more_for">More options for %1$s</string>
+    <string name="attach_photo_label">Photo: %1$s</string>
+    <string name="attach_type_pdf">PDF</string>
+    <string name="attach_type_file">File</string>
+    <string name="attach_annotate">Write on this PDF</string>
+    <string name="attach_annotate_summary">Opens a copy as a PDF note; this attachment stays as it is</string>
+    <string name="attach_removed">Removed %1$s</string>
+    <string name="attach_no_app">No app on this phone can open this file</string>
+    <string name="attach_camera_unavailable">No camera app is available</string>
+    <string name="attach_error_unreadable">That file couldn\'t be read. It may have been moved or deleted.</string>
+    <string name="attach_error_too_large">That file is too large to attach (the limit is 250 MB).</string>
+    <string name="attach_error_storage_full">Not enough free space on this phone. Free up some space and try again.</string>
+    <string name="attach_error_storage">Couldn\'t save the file. Please try again.</string>
+    <string name="export_lost_attachments">Attached files aren\'t included in Markdown. Share them from the note separately.</string>
+    <plurals name="card_attachments">
+        <item quantity="one">%d attachment</item>
+        <item quantity="other">%d attachments</item>
+    </plurals>
 </resources>

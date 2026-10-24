@@ -5,11 +5,13 @@ import com.appname.notes.core.common.id.IdGenerator
 import com.appname.notes.core.common.logging.AppLogger
 import com.appname.notes.core.common.time.AppClock
 import com.appname.notes.core.database.NotesDatabase
+import com.appname.notes.core.database.RoomAttachmentRepository
 import com.appname.notes.core.database.RoomInkRepository
 import com.appname.notes.core.database.RoomNoteRepository
 import com.appname.notes.core.database.RoomPdfRepository
 import com.appname.notes.core.database.RoomNotebookRepository
 import com.appname.notes.core.database.RoomTagRepository
+import com.appname.notes.core.domain.repository.AttachmentRepository
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
@@ -76,4 +78,9 @@ object DataModule {
     @Singleton
     fun providePdfRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): PdfRepository =
         RoomPdfRepository(db, clock, ids, logger)
+
+    @Provides
+    @Singleton
+    fun provideAttachmentRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): AttachmentRepository =
+        RoomAttachmentRepository(db, clock, ids, logger)
 }

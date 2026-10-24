@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Only the share folder in the cache is ever exposed; imported PDFs and the database are not. -->
+<!--
+    What the FileProvider may hand to another app, always one file at a time with a read grant:
+    shared annotated PDFs, attachments the user opens or shares, and the camera's photo before it is attached.
+    Imported PDFs and the database are never exposed.
+-->
 <paths>
     <cache-path name="shared" path="shared/" />
+    <cache-path name="camera" path="camera/" />
+    <files-path name="attachments" path="attachments/" />
 </paths>

@@ -2,7 +2,11 @@ package com.appname.notes.feature.library
 
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
+import com.appname.notes.core.domain.model.AttachmentKind
+import com.appname.notes.feature.attachments.AttachmentPreviews
+import com.appname.notes.feature.attachments.StorageCleanup
 import com.appname.notes.feature.pdf.PdfImport
 import com.appname.notes.feature.pdf.PdfImporter
 import com.appname.notes.feature.pdf.PdfThumbnails
@@ -71,6 +75,8 @@ class LibraryViewModel @Inject constructor(
     private val savedState: SavedStateHandle,
     private val pdfImporter: PdfImporter,
     private val pdfThumbnails: PdfThumbnails,
+    private val storageCleanup: StorageCleanup,
+    private val attachmentPreviews: AttachmentPreviews,
 ) : ViewModel() {
 
     // The chosen collection survives rotation and process death via SavedStateHandle.
@@ -134,6 +140,9 @@ class LibraryViewModel @Inject constructor(
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, InkThumbnail>?) = size > THUMBNAIL_CACHE
     }
 
+    /** Cover photo for a text note's card (its first attached image), decoded at card size and cached. */
+    suspend fun cover(fileName: String): Bitmap? = attachmentPreviews.load(fileName, AttachmentKind.IMAGE, COVER_PX)
+
     suspend fun inkThumbnail(note: NoteSummary): InkThumbnail? {
         val key = "${note.id.value}@${note.updatedAt.toEpochMilli()}"
         synchronized(thumbnails) { thumbnails[key] }?.let { return it }
@@ -186,9 +195,9 @@ class LibraryViewModel @Inject constructor(
         launchAction(UserMessage(R.string.msg_trash_emptied)) { notes.emptyTrash().also { cleanUpPdfFiles() } }
     }
 
-    /** Deleted PDF notes leave their file behind (duplicates may share it); remove files nothing uses now. */
+    /** Deleted notes leave their PDF/attachment files behind (copies may share them); remove what nothing uses. */
     private suspend fun cleanUpPdfFiles() {
-        pdfImporter.cleanUp()
+        storageCleanup.run()
     }
 
     private val _importingPdf = MutableStateFlow(false)
@@ -257,6 +266,7 @@ class LibraryViewModel @Inject constructor(
     companion object {
         private const val KEY_COLLECTION = "collection"
         private const val THUMBNAIL_CACHE = 60
+        private const val COVER_PX = 480
 
         fun encode(c: NoteCollection): String = when (c) {
             NoteCollection.All -> "all"

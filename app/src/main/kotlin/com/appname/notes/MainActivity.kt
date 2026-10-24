@@ -60,22 +60,24 @@ class MainActivity : ComponentActivity() {
             AppTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 // Exposes test tags as resource ids so UiAutomator tests (which run in another process,
                 // e.g. the process-death tests in :e2e) can find screens and fields.
-                val sharedPdf by viewModel.sharedPdf.collectAsStateWithLifecycle()
+                val shared by viewModel.shared.collectAsStateWithLifecycle()
                 val context = LocalContext.current
-                LaunchedEffect(sharedPdf) {
-                    when (val s = sharedPdf) {
-                        SharedPdf.Importing -> Toast.makeText(context, R.string.pdf_importing, Toast.LENGTH_SHORT).show()
-                        is SharedPdf.Failed -> {
+                LaunchedEffect(shared) {
+                    when (val s = shared) {
+                        is SharedImport.Importing -> Toast.makeText(context, s.message, Toast.LENGTH_SHORT).show()
+                        is SharedImport.Failed -> {
                             Toast.makeText(context, s.message, Toast.LENGTH_LONG).show()
-                            viewModel.sharedPdfHandled()
+                            viewModel.sharedHandled()
                         }
-                        is SharedPdf.Opened, null -> Unit
+                        is SharedImport.Opened -> s.notice?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                        null -> Unit
                     }
                 }
+                val opened = shared as? SharedImport.Opened
                 NotesApp(
                     Modifier.semantics { testTagsAsResourceId = true },
-                    openNoteRequest = (sharedPdf as? SharedPdf.Opened)?.noteId,
-                    onOpenNoteRequestHandled = viewModel::sharedPdfHandled,
+                    openNoteRequest = opened?.let { it.noteId to it.type },
+                    onOpenNoteRequestHandled = viewModel::sharedHandled,
                 )
             }
         }
@@ -86,16 +88,21 @@ class MainActivity : ComponentActivity() {
         handleIncoming(intent)
     }
 
-    /** "Open with" (VIEW) or "Share" (SEND) of a PDF from another app: import it as a new note (SRS 7.1). */
+    /**
+     * Content from another app:
+     * - "Open with" (VIEW) or "Share" (SEND) of a PDF → a new PDF note (SRS 7.1);
+     * - "Share" of one or more photos (SEND / SEND_MULTIPLE) → a new note with them attached (FR-009).
+     */
     private fun handleIncoming(intent: Intent?) {
-        val uri = when (intent?.action) {
-            Intent.ACTION_VIEW -> intent.data
-            Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-            else -> null
-        } ?: return
-        // Only content the sender granted us; file:// paths can't be read on current Android anyway.
-        if (uri.scheme != ContentResolver.SCHEME_CONTENT) return
-        viewModel.importShared(uri)
+        val uris: List<Uri> = when (intent?.action) {
+            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
+            Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
+            Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+            else -> emptyList()
+        }.filter { it.scheme == ContentResolver.SCHEME_CONTENT } // only content the sender granted us
+        if (uris.isEmpty()) return
+        val type = intent?.type.orEmpty()
+        if (type.startsWith("image/")) viewModel.importSharedImages(uris) else viewModel.importSharedPdf(uris.first())
     }
 
     private companion object {

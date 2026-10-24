@@ -1,5 +1,18 @@
 package com.appname.notes.feature.editor
 
+import android.content.ActivityNotFoundException
+import android.content.pm.PackageManager
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.InsertDriveFile
+import com.appname.notes.core.domain.model.Attachment
+import com.appname.notes.core.domain.model.AttachmentKind
+import com.appname.notes.feature.attachments.AttachmentActions
+import com.appname.notes.feature.attachments.AttachmentStrip
+import com.appname.notes.feature.attachments.AttachmentTestTags
+import com.appname.notes.feature.attachments.ImageViewer
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -118,6 +131,8 @@ fun NoteEditorRoute(
     onClose: () -> Unit,
     onOpenNote: (NoteId) -> Unit,
     showBack: Boolean = true,
+    /** Opens a PDF note (an attached PDF the user chose to write on). */
+    onOpenPdfNote: (NoteId) -> Unit = {},
 ) {
     val load by viewModel.load.collectAsStateWithLifecycle()
     val readOnly by viewModel.readOnly.collectAsStateWithLifecycle()
@@ -139,6 +154,54 @@ fun NoteEditorRoute(
     var showTags by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf<ExportResult?>(null) }
+    val attachments by viewModel.attachments.collectAsStateWithLifecycle()
+    val attaching by viewModel.attaching.collectAsStateWithLifecycle()
+    var viewing by remember { mutableStateOf<Attachment?>(null) }
+    // Where the camera app writes the photo; saved because the camera may outlive our process.
+    var cameraPath by rememberSaveable { mutableStateOf<String?>(null) }
+    // System pickers: they grant access to exactly the chosen items, so no storage/photo permission is needed.
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PICK)) { viewModel.attach(it) }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { viewModel.attach(it) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val path = cameraPath
+        cameraPath = null
+        if (path != null) viewModel.attachCameraPhoto(path, taken)
+    }
+    val intents = viewModel.attachmentIntents
+    val shareTitle = stringResource(R.string.attach_share)
+    val editable = readOnly == null && load is EditorLoad.Ready
+    val attachmentActions = AttachmentActions(
+        open = { a ->
+            if (a.kind == AttachmentKind.IMAGE) {
+                viewing = a
+            } else if (!intents.start(context, intents.viewIntent(a))) {
+                viewModel.noAppToOpen()
+            }
+        },
+        openWith = { a -> if (!intents.start(context, Intent.createChooser(intents.viewIntent(a), null))) viewModel.noAppToOpen() },
+        share = { a -> intents.start(context, intents.shareIntent(a, shareTitle)) },
+        remove = if (editable) viewModel::removeAttachment else null,
+        annotate = { a -> scope.launch { viewModel.annotatePdf(a)?.let(onOpenPdfNote) } },
+    )
+    val hasCamera = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
+    val attachMenu = AttachMenu(
+        photos = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        camera = if (hasCamera) {
+            {
+                val (file, uri) = intents.newCameraFile()
+                cameraPath = file.path
+                try {
+                    camera.launch(uri)
+                } catch (e: ActivityNotFoundException) {
+                    cameraPath = null
+                    viewModel.cameraUnavailable()
+                }
+            }
+        } else {
+            null
+        },
+        files = { filePicker.launch(arrayOf("*/*")) },
+    )
     var exportWarning by remember { mutableStateOf<ExportResult?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
@@ -184,7 +247,20 @@ fun NoteEditorRoute(
         showBack = showBack,
         onBack = onClose,
         actions = actions,
+        attachMenu = if (editable) attachMenu else null,
+        attachments = {
+            AttachmentStrip(attachments, attaching, viewModel.previews, attachmentActions)
+        },
     )
+
+    viewing?.let { a ->
+        // Closed if the photo is removed elsewhere (or by Undo racing): never show a stale item.
+        if (attachments.none { it.id == a.id }) {
+            viewing = null
+        } else {
+            ImageViewer(a, viewModel.previews, attachmentActions, onDismiss = { viewing = null })
+        }
+    }
 
     if (showMove) {
         MoveToNotebookSheet(notebooks, meta?.notebookId, onPick = viewModel::moveToNotebook, onDismiss = { showMove = false })
@@ -217,6 +293,7 @@ fun NoteEditorRoute(
                         when (it) {
                             LostFeature.UNDERLINE -> resources.getString(R.string.export_lost_underline)
                             LostFeature.UNSUPPORTED_CONTENT -> resources.getString(R.string.export_lost_unsupported)
+                            LostFeature.ATTACHMENTS -> resources.getString(R.string.export_lost_attachments)
                         }
                     },
                 )
@@ -252,6 +329,10 @@ fun NoteEditorScreen(
     showBack: Boolean,
     onBack: () -> Unit,
     actions: EditorMenuActions,
+    /** Null when attaching isn't possible (read-only note). */
+    attachMenu: AttachMenu? = null,
+    /** Shown between the title and the text. */
+    attachments: @Composable () -> Unit = {},
 ) {
     val controller = (load as? EditorLoad.Ready)?.controller
     Scaffold(
@@ -277,6 +358,7 @@ fun NoteEditorScreen(
                             Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo))
                         }
                     }
+                    attachMenu?.let { AttachButton(it) }
                     if (meta != null && !meta.inTrash) {
                         IconButton(onClick = actions.onPin) {
                             Icon(
@@ -303,7 +385,7 @@ fun NoteEditorScreen(
                     body = "",
                     modifier = Modifier.align(Alignment.Center),
                 )
-                is EditorLoad.Ready -> EditorContent(load.controller, readOnly, actions)
+                is EditorLoad.Ready -> EditorContent(load.controller, readOnly, actions, attachments)
             }
         }
     }
@@ -329,7 +411,12 @@ internal fun SaveStatusLabel(status: SaveStatus) {
 }
 
 @Composable
-private fun EditorContent(controller: EditorController, readOnly: ReadOnlyReason?, actions: EditorMenuActions) {
+private fun EditorContent(
+    controller: EditorController,
+    readOnly: ReadOnlyReason?,
+    actions: EditorMenuActions,
+    attachments: @Composable () -> Unit,
+) {
     val spacing = AppTheme.spacing
     val bodyFocus = remember { FocusRequester() }
     val styles = EditorStyles.fromTheme()
@@ -389,6 +476,8 @@ private fun EditorContent(controller: EditorController, readOnly: ReadOnlyReason
                 }
             },
         )
+
+        attachments()
 
         val bodyHint = stringResource(R.string.editor_body_hint)
         BasicTextField(
@@ -507,3 +596,37 @@ private fun EditorOverflowMenu(meta: NoteMeta, actions: EditorMenuActions) {
         }
     }
 }
+
+/** The three ways to add an attachment (FR-009). [camera] is null on devices without a camera. */
+data class AttachMenu(val photos: () -> Unit, val camera: (() -> Unit)?, val files: () -> Unit)
+
+@Composable
+private fun AttachButton(menu: AttachMenu) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }, modifier = Modifier.testTag(AttachmentTestTags.ATTACH_BUTTON)) {
+            Icon(Icons.Outlined.AttachFile, stringResource(R.string.attach_menu))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.attach_photos)) },
+                leadingIcon = { Icon(Icons.Outlined.Image, null) },
+                onClick = { open = false; menu.photos() },
+            )
+            menu.camera?.let { camera ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.attach_camera)) },
+                    leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) },
+                    onClick = { open = false; camera() },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.attach_files)) },
+                leadingIcon = { Icon(Icons.Outlined.InsertDriveFile, null) },
+                onClick = { open = false; menu.files() },
+            )
+        }
+    }
+}
+
+private const val MAX_PICK = 20

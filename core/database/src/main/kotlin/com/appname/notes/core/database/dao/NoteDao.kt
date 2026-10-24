@@ -32,7 +32,10 @@ abstract class NoteDao {
         """
         SELECT n.id, n.title, n.preview, n.noteType, n.notebookId,
                nb.title AS notebookTitle, n.isPinned, n.isFavourite, n.isArchived, n.trashedAt,
-               n.createdAt, n.updatedAt
+               n.createdAt, n.updatedAt,
+               (SELECT COUNT(*) FROM attachments a WHERE a.noteId = n.id) AS attachmentCount,
+               (SELECT a.fileName FROM attachments a WHERE a.noteId = n.id AND a.kind = 'IMAGE'
+                ORDER BY a.position LIMIT 1) AS coverImage
         FROM notes n
         LEFT JOIN notebooks nb ON nb.id = n.notebookId AND nb.deletedAt IS NULL
         WHERE n.deletedAt IS NULL
@@ -127,6 +130,10 @@ abstract class NoteDao {
     @Query("DELETE FROM pdf_documents WHERE noteId IN (:ids)")
     protected abstract suspend fun deletePdfDocuments(ids: List<String>)
 
+    /** Attachment files themselves are removed afterwards by the app once nothing references them. */
+    @Query("DELETE FROM attachments WHERE noteId IN (:ids)")
+    protected abstract suspend fun deleteAttachments(ids: List<String>)
+
     /** Permanent delete: content and handwriting removed, tags unlinked, tombstone kept (SRS 9.2). */
     @Transaction
     open suspend fun deletePermanently(ids: List<String>, now: Long): Int {
@@ -137,6 +144,7 @@ abstract class NoteDao {
             deleteInkItems(chunk)
             deleteInkPages(chunk)
             deletePdfDocuments(chunk)
+            deleteAttachments(chunk)
             count += tombstone(chunk, now)
         }
         return count
@@ -149,6 +157,7 @@ abstract class NoteDao {
         deleteInkItems(listOf(id))
         deleteInkPages(listOf(id))
         deletePdfDocuments(listOf(id))
+        deleteAttachments(listOf(id))
         hardDelete(id)
     }
 
@@ -181,6 +190,9 @@ abstract class NoteDao {
         SELECT n.id, n.title, n.preview, n.noteType, n.notebookId,
                nb.title AS notebookTitle, n.isPinned, n.isFavourite, n.isArchived, n.trashedAt,
                n.createdAt, n.updatedAt,
+               (SELECT COUNT(*) FROM attachments a WHERE a.noteId = n.id) AS attachmentCount,
+               (SELECT a.fileName FROM attachments a WHERE a.noteId = n.id AND a.kind = 'IMAGE'
+                ORDER BY a.position LIMIT 1) AS coverImage,
                snippet(notes_fts, char(2), char(3), '…', -1, 12) AS snippet
         FROM notes_fts
         JOIN notes n ON n.rowid = notes_fts.rowid
