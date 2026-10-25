@@ -105,8 +105,22 @@ internal object InkPaths {
     fun drawItem(canvas: Canvas, item: InkItem, paint: Paint = InkPaints.inkPaint(item.brush), styled: StyledInk? = null) {
         when (item) {
             is StrokeItem -> if (item.brush.usesJetpack) drawStroke(canvas, item, paint) else (styled ?: StyledInk(cache = false)).draw(canvas, item)
-            is ShapeItem -> canvas.drawPath(shape(item.geometry), paint)
+            is ShapeItem -> {
+                val path = shape(item.geometry)
+                drawFill(canvas, item, path)
+                canvas.drawPath(path, paint)
+            }
         }
+    }
+
+    private val fillPaint = ThreadLocal.withInitial { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL } }
+
+    /** A filled shape's inside, under its outline (owner brief §14–15). */
+    fun drawFill(canvas: Canvas, item: ShapeItem, path: Path) {
+        val fill = item.fill ?: return
+        val p = fillPaint.get()!!
+        p.color = fill
+        canvas.drawPath(path, p)
     }
 }
 
@@ -255,6 +269,7 @@ internal class InkRenderer {
             is ShapeItem -> {
                 val cached = shapeCache[item.id]
                 val path = if (cached != null && cached.first === item) cached.second else InkPaths.shape(item.geometry).also { shapeCache[item.id] = item to it }
+                InkPaths.drawFill(canvas, item, path)
                 paintFor(item.brush)
                 canvas.drawPath(path, itemPaint)
             }

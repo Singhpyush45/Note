@@ -660,4 +660,17 @@
         <item quantity="one">%d folder</item>
         <item quantity="other">%d folders</item>
     </plurals>
+    <!-- Phase 7d: shapes and arranging -->
+    <string name="ink_tool_shape">Shapes</string>
+    <string name="shape_fill">Fill</string>
+    <string name="shape_line">Line</string>
+    <string name="shape_arrow">Arrow</string>
+    <string name="shape_rectangle">Rectangle</string>
+    <string name="shape_square">Square</string>
+    <string name="shape_ellipse">Ellipse</string>
+    <string name="shape_circle">Circle</string>
+    <string name="shape_triangle">Triangle</string>
+    <string name="ink_selection_rotate">Rotate 90°</string>
+    <string name="ink_selection_front">Bring to front</string>
+    <string name="ink_selection_back">Send to back</string>
 </resources>

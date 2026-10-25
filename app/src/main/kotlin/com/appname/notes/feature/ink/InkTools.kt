@@ -1,5 +1,12 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.material.icons.outlined.Rotate90DegreesCw
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.FlipToFront
+import androidx.compose.material.icons.outlined.Category
+import com.appname.notes.core.ink.input.ShapeTool
+import com.appname.notes.core.settings.ShapeSettings
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -97,6 +104,11 @@ object InkToolTags {
     fun recent(i: Int) = "ink_recent_$i"
     fun color(argb: Int) = "ink_color_${Integer.toHexString(argb and 0xFFFFFF)}"
     const val LASER_RAINBOW = "ink_laser_rainbow"
+    const val SHAPE_FILL = "ink_shape_fill"
+    const val ROTATE = "ink_selection_rotate"
+    const val FRONT = "ink_selection_front"
+    const val BACK = "ink_selection_back"
+    fun shape(k: com.appname.notes.core.ink.model.ShapeKind) = "ink_shape_${k.name.lowercase()}"
     fun laserStyle(s: LaserStyle) = "ink_laser_${s.name.lowercase()}"
 }
 
@@ -117,11 +129,15 @@ data class InkToolActions(
     val onRecolorSelection: (Int) -> Unit,
     val onDoneSelection: () -> Unit,
     val onLaser: (LaserSettings) -> Unit,
+    val onShape: (ShapeSettings) -> Unit = {},
+    val onFront: () -> Unit = {},
+    val onBack: () -> Unit = {},
+    val onRotate: () -> Unit = {},
 )
 
 /** The tools in the bar, in order (owner brief §13). Only tools that work are shown. */
 private val BarTools = listOf(
-    EditorTool.PEN, EditorTool.MARKER, EditorTool.PENCIL, EditorTool.BRUSH, EditorTool.HIGHLIGHTER, EditorTool.ERASER, EditorTool.LASSO, EditorTool.LASER,
+    EditorTool.PEN, EditorTool.MARKER, EditorTool.PENCIL, EditorTool.BRUSH, EditorTool.HIGHLIGHTER, EditorTool.SHAPE, EditorTool.ERASER, EditorTool.LASSO, EditorTool.LASER,
 )
 
 /** Laser widths in dp: thin, medium, bold. */
@@ -163,6 +179,7 @@ fun InkToolbar(
                 BarTools.forEach { tool ->
                     val mark: Brush? = when {
                         tool == EditorTool.LASER -> if (ui.laser.rainbow) RainbowBrush else SolidColor(Color(ui.laser.colorArgb or OPAQUE))
+                        tool == EditorTool.SHAPE -> SolidColor(Color(tools.shapeColor or OPAQUE))
                         else -> tools.brushFor(tool)?.let { SolidColor(Color(it.colorArgb or OPAQUE)) }
                     }
                     ToolButton(
@@ -220,10 +237,14 @@ fun InkToolbar(
                         }
                     }
                     tools.tool == EditorTool.LASER -> LaserControls(ui.laser, actions)
+                    tools.tool == EditorTool.SHAPE -> ShapeControls(ui.shapeSettings, ui.recentColors, actions)
                     tools.tool == EditorTool.LASSO -> if (ui.hasSelection) {
                         IconButton(onClick = actions.onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
                         IconButton(onClick = actions.onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
                         IconButton(onClick = actions.onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }
+                        IconButton(onClick = actions.onRotate, modifier = Modifier.testTag(InkToolTags.ROTATE)) { Icon(Icons.Outlined.Rotate90DegreesCw, stringResource(R.string.ink_selection_rotate)) }
+                        IconButton(onClick = actions.onFront, modifier = Modifier.testTag(InkToolTags.FRONT)) { Icon(Icons.Outlined.FlipToFront, stringResource(R.string.ink_selection_front)) }
+                        IconButton(onClick = actions.onBack, modifier = Modifier.testTag(InkToolTags.BACK)) { Icon(Icons.Outlined.FlipToBack, stringResource(R.string.ink_selection_back)) }
                         Spacer(Modifier.width(8.dp))
                         QuickColors.forEach { c -> ColorDot(c, selected = false, onClick = { actions.onRecolorSelection(c) }) }
                     }
@@ -438,6 +459,74 @@ private fun VariantChip(style: BrushStyle, open: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** Shape tool options (owner brief §15): which shape, fill on/off, outline width, colour. */
+@Composable
+private fun ShapeControls(shape: ShapeSettings, recent: List<Int>, actions: InkToolActions) {
+    ShapeTool.KINDS.forEach { kind ->
+        val label = stringResource(kind.label())
+        val selected = shape.kind == kind
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .then(if (selected) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier)
+                .clickable(role = Role.RadioButton) { actions.onShape(shape.copy(kind = kind)) }
+                .semantics {
+                    contentDescription = label
+                    this.selected = selected
+                }
+                .testTag(InkToolTags.shape(kind)),
+            contentAlignment = Alignment.Center,
+        ) { ShapeGlyph(kind, MaterialTheme.colorScheme.onSurface) }
+    }
+    Spacer(Modifier.width(4.dp))
+    val filled = shape.fillArgb != null
+    FilterChip(
+        selected = filled,
+        onClick = { actions.onShape(shape.copy(fillArgb = if (filled) null else fillOf(shape.colorArgb))) },
+        label = { Text(stringResource(R.string.shape_fill)) },
+        modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.SHAPE_FILL),
+    )
+    Spacer(Modifier.width(4.dp))
+    ShapeSizes.forEachIndexed { i, w ->
+        SizeDot(w / ShapeSizes.last(), SizeNames[i], selected = shape.size == w, onClick = { actions.onShape(shape.copy(size = w)) })
+    }
+    Spacer(Modifier.width(4.dp))
+    (recent + QuickColors).map { it or OPAQUE }.distinct().take(QUICK_COLOURS).forEach { c ->
+        ColorDot(c, selected = (shape.colorArgb and 0xFFFFFF) == (c and 0xFFFFFF), onClick = { actions.onShape(shape.withColor(c)) })
+    }
+    MoreColorsButton(actions.onMoreColors)
+}
+
+/** A new outline colour; a fill follows it (same colour, see-through). */
+internal fun ShapeSettings.withColor(c: Int) = copy(colorArgb = c or OPAQUE, fillArgb = fillArgb?.let { fillOf(c) })
+
+private fun fillOf(c: Int) = (FILL_ALPHA shl 24) or (c and 0xFFFFFF)
+
+/** The shape drawn small, as the button's picture. */
+@Composable
+private fun ShapeGlyph(kind: com.appname.notes.core.ink.model.ShapeKind, color: Color) {
+    Canvas(Modifier.size(22.dp)) {
+        val g = ShapeTool.geometry(
+            kind,
+            com.appname.notes.core.ink.geometry.Vec(size.width * 0.12, size.height * 0.2),
+            com.appname.notes.core.ink.geometry.Vec(size.width * 0.88, size.height * 0.8),
+            size.width / 12,
+        )
+        val path = InkPaths.shape(g)
+        drawIntoCanvas { c ->
+            val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = size.width / 12
+                strokeCap = android.graphics.Paint.Cap.ROUND
+                strokeJoin = android.graphics.Paint.Join.ROUND
+                this.color = color.toArgb()
+            }
+            c.nativeCanvas.drawPath(path, p)
+        }
+    }
+}
+
 /** Laser pointer options (owner brief §17): look, rainbow ("RGB") or one colour, and width. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -565,6 +654,7 @@ private fun EditorTool.icon(): ImageVector = when (this) {
     EditorTool.ERASER -> InkIcons.Eraser
     EditorTool.LASSO -> InkIcons.Lasso
     EditorTool.LASER -> InkIcons.Laser
+    EditorTool.SHAPE -> Icons.Outlined.Category
 }
 
 @StringRes
@@ -577,6 +667,18 @@ private fun EditorTool.label(): Int = when (this) {
     EditorTool.ERASER -> R.string.ink_tool_eraser
     EditorTool.LASSO -> R.string.ink_tool_lasso
     EditorTool.LASER -> R.string.ink_tool_laser
+    EditorTool.SHAPE -> R.string.ink_tool_shape
+}
+
+@StringRes
+private fun com.appname.notes.core.ink.model.ShapeKind.label(): Int = when (this) {
+    com.appname.notes.core.ink.model.ShapeKind.LINE -> R.string.shape_line
+    com.appname.notes.core.ink.model.ShapeKind.ARROW -> R.string.shape_arrow
+    com.appname.notes.core.ink.model.ShapeKind.RECTANGLE -> R.string.shape_rectangle
+    com.appname.notes.core.ink.model.ShapeKind.SQUARE -> R.string.shape_square
+    com.appname.notes.core.ink.model.ShapeKind.ELLIPSE -> R.string.shape_ellipse
+    com.appname.notes.core.ink.model.ShapeKind.CIRCLE -> R.string.shape_circle
+    com.appname.notes.core.ink.model.ShapeKind.TRIANGLE -> R.string.shape_triangle
 }
 
 @StringRes
@@ -650,5 +752,7 @@ private const val QUICK_COLOURS = 10
 private const val PREVIEW_W = 180f
 private const val PREVIEW_H = 44f
 internal const val HIGHLIGHTER_MAX_OPACITY = 0.7f
+private const val FILL_ALPHA = 0x40
+private val ShapeSizes = listOf(1.5f, 2.5f, 5f)
 private const val PANEL_ALPHA = 0.97f
 private val TILE_HEIGHT = 96.dp

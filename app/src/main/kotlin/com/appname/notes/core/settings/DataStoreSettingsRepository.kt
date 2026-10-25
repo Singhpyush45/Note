@@ -116,6 +116,11 @@ class DataStoreSettingsRepository @Inject constructor(
         prefs[Keys.LASER_RAINBOW] = new.laser.rainbow
         prefs[Keys.LASER_COLOR] = new.laser.colorArgb
         prefs[Keys.LASER_WIDTH] = new.laser.widthDp
+        prefs[Keys.SHAPE_KIND] = new.shape.kind.code
+        prefs[Keys.SHAPE_COLOR] = new.shape.colorArgb
+        prefs[Keys.SHAPE_SIZE] = new.shape.size
+        prefs[Keys.SHAPE_FILLED] = new.shape.fillArgb != null
+        new.shape.fillArgb?.let { prefs[Keys.SHAPE_FILL] = it }
     }
 
     private fun Preferences.toInk(): InkSettings {
@@ -135,6 +140,12 @@ class DataStoreSettingsRepository @Inject constructor(
                 rainbow = this[Keys.LASER_RAINBOW] ?: false,
                 colorArgb = this[Keys.LASER_COLOR] ?: LaserSettings().colorArgb,
                 widthDp = this[Keys.LASER_WIDTH]?.takeIf { it.isFinite() && it in 1f..40f } ?: LaserSettings().widthDp,
+            ),
+            shape = ShapeSettings(
+                kind = this[Keys.SHAPE_KIND]?.let { com.appname.notes.core.ink.model.ShapeKind.fromCode(it) } ?: ShapeSettings().kind,
+                colorArgb = this[Keys.SHAPE_COLOR] ?: ShapeSettings().colorArgb,
+                size = this[Keys.SHAPE_SIZE]?.takeIf { it.isFinite() && it in 0.5f..40f } ?: ShapeSettings().size,
+                fillArgb = if (this[Keys.SHAPE_FILLED] == true) this[Keys.SHAPE_FILL] else null,
             ),
             brushes = defaults.brushes.mapValues { (tool, default) ->
                 val size = this[sizeKey(tool)]?.takeIf { it.isFinite() && it > 0f } ?: default.size
@@ -236,6 +247,11 @@ class DataStoreSettingsRepository @Inject constructor(
         val LASER_RAINBOW = booleanPreferencesKey("laser_rainbow")
         val LASER_COLOR = intPreferencesKey("laser_color")
         val LASER_WIDTH = floatPreferencesKey("laser_width")
+        val SHAPE_KIND = intPreferencesKey("shape_kind")
+        val SHAPE_COLOR = intPreferencesKey("shape_color")
+        val SHAPE_SIZE = floatPreferencesKey("shape_size")
+        val SHAPE_FILLED = booleanPreferencesKey("shape_filled")
+        val SHAPE_FILL = intPreferencesKey("shape_fill")
     }
 
     private companion object {

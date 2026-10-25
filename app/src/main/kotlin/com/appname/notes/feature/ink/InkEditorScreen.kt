@@ -157,6 +157,10 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onRecolorSelection = viewModel::recolorSelection,
             onDoneSelection = viewModel::clearSelection,
             onLaser = viewModel::setLaser,
+            onShape = viewModel::setShape,
+            onFront = viewModel::bringSelectionToFront,
+            onBack = viewModel::sendSelectionToBack,
+            onRotate = viewModel::rotateSelection,
         )
     }
     val context = LocalContext.current
@@ -312,13 +316,22 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     }
     if (colorPicker && ready != null) {
         val laserColor = ui.tools.tool == EditorTool.LASER
-        val current = if (laserColor) ui.laser.colorArgb else ui.tools.tool.inkTool?.let { ui.tools.brushes[it]?.colorArgb } ?: 0xFF000000.toInt()
+        val shapeColor = ui.tools.tool == EditorTool.SHAPE
+        val current = when {
+            laserColor -> ui.laser.colorArgb
+            shapeColor -> ui.tools.shapeColor
+            else -> ui.tools.tool.inkTool?.let { ui.tools.brushes[it]?.colorArgb } ?: 0xFF000000.toInt()
+        }
         ColorPickerDialog(
             initial = current,
             recent = ui.recentColors,
             saved = ui.savedColors,
             onPick = { c ->
-                if (laserColor) viewModel.setLaser(ui.laser.copy(colorArgb = c, rainbow = false)) else viewModel.setColor(c)
+                when {
+                    laserColor -> viewModel.setLaser(ui.laser.copy(colorArgb = c, rainbow = false))
+                    shapeColor -> viewModel.setShape(ui.shapeSettings.withColor(c))
+                    else -> viewModel.setColor(c)
+                }
                 colorPicker = false
             },
             onSave = viewModel::saveColor,

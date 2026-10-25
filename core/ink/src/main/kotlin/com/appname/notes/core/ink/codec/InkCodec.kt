@@ -47,7 +47,9 @@ sealed interface DecodeResult {
  * Varint = 7 bits per byte, high bit means "more bytes" (like protobuf). Zig-zag maps signed to unsigned
  * so small negative deltas stay small: 0→0, −1→1, 1→2, −2→3 …
  *
- * Format 2 is written only when it is needed (a pencil, brush, non-classic variant or pressure off), so ink
+ * Format 2 flags: bit0 pressure off, bit1 a fill colour follows (i32 ARGB, shapes only).
+ *
+ * Format 2 is written only when it is needed (a pencil, brush, non-classic variant, pressure off or a filled shape), so ink
  * drawn with the original tools stays readable by older app versions. An older version that meets format 2
  * opens the page read-only instead of losing anything.
  *
@@ -59,6 +61,8 @@ object InkCodec {
     const val FORMAT_VERSION = 2
 
     private const val FLAG_NO_PRESSURE = 1
+    private const val FLAG_FILL = 2
+    private const val KNOWN_FLAGS = FLAG_NO_PRESSURE or FLAG_FILL
 
     private const val TYPE_STROKE = 1
     private const val TYPE_SHAPE = 2
@@ -103,6 +107,8 @@ object InkCodec {
     /** Whether [b] needs format 2 (see the format description). */
     private fun needsV2(b: InkBrush): Boolean = !b.tool.isOriginal || !b.pressure || (b.style != null && b.style != BrushStyle.classic(b.tool))
 
+    private fun needsV2(item: InkItem): Boolean = needsV2(item.brush) || (item is ShapeItem && item.fill != null)
+
     private fun wrap(a: Float): Float {
         val twoPi = (2 * PI).toFloat()
         val r = a % twoPi
@@ -114,7 +120,8 @@ object InkCodec {
     fun encode(item: InkItem): ByteArray {
         val w = Writer()
         val b = item.brush
-        val v2 = needsV2(b)
+        val v2 = needsV2(item)
+        val fill = (item as? ShapeItem)?.fill
         w.u8(if (v2) 2 else 1)
         w.u8(if (item is StrokeItem) TYPE_STROKE else TYPE_SHAPE)
         w.u8(b.tool.code)
@@ -122,7 +129,8 @@ object InkCodec {
         w.f32(b.size)
         if (v2) {
             w.u8(b.effectiveStyle.code)
-            w.u8(if (b.pressure) 0 else FLAG_NO_PRESSURE)
+            w.u8((if (b.pressure) 0 else FLAG_NO_PRESSURE) or (if (fill != null) FLAG_FILL else 0))
+            if (fill != null) w.i32(fill)
         }
         when (item) {
             is StrokeItem -> writePoints(w, item.points)
@@ -188,12 +196,14 @@ object InkCodec {
             val tool = InkTool.fromCode(toolCode)
             val color = r.i32()
             val size = r.f32()
+            var fill: Int? = null
             val brush = if (version >= 2) {
                 val styleCode = r.u8()
                 val flags = r.u8()
+                if (flags and FLAG_FILL != 0) fill = r.i32()
                 // A variant or flag this version doesn't know comes from a newer app: read-only, never overwritten.
                 val style = BrushStyle.fromCode(styleCode)
-                if (tool == null || style == null || style.tool != tool || flags and FLAG_NO_PRESSURE.inv() != 0) {
+                if (tool == null || style == null || style.tool != tool || flags and KNOWN_FLAGS.inv() != 0) {
                     return DecodeResult.NewerVersion(version)
                 }
                 InkBrush(tool, color, size, style, pressure = flags and FLAG_NO_PRESSURE == 0).normalized()
@@ -215,7 +225,7 @@ object InkCodec {
                         else -> return DecodeResult.Corrupt("unknown geometry")
                     }
                     val source = if (r.u8() == 1) readPoints(r) else null
-                    ShapeItem(id, z, brush, kind, geometry, source)
+                    ShapeItem(id, z, brush, kind, geometry, source, fill)
                 }
                 else -> return DecodeResult.Corrupt("unknown item type")
             }

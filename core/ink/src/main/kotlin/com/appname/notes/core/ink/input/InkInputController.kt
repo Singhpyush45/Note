@@ -1,5 +1,6 @@
 package com.appname.notes.core.ink.input
 
+import com.appname.notes.core.ink.model.ShapeKind
 import com.appname.notes.core.ink.codec.InkCodec
 import com.appname.notes.core.ink.edit.Eraser
 import com.appname.notes.core.ink.edit.InkEdit
@@ -29,6 +30,9 @@ enum class EditorTool {
 
     /** A pointer for presenting (owner brief §17): a fading trail on screen, never saved. The canvas draws it. */
     LASER,
+
+    /** Draws a chosen shape by dragging (owner brief §15). */
+    SHAPE,
     ;
 
     /** The ink this tool draws with, or null for tools that don't draw (eraser, lasso, laser). */
@@ -39,7 +43,7 @@ enum class EditorTool {
             HIGHLIGHTER -> InkTool.HIGHLIGHTER
             PENCIL -> InkTool.PENCIL
             BRUSH -> InkTool.BRUSH
-            ERASER, LASSO, LASER -> null
+            ERASER, LASSO, LASER, SHAPE -> null
         }
 
     companion object {
@@ -80,7 +84,15 @@ data class InkToolState(
     val eraserSizeDp: Double = 16.0,
     val shapeCorrection: Boolean = true,
     val holdMillis: Long = HoldDetector.DEFAULT_HOLD_MILLIS,
+    /** The shape tool: which shape, its outline colour and width, and its fill (null = none). */
+    val shapeKind: ShapeKind = ShapeKind.RECTANGLE,
+    val shapeColor: Int = 0xFF1F1F1F.toInt(),
+    val shapeSize: Float = 2.5f,
+    val shapeFill: Int? = null,
 ) {
+    /** The outline of shapes drawn with the shape tool: a plain pen line. */
+    val shapeBrush: InkBrush get() = InkBrush(InkTool.PEN, shapeColor, shapeSize)
+
     fun brushFor(tool: EditorTool): InkBrush? = tool.inkTool?.let { brushes[it] ?: DefaultBrushes.getValue(it) }
 }
 
@@ -190,6 +202,8 @@ class InkInputController(
         class LassoDraw(override val pageId: String) : Gesture
         class MoveSelection(override val pageId: String, val start: Vec) : Gesture
 
+        class ShapeDraw(override val pageId: String, val start: Vec) : Gesture
+
         /** Dragging the corner handle: scales around the opposite (top-left) corner. */
         class ResizeSelection(override val pageId: String, val anchor: Vec, val startDistance: Double) : Gesture
     }
@@ -233,6 +247,12 @@ class InkInputController(
                 Response.REDRAW
             }
             EditorTool.LASER -> Response.NONE // drawn by the canvas; nothing touches the note
+            EditorTool.SHAPE -> {
+                selection = null
+                gesture = Gesture.ShapeDraw(pageId, p)
+                shapePreview = null
+                Response.REDRAW
+            }
             EditorTool.LASSO -> {
                 val sel = selection
                 val handle = resizeHandle
@@ -282,6 +302,15 @@ class InkInputController(
                 if (dist(lassoPath.last(), p) >= unitsPerDp) lassoPath = lassoPath + p
                 Response.REDRAW
             }
+            is Gesture.ShapeDraw -> {
+                shapePreview = if (ShapeTool.tooSmall(g.start, p, MIN_SHAPE_DP * unitsPerDp)) {
+                    null
+                } else {
+                    val brush = tools.shapeBrush
+                    ShapeItem(PREVIEW_ID, 0, brush, tools.shapeKind, ShapeTool.geometry(tools.shapeKind, g.start, p, brush.size), null, fillFor(tools.shapeKind))
+                }
+                Response.REDRAW
+            }
             is Gesture.MoveSelection -> {
                 val d = p - g.start
                 selectionTransform = Similarity.translate(d.x, d.y)
@@ -328,6 +357,15 @@ class InkInputController(
                     null // a tap: clears the selection
                 } else {
                     selectionOf(g.pageId, Lasso.select(items, path))
+                }
+                Response.REDRAW
+            }
+            is Gesture.ShapeDraw -> {
+                val preview = shapePreview
+                shapePreview = null
+                val page = session.page(g.pageId)
+                if (preview != null && page != null) {
+                    session.apply(g.pageId, InkEdit.add(InkCodec.quantize(preview.copy(id = newId(), z = page.items.nextZ))))
                 }
                 Response.REDRAW
             }
@@ -461,6 +499,39 @@ class InkInputController(
         selection = null
     }
 
+    /** Only closed shapes can be filled. */
+    private fun fillFor(kind: ShapeKind): Int? = tools.shapeFill.takeIf { kind != ShapeKind.LINE && kind != ShapeKind.ARROW }
+
+    /** Puts the selection on top of everything else on the page (keeping its own order). */
+    fun bringSelectionToFront(): Boolean = restack(front = true)
+
+    /** Puts the selection under everything else on the page. */
+    fun sendSelectionToBack(): Boolean = restack(front = false)
+
+    private fun restack(front: Boolean): Boolean {
+        val sel = selection ?: return false
+        val items = selectedItems().sortedBy { it.z }
+        val page = session.page(sel.pageId) ?: return false
+        if (items.isEmpty()) return false
+        val others = page.items.items.filter { it.id !in sel.ids }
+        val start = if (front) page.items.nextZ else (others.minOfOrNull { it.z } ?: 1L) - items.size
+        val moved = items.mapIndexed { i, it -> it.withZ(start + i) }
+        if (moved.map { it.z } == items.map { it.z }) return false
+        return session.apply(sel.pageId, InkEdit(items, moved))
+    }
+
+    /** Turns the selection by [degrees] around its centre. */
+    fun rotateSelection(degrees: Double = 90.0): Boolean {
+        val sel = selection ?: return false
+        val items = selectedItems()
+        if (items.isEmpty()) return false
+        val c = Vec((sel.bounds.left + sel.bounds.right) / 2, (sel.bounds.top + sel.bounds.bottom) / 2)
+        val edit = Lasso.transform(items, Similarity(rotationDeg = degrees, pivot = c))
+        if (!session.apply(sel.pageId, InkEdit(edit.removed, edit.added.map { InkCodec.quantize(it) }))) return false
+        selection = selectionOf(sel.pageId, selectedItems())
+        return true
+    }
+
     fun deleteSelection(): Boolean {
         val sel = selection ?: return false
         val items = selectedItems()
@@ -520,6 +591,9 @@ class InkInputController(
         /** Touch radius of the resize handle, in dp. */
         const val HANDLE_DP = 20.0
         private const val MIN_SCALE = 0.1
+
+        /** A shape-tool drag shorter than this (dp, both ways) is a tap, not a shape. */
+        const val MIN_SHAPE_DP = 6.0
         private const val MAX_SCALE = 10.0
     }
 }

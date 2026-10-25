@@ -274,4 +274,42 @@ class InkInputControllerTest {
         assertEquals(1, items("p2").size)
         assertEquals(Response.NONE, c.down("missing", sample(Vec(1.0, 1.0)), PointerSource.STYLUS, 1.0))
     }
+
+    @Test
+    fun `shape tool drags out a filled rectangle, stored with its fill`() {
+        c.tools = c.tools.copy(tool = EditorTool.SHAPE, shapeKind = com.appname.notes.core.ink.model.ShapeKind.RECTANGLE, shapeFill = 0x401A73E8)
+        draw(line(Vec(100.0, 100.0), Vec(300.0, 200.0)))
+        val shape = items().single() as com.appname.notes.core.ink.model.ShapeItem
+        assertEquals(com.appname.notes.core.ink.model.ShapeKind.RECTANGLE, shape.kind)
+        assertEquals(0x401A73E8, shape.fill)
+        val box = shape.bounds()
+        assertEquals(100.0, box.left + shape.brush.size / 2.0, 0.1)
+        assertEquals(300.0, box.right - shape.brush.size / 2.0, 0.1)
+        // The fill survives storage (format 2), and a plain shape stays in format 1.
+        val back = com.appname.notes.core.ink.codec.InkCodec.decode(shape.id, shape.z, com.appname.notes.core.ink.codec.InkCodec.encode(shape))
+        assertEquals(shape, (back as com.appname.notes.core.ink.codec.DecodeResult.Ok).item)
+        assertEquals(1, com.appname.notes.core.ink.codec.InkCodec.encode(shape.copy(fill = null))[0].toInt())
+        // Lines can't be filled; a tap adds nothing.
+        c.tools = c.tools.copy(shapeKind = com.appname.notes.core.ink.model.ShapeKind.LINE)
+        draw(line(Vec(100.0, 400.0), Vec(300.0, 400.0)))
+        assertEquals(null, (items().last() as com.appname.notes.core.ink.model.ShapeItem).fill)
+        draw(listOf(Vec(500.0, 500.0), Vec(501.0, 501.0)))
+        assertEquals(2, items().size)
+    }
+
+    @Test
+    fun `selection goes to front and back, and rotates`() {
+        draw(line(Vec(100.0, 100.0), Vec(200.0, 100.0)))
+        draw(line(Vec(100.0, 300.0), Vec(200.0, 300.0)))
+        val first = items().minBy { it.z }
+        c.tools = c.tools.copy(tool = EditorTool.LASSO)
+        draw(listOf(Vec(80.0, 80.0), Vec(220.0, 80.0), Vec(220.0, 120.0), Vec(80.0, 120.0), Vec(80.0, 82.0)))
+        assertTrue(c.bringSelectionToFront())
+        assertEquals(first.id, items().maxBy { it.z }.id)
+        assertTrue(c.sendSelectionToBack())
+        assertEquals(first.id, items().minBy { it.z }.id)
+        assertTrue(c.rotateSelection(90.0))
+        val box = items().first { it.id == first.id }.bounds()
+        assertTrue(box.bottom - box.top > box.right - box.left) // the horizontal line is now upright
+    }
 }

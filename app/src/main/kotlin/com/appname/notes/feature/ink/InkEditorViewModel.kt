@@ -52,6 +52,7 @@ import com.appname.notes.core.ink.model.StrokeItem
 import com.appname.notes.core.ink.model.BrushStyle
 import com.appname.notes.core.settings.Recents
 import com.appname.notes.core.settings.LaserSettings
+import com.appname.notes.core.settings.ShapeSettings
 import com.appname.notes.di.ApplicationScope
 import com.appname.notes.feature.editor.ReadOnlyReason
 import com.appname.notes.feature.editor.SaveStatus
@@ -112,7 +113,10 @@ data class InkEditorUi(
     val savedColors: List<Int> = emptyList(),
     /** The laser pointer's look (owner brief §17). */
     val laser: LaserSettings = LaserSettings(),
-)
+) {
+    /** The shape tool's current choices. */
+    val shapeSettings: ShapeSettings get() = ShapeSettings(tools.shapeKind, tools.shapeColor, tools.shapeSize, tools.shapeFill)
+}
 
 data class ScrollRequest(val page: Int, val id: Long = System.nanoTime())
 
@@ -615,6 +619,32 @@ class InkEditorViewModel @AssistedInject constructor(
         viewModelScope.launch { settings.updateInk { it.copy(lastTool = tool) } }
     }
 
+    // ------------------------------------------------------------ shape tool and arranging (7d)
+
+    /** Changes the shape tool's shape, outline colour, width or fill; kept for next time. */
+    fun setShape(shape: ShapeSettings) {
+        val c = controller() ?: return
+        val safe = shape.copy(size = shape.size.takeIf { it.isFinite() }?.coerceIn(0.5f, 40f) ?: 2.5f)
+        c.tools = c.tools.copy(shapeKind = safe.kind, shapeColor = safe.colorArgb, shapeSize = safe.size, shapeFill = safe.fillArgb)
+        refresh()
+        viewModelScope.launch { settings.updateInk { it.copy(shape = safe) } }
+    }
+
+    fun bringSelectionToFront() {
+        controller()?.bringSelectionToFront()
+        refresh()
+    }
+
+    fun sendSelectionToBack() {
+        controller()?.sendSelectionToBack()
+        refresh()
+    }
+
+    fun rotateSelection() {
+        controller()?.rotateSelection()
+        refresh()
+    }
+
     /** Changes how the laser pointer looks; kept for next time. */
     fun setLaser(laser: LaserSettings) {
         val safe = laser.copy(widthDp = laser.widthDp.takeIf { it.isFinite() }?.coerceIn(2f, 24f) ?: LaserSettings().widthDp, colorArgb = laser.colorArgb or ALPHA_MASK)
@@ -833,6 +863,10 @@ class InkEditorViewModel @AssistedInject constructor(
         eraserMode = s.eraserMode,
         shapeCorrection = s.shapeCorrection,
         holdMillis = s.holdDuration.millis,
+        shapeKind = s.shape.kind,
+        shapeColor = s.shape.colorArgb,
+        shapeSize = s.shape.size,
+        shapeFill = s.shape.fillArgb,
     )
 
     private companion object {

@@ -47,6 +47,8 @@ data class InkSettings(
     /** The user's saved colours ("My colours"), in the order saved. */
     val savedColors: List<Int> = emptyList(),
     val laser: LaserSettings = LaserSettings(),
+    /** The shape tool's last choices (owner brief §15). */
+    val shape: ShapeSettings = ShapeSettings(),
 ) {
     val fingerDraws: Boolean
         get() = when (fingerMode) {
@@ -55,6 +57,14 @@ data class InkSettings(
             FingerMode.SCROLL -> false
         }
 }
+
+/** Shape tool choices: which shape, outline colour and width, fill colour (null = no fill). */
+data class ShapeSettings(
+    val kind: com.appname.notes.core.ink.model.ShapeKind = com.appname.notes.core.ink.model.ShapeKind.RECTANGLE,
+    val colorArgb: Int = 0xFF1F1F1F.toInt(),
+    val size: Float = 2.5f,
+    val fillArgb: Int? = null,
+)
 
 /** Laser pointer looks (owner brief §17). */
 enum class LaserStyle { SOLID, OUTLINE, DOT }
