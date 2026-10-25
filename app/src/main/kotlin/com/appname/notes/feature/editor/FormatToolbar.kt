@@ -146,7 +146,7 @@ fun FormatToolbar(
                 ToolbarIcon(Icons.Outlined.PlaylistRemove, R.string.table_delete_row) { controller.tableDeleteRow() }
                 ToolbarIcon(Icons.Outlined.DeleteSweep, R.string.table_delete_column) { controller.tableDeleteColumn() }
             } else {
-                ToolbarIcon(Icons.Outlined.TableChart, R.string.table_insert, tag = EditorTestTags.TABLE_INSERT) { controller.insertTable(3, 3) }
+                ToolbarIcon(Icons.Outlined.TableChart, R.string.typed_table_insert, tag = EditorTestTags.TABLE_INSERT) { controller.insertTable(3, 3) }
             }
         }
     }

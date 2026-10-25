@@ -337,7 +337,7 @@
     <string name="laser_style_dot">Dot</string>
     <string name="ink_selection_delete">Delete selection</string>
     <string name="ink_selection_copy">Copy selection</string>
-    <string name="table_insert">Insert table</string>
+    <string name="typed_table_insert">Insert table</string>
     <string name="insert_equation">Equation</string>
     <string name="equation_insert">Insert</string>
     <string name="clip_page">Clip page</string>
