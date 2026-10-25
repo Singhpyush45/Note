@@ -303,9 +303,8 @@ private fun SettingsList(
                     title = stringResource(R.string.settings_corner_radius),
                     value = appearance.cornerRadius.toFloat(),
                     valueRange = CornerRadius.MIN.value..CornerRadius.MAX.value,
-                    steps = (CornerRadius.MAX.value - CornerRadius.MIN.value).toInt() - 1,
-                    valueLabel = { "${it.toInt()} dp" },
-                    onValueCommitted = { actions.onCorner(it.toInt()) },
+                    valueLabel = { "${kotlin.math.round(it).toInt()} dp" },
+                    onValueCommitted = { actions.onCorner(kotlin.math.round(it).toInt()) },
                     modifier = Modifier.testTag(SettingsTestTags.CORNER),
                 )
                 SettingsLinkRow(
@@ -453,9 +452,10 @@ private fun AccentRow(appearance: AppearanceSettings, dimmed: Boolean, onAccent:
     val dark = LocalDarkTheme.current
     Column(Modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.sm)) {
         Text(stringResource(R.string.settings_accent), style = MaterialTheme.typography.bodyLarge)
+        // Seven 48 dp targets fit in one line on phones; narrower screens wrap.
         FlowRow(
-            Modifier.padding(top = spacing.sm).selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+            Modifier.fillMaxWidth().padding(top = spacing.sm).selectableGroup(),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Accent.entries.forEach { a ->
                 val name = stringResource(a.labelRes())

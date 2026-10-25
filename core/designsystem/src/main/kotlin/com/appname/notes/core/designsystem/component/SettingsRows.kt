@@ -39,6 +39,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+
 /*
  * Settings building blocks. The whole row is the touch target (≥48dp) and carries the accessibility
  * role, so TalkBack reads "Dynamic colour, switch, on" instead of two separate items (SRS 8.2).
@@ -217,7 +229,7 @@ fun SettingsSliderRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
             )
         }
-        Slider(
+        GlassSlider(
             value = shown,
             onValueChange = { dragging = it },
             onValueChangeFinished = { dragging?.let(onValueCommitted); dragging = null },
@@ -227,6 +239,57 @@ fun SettingsSliderRow(
             modifier = Modifier.semantics { contentDescription = title },
         )
     }
+}
+
+/**
+ * A calm slider in the glass style (owner brief §1): a slim rounded track filled with the accent up to the value,
+ * and a round white thumb with a soft shadow and a hairline edge — instead of Material's heavy default.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GlassSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    onValueChangeFinished: (() -> Unit)? = null,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+    enabled: Boolean = true,
+) {
+    val active = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else DISABLED_ALPHA)
+    val inactive = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val edge = MaterialTheme.colorScheme.outlineVariant
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        enabled = enabled,
+        onValueChangeFinished = onValueChangeFinished,
+        steps = steps,
+        valueRange = valueRange,
+        thumb = {
+            Box(
+                Modifier
+                    .size(24.dp)
+                    .shadow(3.dp, CircleShape)
+                    .background(Color.White, CircleShape)
+                    .border(1.dp, edge, CircleShape),
+            )
+        },
+        track = { state ->
+            val range = state.valueRange
+            val fraction = if (range.endInclusive > range.start) {
+                ((state.value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            Canvas(Modifier.fillMaxWidth().height(6.dp)) {
+                val r = CornerRadius(size.height / 2, size.height / 2)
+                drawRoundRect(inactive, cornerRadius = r)
+                drawRoundRect(active, size = Size(size.width * fraction, size.height), cornerRadius = r)
+            }
+        },
+    )
 }
 
 /** One choice out of a few, as a segmented button row ("Light | Dark | System", "Compact | Comfortable"). */
