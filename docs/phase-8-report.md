@@ -1,6 +1,6 @@
-# Phase 8a (first part) — photos, PDF pages and text on handwritten pages: report
+# Phase 8 (8a, 8b, 8c first parts) and 7d — the multimodal page: report
 
-Status: **done on CI** — build 124 (run 40222135136): 459 JVM/Robolectric tests, 38 emulator tests, 0 failures, lint 0 errors, test APK published. Device checks by a person are pending (nothing was tried on a real
+Status: **done on CI** — build 130 (run 40228511477): 463 JVM/Robolectric tests, 39 emulator tests, 0 failures, lint 0 errors, test APK published. Device checks by a person are pending (nothing was tried on a real
 phone yet).
 
 Source: owner request of 25 Oct (Samsung Notes screenshot): "Photo import, PDF import direct on handwritten notes;
@@ -51,3 +51,46 @@ fonts; drag and drop / copy-paste photos from anywhere (browser, gallery)".
 - Text is edited in a dialog (not typed directly on the page).
 - Still to come: ruler, gradients (7d); PDF pages inside typed notes, blank pages between PDF pages (8b); tables,
   stickers, equations (8c).
+
+## Second round (26 Oct)
+
+### 7d — finished parts
+- **Ruler** (ruler button at the end of the tool row): a straight edge on screen. Drag its body to move it, its
+  blue knob to turn it (snaps to every 15°, angle shown). Start a pen/pencil/brush/highlighter stroke next to
+  either long edge and it comes out perfectly straight along that edge.
+- **Box selection**: the lasso has Free / Box; Box selects everything inside a dragged rectangle.
+- **Gradient fill** for shapes: Fill chip cycles none → one colour → gradient (into a neighbouring colour).
+- Lasso: rotate handle (free turn), rotate 90°, flip, bring to front / send to back (first round).
+
+### 8a — recordings on the page
+- Insert › **Record audio** (microphone permission asked once) or **Audio file**: a player chip appears on the page
+  (name and length). Tap the chip with any tool except the lasso to play / pause; a player bar shows position,
+  seek, speed and close. The lasso moves the chip. Recordings are the note's audio attachments.
+
+### 8b — PDF notes
+- **Blank pages between a PDF's pages**: ⋮ › "Add blank page after this one"; such pages can be deleted again (the
+  document's own pages can't).
+- Photos, text boxes, stickers, tables and recordings work on PDF notes too.
+- **Export** of a PDF note keeps all of it: added pages are inserted at their place (the size of the page before
+  them), photos are embedded, text boxes and recording chips are drawn as pictures (so every font and script
+  shows exactly), ink stays vector. Checked on the emulator by rendering the exported file with Android's own PDF
+  renderer (page count, page size, text pixels, photo colour and position).
+
+### 8c — first part
+- **Stickers**: Insert › Sticker: 48 emoji stickers (study marks, feelings, arrows, colours), placed large; the lasso
+  moves and resizes them.
+- **Table grid**: Insert › Table: rows × columns (1–12 each) as ruled lines to write in; one undo removes it.
+
+### Verification (CI)
+- JVM: ruler geometry (edge snapping, projection at any angle, knob, 15° snap), box lasso, gradient fill and
+  recordings stored and read back; everything from the first round.
+- Emulator: exported PDF note with an added page, a text box and a photo, read back with PdfRenderer.
+- A flaky race was fixed on the way: right after "Stylus detected" a finger could still draw for a moment.
+
+### Known limits (second round)
+- The ruler stays where it is on screen when the page scrolls (like a real ruler on a moving sheet).
+- Shape fills aren't in the exported annotated PDF of a PDF note (outlines are); they are in handwritten-note export.
+- Recording chips in an exported PDF are pictures (PDFs can't play the sound).
+- Table grids are lines to write in, not a spreadsheet; typed-note tables, equations, match-style paste and the
+  advanced settings (toolbar, scroll bar, links/web previews) are still to come (8c).
+- Text is still typed in a dialog, not directly on the page.
