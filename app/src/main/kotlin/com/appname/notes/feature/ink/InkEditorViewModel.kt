@@ -776,8 +776,13 @@ class InkEditorViewModel @AssistedInject constructor(
             try {
                 val outcome = attacher.attach(noteId, uris)
                 outcome.errorMessage?.let { _message.value = UserMessage(it) }
-                val images = outcome.added.filter { it.kind == com.appname.notes.core.domain.model.AttachmentKind.IMAGE }
                 val pdfs = outcome.added.filter { it.kind == com.appname.notes.core.domain.model.AttachmentKind.PDF }
+                // Pictures, including ones whose type the sending app didn't say (some browsers): if it decodes, it's a picture.
+                val images = outcome.added.filter { it.kind != com.appname.notes.core.domain.model.AttachmentKind.PDF }.mapNotNull { a ->
+                    if (a.kind == com.appname.notes.core.domain.model.AttachmentKind.IMAGE && a.width != null) return@mapNotNull a
+                    val size = kotlinx.coroutines.withContext(dispatchers.io) { imageSize(a.fileName) } ?: return@mapNotNull null
+                    a.copy(width = size.first, height = size.second)
+                }
                 if (images.isNotEmpty()) placeImages(images, pageId, at)
                 for (pdf in pdfs) insertPdfPages(pdf.fileName)
                 if (images.isEmpty() && pdfs.isEmpty() && outcome.added.isNotEmpty()) _message.value = UserMessage(R.string.insert_not_supported)
@@ -805,6 +810,15 @@ class InkEditorViewModel @AssistedInject constructor(
         }
         s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit(emptyList(), items))
         refresh()
+    }
+
+    /** Pixel size of a stored picture, turned upright; null if it isn't a picture. */
+    private fun imageSize(fileName: String): Pair<Int, Int>? {
+        val f = java.io.File(java.io.File(appContext.filesDir, com.appname.notes.feature.attachments.AttachmentFileStore.DIR), fileName)
+        val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(f.path, o)
+        if (o.outWidth <= 0 || o.outHeight <= 0) return null
+        return if (com.appname.notes.feature.attachments.isRotatedQuarter(f)) o.outHeight to o.outWidth else o.outWidth to o.outHeight
     }
 
     /** Each page of a PDF (already attached) becomes a new page at the end, showing that page as a picture. */
