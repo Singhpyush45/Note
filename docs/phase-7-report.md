@@ -1,6 +1,6 @@
 # Phase 7 — Pens, pencils, brushes, colours, laser pointer: report
 
-Status: **done on CI** — see "Verification" for the build. Device checks by a person:
+Status: **done on CI** — build 109 (run 40203180378): 451 JVM/Robolectric tests, 38 emulator tests, 0 failures, lint 0 errors, test APK published. Device checks by a person:
 `phase-7-device-checklist.md` (pending, like the Phase 3–6 checklists).
 
 Source: the owner's master prompt §12–14 and §17, and the four reference pictures (dark tool bar with tools,
