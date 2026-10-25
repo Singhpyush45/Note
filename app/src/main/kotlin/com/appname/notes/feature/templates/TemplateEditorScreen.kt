@@ -269,7 +269,6 @@ private fun spacingLabel(context: android.content.Context, value: Float): String
 )
 
 /** Colour choices as round swatches; the chosen one has a ring and a tick. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun SwatchRow(title: String, colors: List<Int>, selected: Int, enabled: Boolean, tag: (Int) -> String, onPick: (Int) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {

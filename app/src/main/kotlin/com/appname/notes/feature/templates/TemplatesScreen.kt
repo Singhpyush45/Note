@@ -1,7 +1,6 @@
 package com.appname.notes.feature.templates
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalLayoutApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -147,7 +146,6 @@ data class TemplateActions(
  * category's templates as page thumbnails. Tapping one shows it large with "Use template" (and, for the user's
  * own, edit/rename/duplicate/delete). [manage] is the same screen opened from Settings.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TemplatesScreen(
     state: TemplatesUiState,
