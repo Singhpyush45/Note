@@ -95,10 +95,55 @@ fonts; drag and drop / copy-paste photos from anywhere (browser, gallery)".
   advanced settings (toolbar, scroll bar, links/web previews) are still to come (8c).
 - Text is still typed in a dialog, not directly on the page.
 
-## 8c status (26 Oct, later)
-- Done: maths symbols row in the text box dialog; Settings › Handwriting: choose which tools show in the tool bar,
-  page scroll bar (notes with more than 2 pages), ask before leaving with Back.
-- Paste in typed notes already matches the style where it lands: pasted text arrives as plain text and is treated
-  like typing (bold/italic/etc. around the cursor continue into it).
-- Still open: tables inside typed notes, real equation layout (beyond symbols), link web previews/clipping,
-  typing directly on the handwritten page.
+## Third round (26 Oct, owner list) — 8c finished
+
+CI build 142 (run 40239791588): 472 JVM/Robolectric + 39 emulator tests, 0 failures, lint 0 errors, APK published.
+Not yet tried on a real phone (see docs/phase-8-device-checklist.md).
+
+### Owner's list (handwritten notes)
+- **Full screen**: button at the left of the tool options. The title bar and the phone's status/navigation bars go
+  (swipe from the edge shows them for a moment); a slim **floating tool bar** stands upright on the side, in
+  portrait and landscape. Drag its handle to put it anywhere; one button turns it across/upright. It has: leave full
+  screen, undo, redo, all tools, ruler, tool options, Insert. Tapping the chosen tool again shows its options (sizes,
+  colours, eraser mode …) in a pill at the bottom. Back leaves full screen.
+- **Undo / redo in the tool bar** (always visible at its left; no longer in the title bar).
+- **Type straight on the page**: Text tool, tap the page → a blue cursor right there, type with the keyboard; the
+  text sits at the page's zoom. A slim bar at the top: Done ✓, font, size −/+, bold, italic, alignment, colours,
+  maths symbols, delete. The blue four-arrow handle moves the box. Tapping elsewhere, drawing, or Back finishes; empty
+  text removes the box. Tap a text box with the Text tool to edit it the same way. (The old text dialog is gone.)
+- **Press and hold on the page** (with a finger when fingers scroll, or with the Text tool): a menu with Paste, Write
+  text (or Edit text on a text box), Select, Copy / Copy text, Delete — what fits the spot.
+- **Copy / paste ink**: Lasso › Copy, or the press-and-hold Copy; Paste brings it back (into this or another note;
+  photos get their own copy). Copied text boxes also go to the phone's clipboard.
+- **Photo resize right after import / paste / drop**: the new photo (or pasted text, sticker, equation) comes
+  selected with its handles: drag to move, corner to resize, top handle to turn. Done (or a tap elsewhere) returns
+  to the tool used before.
+- **Home: note size** — Sort and view (⇅) › Note size: Small, Big, Extra big, List. Remembered.
+
+### 8c — finished
+- **Tables in typed notes**: toolbar › Insert table (3 × 3). Rows are drawn as an aligned grid (fixed-width font,
+  first row bold). In a table the toolbar shows Next cell, Add row, Add column, Delete row, Delete column. Enter adds
+  a row; Enter in an empty last row leaves the table. Markdown export/import as GitHub tables.
+- **Equations** (handwritten notes): Insert › Equation, written LaTeX-style with buttons (x², xₙ, fraction, roots,
+  ∑, ∫, lim, Greek letters, ≤ ≥ ≠ → ∞ …) and a live preview; placed as a picture in the pen colour, selected to
+  move/resize. Own small typesetter, works offline.
+- **Web clipping** (typed notes): on a link, toolbar › Clip page: the page's title and summary go under the line as
+  a quote, its preview picture becomes an attachment. Only when tapped.
+- Match-style paste: already the behaviour (pasted text is plain and takes the style where it lands).
+- Settings from before: tool-bar tools, page scroll bar, ask before leaving with Back.
+
+### Verification (CI)
+- Robolectric: full screen → floating bar, Text tool tap → type on the page → saved text box → leave full screen;
+  tool bar controls all labelled and ≥ 48 dp.
+- JVM: press-and-hold hit-testing (photo / ink / empty paper) and selection; typed tables (insert, Enter adds a row,
+  next cell, add column, delete row), grid drawing with every cursor position mapping back, Markdown round trip; web
+  page title/summary/picture reading; equations laid out (fractions stack, powers raise) and drawn.
+
+### Known limits (third round)
+- Table rows that are wider than the screen wrap, which breaks the grid; columns line up by character count (very
+  wide characters like emoji can shift a column).
+- Equations are pictures once placed (to change one, insert it again); equations aren't in typed notes yet.
+- Press-and-hold needs fingers set to scroll (a pen is used) or the Text tool; with finger drawing, holding still
+  is kept for shape correction.
+- Pasting a recording into another note isn't possible (it stays with its own note).
+- Web clipping needs internet and a page that publishes a title; some sites block apps.
