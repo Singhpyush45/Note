@@ -1,6 +1,7 @@
 package com.appname.notes.feature.ink
 
 import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material.icons.outlined.Functions
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.Mic
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -57,6 +59,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -87,6 +92,9 @@ object InsertTags {
     fun sticker(i: Int) = "ink_sticker_$i"
     fun math(s: String) = "ink_math_$s"
     const val TEXT_MOVE = "ink_text_move"
+    const val EQUATION = "ink_insert_equation"
+    const val EQUATION_FIELD = "ink_equation_field"
+    const val EQUATION_INSERT = "ink_equation_insert"
     const val TEXT_BAR = "ink_text_bar"
     const val TEXT_DIALOG = "ink_text_dialog"
     const val TEXT_FIELD = "ink_text_field"
@@ -105,6 +113,7 @@ data class InsertActions(
     val audioFile: () -> Unit = {},
     val sticker: () -> Unit = {},
     val table: () -> Unit = {},
+    val equation: () -> Unit = {},
 )
 
 /** The Insert button in the top bar: photo, camera, text box, PDF pages, paste. */
@@ -153,6 +162,12 @@ fun InsertButton(actions: InsertActions) {
                 leadingIcon = { Icon(Icons.Outlined.TableChart, null) },
                 onClick = { open = false; actions.table() },
                 modifier = Modifier.testTag(InsertTags.TABLE),
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.insert_equation)) },
+                leadingIcon = { Icon(Icons.Outlined.Functions, null) },
+                onClick = { open = false; actions.equation() },
+                modifier = Modifier.testTag(InsertTags.EQUATION),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.audio_record)) },
@@ -296,3 +311,68 @@ internal val MathSymbols = listOf(
     "+", "−", "×", "÷", "=", "≠", "≈", "≤", "≥", "±", "√", "∛", "∞", "π", "θ", "α", "β", "γ", "Δ", "λ", "μ", "σ", "Σ", "Ω",
     "∫", "∑", "∏", "∂", "∇", "→", "⇒", "⇔", "∈", "∉", "⊂", "∪", "∩", "∀", "∃", "°", "²", "³", "ⁿ", "⁻¹", "₀", "₁", "₂", "½", "¼", "⅓",
 )
+
+/** Equation snippets for the quick buttons: what is shown, and what goes into the equation. */
+private val EquationSnippets = listOf(
+    "x²" to "^{2}", "xₙ" to "_{n}", "a⁄b" to "\\frac{a}{b}", "√" to "\\sqrt{x}", "∛" to "\\sqrt[3]{x}", "∑" to "\\sum_{i=1}^{n} ",
+    "∫" to "\\int_{a}^{b} ", "lim" to "\\lim_{x \\to 0} ", "α" to "\\alpha ", "β" to "\\beta ", "θ" to "\\theta ", "π" to "\\pi ",
+    "Δ" to "\\Delta ", "λ" to "\\lambda ", "μ" to "\\mu ", "≤" to "\\leq ", "≥" to "\\geq ", "≠" to "\\neq ", "≈" to "\\approx ",
+    "±" to "\\pm ", "×" to "\\times ", "·" to "\\cdot ", "→" to "\\to ", "∞" to "\\infty ", "∂" to "\\partial ", "sin" to "\\sin ",
+    "log" to "\\log ",
+)
+
+/**
+ * Insert › Equation (8c): typed in the familiar LaTeX style with buttons for the usual pieces, shown as it will
+ * look while typing; placed on the page as a picture (move and resize it like a photo).
+ */
+@Composable
+fun EquationDialog(onInsert: (String) -> Unit, onDismiss: () -> Unit) {
+    var value by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    val ink = MaterialTheme.colorScheme.onSurface.toArgb()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.insert_equation)) },
+        text = {
+            Column {
+                // Preview, scaled down to fit when long.
+                val box = remember(value.text, ink) { MathRender.layout(value.text, with(density) { 26.dp.toPx() }, ink) }
+                androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(96.dp)) {
+                    val b = box ?: return@Canvas
+                    val scale = minOf(1f, size.width / b.width.coerceAtLeast(1f), size.height / (b.ascent + b.descent).coerceAtLeast(1f))
+                    drawIntoCanvas { c ->
+                        val nc = c.nativeCanvas
+                        nc.save()
+                        nc.translate((size.width - b.width * scale) / 2, (size.height - (b.ascent + b.descent) * scale) / 2)
+                        nc.scale(scale, scale)
+                        b.draw(nc, 0f, b.ascent)
+                        nc.restore()
+                    }
+                }
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    placeholder = { Text("x^2 + \\frac{a}{b}") },
+                    textStyle = ComposeTextStyle(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier.fillMaxWidth().testTag(InsertTags.EQUATION_FIELD),
+                )
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 8.dp)) {
+                    EquationSnippets.forEach { (label, snippet) ->
+                        TextButton(onClick = {
+                            val t = value.text
+                            val sel = value.selection
+                            val next = t.substring(0, sel.min) + snippet + t.substring(sel.max)
+                            value = androidx.compose.ui.text.input.TextFieldValue(next, androidx.compose.ui.text.TextRange(sel.min + snippet.length))
+                        }) { Text(label, fontSize = 17.sp) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onInsert(value.text) }, enabled = value.text.isNotBlank(), modifier = Modifier.testTag(InsertTags.EQUATION_INSERT)) {
+                Text(stringResource(R.string.equation_insert))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}

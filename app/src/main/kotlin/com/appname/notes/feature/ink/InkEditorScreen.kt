@@ -243,6 +243,8 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     }
     var stickerPicker by rememberSaveable { mutableStateOf(false) }
     var tablePicker by rememberSaveable { mutableStateOf(false) }
+    var equationDialog by rememberSaveable { mutableStateOf(false) }
+    if (equationDialog) EquationDialog(onInsert = { viewModel.insertEquation(it); equationDialog = false }, onDismiss = { equationDialog = false })
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { viewModel.insertFiles(it) }
     val recordPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         if (granted[android.Manifest.permission.RECORD_AUDIO] == true) viewModel.startRecording() else if (granted.containsKey(android.Manifest.permission.RECORD_AUDIO)) viewModel.microphoneDenied()
@@ -279,6 +281,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         audioFile = { audioPicker.launch(arrayOf("audio/*")) },
         sticker = { stickerPicker = true },
         table = { tablePicker = true },
+        equation = { equationDialog = true },
     )
     if (stickerPicker) StickerDialog(onPick = { viewModel.insertSticker(it); stickerPicker = false }, onDismiss = { stickerPicker = false })
     if (tablePicker) TableDialog(onInsert = { r, c -> viewModel.insertTable(r, c); tablePicker = false }, onDismiss = { tablePicker = false })

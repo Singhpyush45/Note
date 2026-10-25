@@ -933,6 +933,41 @@ class InkEditorViewModel @AssistedInject constructor(
 
     // ------------------------------------------------------------ stickers and table grids (8c)
 
+    /**
+     * An equation (8c), typeset by [MathRender] in the pen's colour and placed in the middle of the shown page at
+     * normal text size, selected so it can be moved or resized. Kept as a picture attachment of the note.
+     */
+    fun insertEquation(source: String) {
+        if (source.isBlank() || !canInsert()) return
+        val c = controller() ?: return
+        val color = (c.tools.brushes[InkTool.PEN]?.colorArgb ?: 0xFF1F1F1F.toInt()) or ALPHA_MASK
+        viewModelScope.launch {
+            _inserting.value = true
+            try {
+                val file = withContext(dispatchers.io) {
+                    val bmp = MathRender.render(source, EQUATION_PX, color) ?: return@withContext null
+                    val dir = java.io.File(appContext.cacheDir, "equations").apply { mkdirs() }
+                    java.io.File(dir, "Equation.png").also { f -> f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } } to (bmp.width to bmp.height)
+                } ?: return@launch
+                val added = attacher.attach(noteId, listOf(Uri.fromFile(file.first))).added.firstOrNull() ?: return@launch
+                file.first.delete()
+                val s = session() ?: return@launch
+                val page = s.pages.getOrNull(_ui.value.currentPage) ?: return@launch
+                val k = EQUATION_UNITS / EQUATION_PX
+                val w = (file.second.first * k).coerceAtMost(page.width * 0.9f)
+                val h = file.second.second * (w / file.second.first)
+                val item = com.appname.notes.core.ink.model.ImageItem(
+                    ids.newId(), page.items.nextZ, added.fileName,
+                    com.appname.notes.core.ink.model.Placement(page.width / 2, page.height / 3, w, h),
+                )
+                s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(item))
+                selectInserted(page.id, setOf(item.id))
+            } finally {
+                _inserting.value = false
+            }
+        }
+    }
+
     /** A sticker (an emoji drawn large) in the middle of the shown page; the lasso moves and resizes it. */
     fun insertSticker(emoji: String) {
         if (emoji.isBlank() || !canInsert()) return
@@ -1455,6 +1490,8 @@ class InkEditorViewModel @AssistedInject constructor(
         const val MAX_PDF_PAGES = 100
         const val TEXT_WIDTH = 420f
         const val HOLD_TOLERANCE_DP = 12.0
+        const val EQUATION_PX = 96f
+        const val EQUATION_UNITS = 30f
         const val PASTE_OFFSET = 24.0
         const val AUDIO_CHIP_W = 300f
         const val STICKER_SIZE = 72f

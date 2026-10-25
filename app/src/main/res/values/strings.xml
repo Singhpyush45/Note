@@ -338,6 +338,8 @@
     <string name="ink_selection_delete">Delete selection</string>
     <string name="ink_selection_copy">Copy selection</string>
     <string name="table_insert">Insert table</string>
+    <string name="insert_equation">Equation</string>
+    <string name="equation_insert">Insert</string>
     <string name="clip_page">Clip page</string>
     <string name="clip_working">Reading the page…</string>
     <string name="clip_done">Page clipped under the link.</string>
