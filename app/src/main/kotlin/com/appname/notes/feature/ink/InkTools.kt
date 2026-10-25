@@ -1,5 +1,11 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.material.icons.outlined.Rotate90DegreesCw
 import androidx.compose.material.icons.outlined.FlipToBack
@@ -170,50 +176,61 @@ fun InkToolbar(
     modifier: Modifier = Modifier,
 ) {
     val tools = ui.tools
-    GlassSurface(shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), elevation = 4.dp, modifier = modifier.testTag(InkTestTags.TOOLBAR)) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    // A floating, solid pill (no live blur here: drawing must stay smooth).
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 2.dp,
+        shadowElevation = 8.dp,
+        modifier = modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag(InkTestTags.TOOLBAR),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
             Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
             ) {
                 BarTools.forEach { tool ->
-                    val mark: Brush? = when {
-                        tool == EditorTool.LASER -> if (ui.laser.rainbow) RainbowBrush else SolidColor(Color(ui.laser.colorArgb or OPAQUE))
-                        tool == EditorTool.SHAPE -> SolidColor(Color(tools.shapeColor or OPAQUE))
-                        else -> tools.brushFor(tool)?.let { SolidColor(Color(it.colorArgb or OPAQUE)) }
+                    val ink = when (tool) {
+                        EditorTool.LASER -> ui.laser.colorArgb
+                        EditorTool.SHAPE -> tools.shapeColor
+                        else -> tools.brushFor(tool)?.colorArgb ?: 0
                     }
                     ToolButton(
                         tool = tool,
                         selected = tools.tool == tool,
-                        mark = mark,
+                        ink = Color(ink or OPAQUE),
+                        rainbow = tool == EditorTool.LASER && ui.laser.rainbow,
                         onClick = { if (tools.tool == tool && tool.inkTool != null) onPanel(!panelOpen) else actions.onTool(tool) },
                     )
                 }
             }
+            HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             // Each tool's options start scrolled to the beginning.
             val optionsScroll = key(tools.tool) { rememberScrollState() }
             Row(
-                Modifier.fillMaxWidth().horizontalScroll(optionsScroll).padding(horizontal = 8.dp).height(52.dp),
+                Modifier.fillMaxWidth().horizontalScroll(optionsScroll).padding(horizontal = 6.dp).height(52.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
             ) {
                 val inkTool = tools.tool.inkTool
                 when {
                     inkTool != null -> {
+                        // Minimal: three sizes, a few colours, the full palette, and "more options".
                         val brush = tools.brushes[inkTool] ?: tools.brushFor(tools.tool)!!
-                        VariantChip(brush.effectiveStyle, panelOpen, onClick = { onPanel(!panelOpen) })
                         val base = brush.effectiveStyle.defaultSize
                         listOf(0.6f, 1f, 1.8f).forEachIndexed { i, f ->
                             val size = (base * f * 10).toInt() / 10f
                             SizeDot(f / 1.8f, SizeNames[i], selected = kotlin.math.abs(brush.size - size) < 0.05f, onClick = { actions.onSize(size) })
                         }
-                        Spacer(Modifier.width(6.dp))
+                        OptionDivider()
                         val palette = (ui.recentColors + if (inkTool == InkTool.HIGHLIGHTER) HighlighterQuickColors else QuickColors)
-                            .map { it or OPAQUE }.distinct().take(QUICK_COLOURS)
+                            .map { it or OPAQUE }.distinct().take(BAR_COLOURS)
                         palette.forEach { c ->
                             ColorDot(c, selected = (brush.colorArgb and 0xFFFFFF) == (c and 0xFFFFFF), onClick = { actions.onColor(c) })
                         }
                         MoreColorsButton(actions.onMoreColors)
+                        OptionDivider()
+                        PanelButton(brush.effectiveStyle, panelOpen, onClick = { onPanel(!panelOpen) })
                     }
                     tools.tool == EditorTool.ERASER -> {
                         SingleChoiceSegmentedButtonRow {
@@ -263,23 +280,15 @@ fun VariationPanel(ui: InkEditorUi, actions: InkToolActions, onClose: () -> Unit
     val tool = ui.tools.tool.inkTool ?: return
     val brush = ui.tools.brushes[tool] ?: ui.tools.brushFor(ui.tools.tool) ?: return
     val style = brush.effectiveStyle
-    GlassSurface(
+    // A solid card (a Material surface also keeps touches on it from reaching the page below). No live blur:
+    // the panel must react at once.
+    Surface(
         shape = RoundedCornerShape(24.dp),
-        elevation = 6.dp,
-        modifier = modifier
-            .padding(horizontal = 8.dp, vertical = 6.dp)
-            // Touches on the panel never reach the page under it.
-            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
-            .testTag(InkToolTags.PANEL),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shadowElevation = 8.dp,
+        modifier = modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag(InkToolTags.PANEL),
     ) {
-        // Nearly opaque: the page under the panel (a separate view) can't be blurred, and strokes showing through
-        // would make the previews hard to read.
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = PANEL_ALPHA), RoundedCornerShape(24.dp))
-                .padding(vertical = 10.dp),
-        ) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(tool.label()), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
@@ -415,48 +424,38 @@ private fun VariantTile(style: BrushStyle, current: InkBrush, selected: Boolean,
     }
 }
 
-/** A sample S-curve drawn with [brush], pressing harder in the middle, as the real stroke would look. */
+/**
+ * A sample S-curve drawn with [brush], pressing harder in the middle, as the real stroke would look. Rendered once
+ * into a bitmap per brush and size (textures and soft edges are costly), so scrolling and sliders stay smooth.
+ */
 @Composable
 internal fun StrokePreview(brush: InkBrush, modifier: Modifier = Modifier) {
-    val styled = remember { StyledInk(cache = false) }
-    val paint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
-    Canvas(modifier) {
-        val n = 40
-        val w = PREVIEW_W
-        val h = PREVIEW_H
-        val x = FloatArray(n) { it * w / (n - 1) }
-        val y = FloatArray(n) { h / 2 + sin(it / (n - 1f) * 2 * PI).toFloat() * h * 0.3f }
-        val pressure = FloatArray(n) { 0.25f + 0.7f * sin(it / (n - 1f) * PI).toFloat() }
-        val item = StrokeItem("preview", 0, brush, StrokePoints(x, y, IntArray(n) { it * 8 }, pressure))
-        val scale = minOf(size.width / w, size.height / h)
-        drawIntoCanvas { c ->
-            c.nativeCanvas.withSave {
-                translate((size.width - w * scale) / 2, (size.height - h * scale) / 2)
-                scale(scale, scale)
-                paint.set(InkPaints.inkPaint(brush))
-                InkPaths.drawItem(this, item, paint, styled)
-            }
+    val cached = remember(brush) {
+        Modifier.drawWithCache {
+            val image = renderPreview(brush, size.width.toInt().coerceAtLeast(1), size.height.toInt().coerceAtLeast(1))
+            onDrawBehind { drawImage(image) }
         }
     }
+    Spacer(modifier.then(cached))
 }
 
-@Composable
-private fun VariantChip(style: BrushStyle, open: Boolean, onClick: () -> Unit) {
-    val label = stringResource(style.label())
-    val state = stringResource(if (open) R.string.ink_panel_state_open else R.string.ink_panel_state_closed)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.ink_panel_open), onClick = onClick)
-            .semantics(mergeDescendants = true) { stateDescription = state }
-            .testTag(InkToolTags.VARIANT_CHIP)
-            .padding(horizontal = 10.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, color = MaterialTheme.colorScheme.onSurface)
-        Icon(if (open) Icons.Outlined.ExpandMore else Icons.Outlined.ExpandLess, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun renderPreview(brush: InkBrush, width: Int, height: Int): androidx.compose.ui.graphics.ImageBitmap {
+    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val n = 40
+    val w = PREVIEW_W
+    val h = PREVIEW_H
+    val x = FloatArray(n) { it * w / (n - 1) }
+    val y = FloatArray(n) { h / 2 + sin(it / (n - 1f) * 2 * PI).toFloat() * h * 0.3f }
+    val pressure = FloatArray(n) { 0.25f + 0.7f * sin(it / (n - 1f) * PI).toFloat() }
+    val item = StrokeItem("preview", 0, brush, StrokePoints(x, y, IntArray(n) { it * 8 }, pressure))
+    val scale = minOf(width / w, height / h)
+    canvas.withSave {
+        translate((width - w * scale) / 2, (height - h * scale) / 2)
+        scale(scale, scale)
+        InkPaths.drawItem(this, item, InkPaints.inkPaint(brush), StyledInk(cache = false))
     }
+    return bitmap.asImageBitmap()
 }
 
 /** Shape tool options (owner brief §15): which shape, fill on/off, outline width, colour. */
@@ -564,28 +563,42 @@ private fun LaserControls(laser: LaserSettings, actions: InkToolActions) {
 }
 
 @Composable
-private fun ToolButton(tool: EditorTool, selected: Boolean, mark: Brush?, onClick: () -> Unit) {
+private fun ToolButton(tool: EditorTool, selected: Boolean, ink: Color, rainbow: Boolean, onClick: () -> Unit) {
     val label = stringResource(tool.label())
-    Box(contentAlignment = Alignment.BottomCenter) {
-        FilledIconToggleButton(
-            checked = selected,
-            onCheckedChange = { onClick() },
-            modifier = Modifier.testTag(InkTestTags.tool(tool)),
-        ) {
-            Icon(tool.icon(), label)
-        }
-        // The tool's current colour, as on a real pen cap.
-        if (mark != null) {
-            Box(
-                Modifier
-                    .padding(bottom = 2.dp)
-                    .size(width = 16.dp, height = 4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(mark)
-                    // Black ink on a dark bar (or white on a light one) still shows as a bar.
-                    .border(0.5.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
-            )
-        }
+    val colors = MaterialTheme.colorScheme
+    // The chosen tool sits on a soft disc and is drawn a little bigger.
+    Box(
+        Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .then(if (selected) Modifier.background(colors.primaryContainer) else Modifier)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .semantics { contentDescription = label }
+            .testTag(InkTestTags.tool(tool)),
+        contentAlignment = Alignment.Center,
+    ) {
+        ToolGlyph(tool, body = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant, ink = ink, size = if (selected) 32.dp else 28.dp, rainbow = rainbow)
+    }
+}
+
+@Composable
+private fun OptionDivider() {
+    Box(Modifier.padding(horizontal = 6.dp).size(width = 1.dp, height = 24.dp).background(MaterialTheme.colorScheme.outlineVariant))
+}
+
+/** Opens the tool's options panel (variants, size, opacity, pressure). */
+@Composable
+private fun PanelButton(style: BrushStyle, open: Boolean, onClick: () -> Unit) {
+    val label = stringResource(R.string.ink_panel_open_for, stringResource(style.label()))
+    val state = stringResource(if (open) R.string.ink_panel_state_open else R.string.ink_panel_state_closed)
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(48.dp)
+            .semantics { stateDescription = state }
+            .testTag(InkToolTags.VARIANT_CHIP),
+    ) {
+        Icon(Icons.Outlined.Tune, label, tint = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -609,9 +622,9 @@ internal fun ColorDot(argb: Int, selected: Boolean, onClick: () -> Unit, label: 
     ) {
         Box(
             Modifier
-                .size(28.dp)
-                .then(if (selected) Modifier.border(3.dp, ring, CircleShape) else Modifier.border(1.dp, Color(0x33000000), CircleShape))
-                .padding(if (selected) 5.dp else 1.dp)
+                .size(26.dp)
+                .then(if (selected) Modifier.border(2.5.dp, ring, CircleShape) else Modifier.border(1.dp, Color(0x33000000), CircleShape))
+                .padding(if (selected) 4.dp else 1.dp)
                 .background(Color(argb or OPAQUE), CircleShape),
         )
     }
@@ -631,7 +644,8 @@ private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, on
     val colors = MaterialTheme.colorScheme
     Box(
         Modifier
-            .size(48.dp)
+            .size(44.dp)
+            .clip(CircleShape)
             .clickable(onClick = onClick)
             .then(if (selected) Modifier.background(colors.secondaryContainer, CircleShape) else Modifier)
             .semantics {
@@ -641,7 +655,7 @@ private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, on
             },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size((6 + 16 * fraction).dp).background(colors.onSurface, CircleShape))
+        Box(Modifier.size((5 + 13 * fraction).dp).background(colors.onSurface, CircleShape))
     }
 }
 
@@ -749,6 +763,7 @@ internal fun BrushStyle.label(): Int = when (this) {
 
 private const val OPAQUE = 0xFF shl 24
 private const val QUICK_COLOURS = 10
+private const val BAR_COLOURS = 6
 private const val PREVIEW_W = 180f
 private const val PREVIEW_H = 44f
 internal const val HIGHLIGHTER_MAX_OPACITY = 0.7f

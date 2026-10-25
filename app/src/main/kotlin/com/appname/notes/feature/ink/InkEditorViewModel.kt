@@ -559,7 +559,7 @@ class InkEditorViewModel @AssistedInject constructor(
         toolPickedHere = true
         c.tools = c.tools.copy(tool = tool)
         refresh()
-        viewModelScope.launch { settings.updateInk { it.copy(lastTool = tool) } }
+        persistInk { it.copy(lastTool = tool) }
     }
 
     fun setColor(colorArgb: Int) {
@@ -570,7 +570,7 @@ class InkEditorViewModel @AssistedInject constructor(
         val color = (brush.colorArgb and ALPHA_MASK) or (colorArgb and RGB_MASK)
         updateBrush(inkTool, brush.copy(colorArgb = color))
         val opaque = colorArgb or ALPHA_MASK
-        viewModelScope.launch { settings.updateInk { it.copy(recentColors = Recents.push(it.recentColors, opaque, Recents.MAX_COLORS)) } }
+        persistInk { it.copy(recentColors = Recents.push(it.recentColors, opaque, Recents.MAX_COLORS)) }
     }
 
     fun setSize(size: Float) {
@@ -616,7 +616,7 @@ class InkEditorViewModel @AssistedInject constructor(
         toolPickedHere = true
         c.tools = c.tools.copy(tool = tool)
         updateBrush(brush.tool, brush.normalized())
-        viewModelScope.launch { settings.updateInk { it.copy(lastTool = tool) } }
+        persistInk { it.copy(lastTool = tool) }
     }
 
     // ------------------------------------------------------------ shape tool and arranging (7d)
@@ -627,7 +627,7 @@ class InkEditorViewModel @AssistedInject constructor(
         val safe = shape.copy(size = shape.size.takeIf { it.isFinite() }?.coerceIn(0.5f, 40f) ?: 2.5f)
         c.tools = c.tools.copy(shapeKind = safe.kind, shapeColor = safe.colorArgb, shapeSize = safe.size, shapeFill = safe.fillArgb)
         refresh()
-        viewModelScope.launch { settings.updateInk { it.copy(shape = safe) } }
+        persistInk { it.copy(shape = safe) }
     }
 
     fun bringSelectionToFront() {
@@ -649,7 +649,7 @@ class InkEditorViewModel @AssistedInject constructor(
     fun setLaser(laser: LaserSettings) {
         val safe = laser.copy(widthDp = laser.widthDp.takeIf { it.isFinite() }?.coerceIn(2f, 24f) ?: LaserSettings().widthDp, colorArgb = laser.colorArgb or ALPHA_MASK)
         _ui.update { it.copy(laser = safe) }
-        viewModelScope.launch { settings.updateInk { it.copy(laser = safe) } }
+        persistInk { it.copy(laser = safe) }
     }
 
     fun saveColor(colorArgb: Int) {
@@ -660,7 +660,7 @@ class InkEditorViewModel @AssistedInject constructor(
     }
 
     fun removeSavedColor(colorArgb: Int) {
-        viewModelScope.launch { settings.updateInk { s -> s.copy(savedColors = s.savedColors - colorArgb) } }
+        persistInk { s -> s.copy(savedColors = s.savedColors - colorArgb) }
     }
 
     /** A stroke was just drawn with the current tool: its set-up goes to the front of the recent list. */
@@ -672,21 +672,21 @@ class InkEditorViewModel @AssistedInject constructor(
         val used = stroke.brush.normalized()
         if (used != current.normalized()) return // an undo/redo or a pasted stroke, not a new one
         if (inkSettings.recentBrushes.firstOrNull() == used) return
-        viewModelScope.launch { settings.updateInk { it.copy(recentBrushes = Recents.push(it.recentBrushes, used, Recents.MAX_BRUSHES)) } }
+        persistInk { it.copy(recentBrushes = Recents.push(it.recentBrushes, used, Recents.MAX_BRUSHES)) }
     }
 
     private fun updateBrush(tool: InkTool, brush: InkBrush) {
         val c = controller() ?: return
         c.tools = c.tools.copy(brushes = c.tools.brushes + (tool to brush))
         refresh()
-        viewModelScope.launch { settings.updateInk { it.copy(brushes = it.brushes + (tool to brush)) } }
+        persistInk { it.copy(brushes = it.brushes + (tool to brush)) }
     }
 
     fun setEraserMode(mode: EraserMode) {
         val c = controller() ?: return
         c.tools = c.tools.copy(eraserMode = mode)
         refresh()
-        viewModelScope.launch { settings.updateInk { it.copy(eraserMode = mode) } }
+        persistInk { it.copy(eraserMode = mode) }
     }
 
     fun setEraserSize(sizeDp: Double) {
@@ -846,14 +846,31 @@ class InkEditorViewModel @AssistedInject constructor(
 
     // ---------------------------------------------------------------- settings
 
+    /**
+     * Saves a tool change. While our own saves are still on their way, the settings flow can echo an older value;
+     * tool state isn't taken from the flow then, so a quick second tap is never undone by the first one's echo.
+     */
+    private var localInkWrites = 0
+
+    private fun persistInk(change: (InkSettings) -> InkSettings) {
+        localInkWrites++
+        viewModelScope.launch {
+            try {
+                settings.updateInk(change)
+            } finally {
+                localInkWrites--
+            }
+        }
+    }
+
     private fun applySettings(s: InkSettings) {
         val c = controller()
-        if (c != null) {
+        if (c != null && localInkWrites == 0) {
             val tool = if (toolPickedHere) c.tools.tool else s.lastTool
             val next = toolsFrom(s).copy(tool = tool, eraserSizeDp = c.tools.eraserSizeDp)
             if (next != c.tools) c.tools = next
         }
-        _ui.update { it.copy(recentBrushes = s.recentBrushes, recentColors = s.recentColors, savedColors = s.savedColors, laser = s.laser) }
+        _ui.update { it.copy(recentBrushes = s.recentBrushes, recentColors = s.recentColors, savedColors = s.savedColors, laser = if (localInkWrites == 0) s.laser else it.laser) }
         refresh()
     }
 

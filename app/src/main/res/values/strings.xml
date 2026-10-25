@@ -222,6 +222,7 @@
     <string name="ink_tool_laser">Laser pointer</string>
     <string name="ink_more_colors">More colours</string>
     <string name="ink_panel_open">Tool options</string>
+    <string name="ink_panel_open_for">More options for %1$s</string>
     <string name="ink_panel_close">Close tool options</string>
     <string name="ink_panel_state_open">Options open</string>
     <string name="ink_panel_state_closed">Options closed</string>
