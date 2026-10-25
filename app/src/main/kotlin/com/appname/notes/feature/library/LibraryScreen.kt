@@ -118,6 +118,7 @@ object LibraryTestTags {
     const val NEW_NOTE = "fab_new_note"
     const val CHOOSE_TEMPLATE = "create_choose_template"
     const val SCAN = "action_scan"
+    const val NEW_FOLDER = "action_new_folder"
     const val IMPORT_FILE = "action_import_file"
     const val COLLECTION_BUTTON = "collection_button"
     const val SEARCH = "action_search"
@@ -346,7 +347,7 @@ fun LibraryScreen(
                 CreateMenu(
                     expanded = createOpen,
                     onExpandedChange = { createOpen = it },
-                    actions = create,
+                    actions = if (folders != null && state.canCreate) create.copy(newFolder = { newFolder = true }) else create,
                 )
             }
         },

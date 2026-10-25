@@ -123,11 +123,11 @@ class PageStackTest {
     }
 
     @Test
-    fun `infinite mode joins the pages without gaps`() {
+    fun `infinite mode keeps a small gap between pages`() {
         val arrangement = PageArrangement(PageMode.INFINITE, ScrollAxis.VERTICAL)
         val joined = PageStack(listOf(794f to 1123f, 794f to 1123f), arrangement.axis, arrangement.gap)
-        assertEquals(1123.0, joined.top(1), 0.0)
-        assertEquals(2246.0, joined.height, 0.0)
+        assertEquals(1123.0 + PageStack.INFINITE_GAP, joined.top(1), 0.0)
+        assertEquals(2246.0 + PageStack.INFINITE_GAP, joined.height, 0.0)
         assertEquals(PageStack.GAP, PageArrangement.DEFAULT.gap, 0.0)
     }
 }

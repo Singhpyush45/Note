@@ -809,7 +809,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     -1
                 }
                 // Infinite mode: no paper edge shadow, so the joined pages read as one surface.
-                val edge = if (arrangement.mode == PageMode.INFINITE) 0f else shadow
+                val edge = if (arrangement.mode == PageMode.INFINITE) shadow * 0.5f else shadow
                 renderer.drawPaper(canvas, page.width, page.height, page.template, m, edge, page.layout)
                 drawPdfPage(canvas, page, m, v.scale.toFloat())
                 val editing = selection != null && selection.pageId == page.id && liveMatrix != null

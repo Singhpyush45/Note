@@ -16,7 +16,7 @@
     <string name="action_continue">Continue</string>
 
     <!-- Library -->
-    <string name="collection_all">All notes</string>
+    <string name="collection_all">Notes</string>
     <string name="collection_favourites">Favourites</string>
     <string name="collection_archive">Archive</string>
     <string name="collection_trash">Trash</string>

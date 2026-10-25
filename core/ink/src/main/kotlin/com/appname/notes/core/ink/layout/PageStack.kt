@@ -12,8 +12,8 @@ enum class ScrollAxis { VERTICAL, HORIZONTAL }
 
 /** A note's page arrangement. Separate from the page size, as the owner asked. */
 data class PageArrangement(val mode: PageMode = PageMode.SPLIT, val axis: ScrollAxis = ScrollAxis.VERTICAL) {
-    /** Space between pages: none in infinite mode, so the pages join into one surface. */
-    val gap: Double get() = if (mode == PageMode.SPLIT) PageStack.GAP else 0.0
+    /** Space between pages: a small one in infinite mode (owner request), so each page still reads as one. */
+    val gap: Double get() = if (mode == PageMode.SPLIT) PageStack.GAP else PageStack.INFINITE_GAP
 
     companion object {
         val DEFAULT = PageArrangement()
@@ -107,6 +107,9 @@ class PageStack(sizes: List<Pair<Float, Float>>, val axis: ScrollAxis = ScrollAx
 
     companion object {
         const val GAP = 24.0
+
+        /** Infinite mode: pages follow closely, with just a thin break between them. */
+        const val INFINITE_GAP = 10.0
     }
 }
 

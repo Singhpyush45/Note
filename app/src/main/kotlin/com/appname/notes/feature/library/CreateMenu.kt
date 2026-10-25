@@ -1,5 +1,6 @@
 package com.appname.notes.feature.library
 
+import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -52,6 +53,8 @@ data class CreateActions(
     val chooseTemplate: () -> Unit,
     val scanNote: () -> Unit,
     val importFile: () -> Unit,
+    /** A new folder (in the open folder, or at the top level); null where folders can't be made. */
+    val newFolder: (() -> Unit)? = null,
 )
 
 /**
@@ -87,6 +90,7 @@ fun CreateMenu(expanded: Boolean, onExpandedChange: (Boolean) -> Unit, actions: 
         ) {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 fun pick(action: () -> Unit): () -> Unit = { onExpandedChange(false); action() }
+                actions.newFolder?.let { CreateItem(R.string.folder_new, Icons.Outlined.CreateNewFolder, LibraryTestTags.NEW_FOLDER, pick(it)) }
                 CreateItem(R.string.create_import_file, Icons.Outlined.UploadFile, LibraryTestTags.IMPORT_FILE, pick(actions.importFile))
                 CreateItem(R.string.create_scan_note, Icons.Outlined.DocumentScanner, LibraryTestTags.SCAN, pick(actions.scanNote))
                 CreateItem(R.string.create_choose_template, Icons.Outlined.GridView, LibraryTestTags.CHOOSE_TEMPLATE, pick(actions.chooseTemplate))
