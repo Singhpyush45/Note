@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,7 +27,16 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.stateDescription
+import com.appname.notes.core.designsystem.component.GlassSurface
+import com.appname.notes.feature.reminders.ReminderDates
+import java.time.LocalDateTime
+import java.time.ZoneId
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,8 +59,10 @@ import com.appname.notes.core.domain.model.NoteType
 data class CardAction(val label: String, val run: () -> Unit)
 
 /**
- * Note preview card. Tap opens, long-press shows actions. TalkBack users get the same actions
- * through the "Actions" menu (custom accessibility actions).
+ * Note preview card on frosted glass (owner brief §1–2): title and when it was changed, a ⋮ for this note's actions,
+ * then a preview (text, handwriting thumbnail or first photo) and its notebook, tags, attachments and reminder.
+ * Tap opens; long-press starts selecting several notes ([onLongClick]); [checked] marks a selected one.
+ * TalkBack users get every action through the "Actions" menu (custom accessibility actions).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -66,8 +76,13 @@ fun NoteCard(
     inkThumbnail: (suspend (NoteSummary) -> InkThumbnail?)? = null,
     /** Loads the cover photo (first attached image) by stored file name. */
     cover: (suspend (String) -> Bitmap?)? = null,
+    /** The ⋮ button; null hides it (e.g. while selecting several notes). */
+    onMore: (() -> Unit)? = null,
+    /** Shown as selected in multi-select. */
+    checked: Boolean = false,
 ) {
     val spacing = AppTheme.spacing
+    val context = LocalContext.current
     // PDF notes are ink pages over the document's pages: same thumbnail, with the PDF page under the ink.
     val isInk = note.type == NoteType.INK || note.type == NoteType.PDF
     val firstLine = note.preview.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
@@ -80,71 +95,93 @@ fun NoteCard(
     )
     val heading = note.title.ifBlank { firstLine }.ifBlank { untitled }
     val body = if (note.title.isBlank()) note.preview.substringAfter(firstLine).trim() else note.preview
-    OutlinedCard(
+    val changed = ReminderDates.format(context, LocalDateTime.ofInstant(note.updatedAt, ZoneId.systemDefault()))
+    val highlighted = selected || checked
+    val shape = MaterialTheme.shapes.large
+    val selectedLabel = stringResource(R.string.library_selected_note)
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
+            .then(if (highlighted) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
             .testTag("note_card_${note.id.value}")
             .semantics {
                 customActions = accessibilityActions.map { CustomAccessibilityAction(it.label) { it.run(); true } }
+                if (checked) stateDescription = selectedLabel
             },
-        border = if (selected) {
-            androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            androidx.compose.material3.CardDefaults.outlinedCardBorder()
-        },
+        shape = shape,
+        elevation = 2.dp,
     ) {
         Column(
             modifier = Modifier
+                .clip(shape) // ripple inside the card; the soft shadow stays outside
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick, onClickLabel = stringResource(R.string.note_open))
-                .padding(spacing.lg),
+                .padding(start = spacing.lg, end = if (onMore != null) spacing.xs else spacing.lg, top = spacing.md, bottom = spacing.lg),
             verticalArrangement = Arrangement.spacedBy(spacing.sm),
         ) {
             Row(verticalAlignment = Alignment.Top) {
-                Text(
-                    text = heading,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                if (checked) {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp, end = spacing.sm).size(22.dp),
+                    )
+                }
+                Column(Modifier.weight(1f).padding(top = spacing.xs)) {
+                    Text(
+                        text = heading,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = changed,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (note.isFavourite) {
-                    Icon(Icons.Filled.Star, stringResource(R.string.collection_favourites), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.tertiary)
+                    Icon(Icons.Filled.Star, stringResource(R.string.collection_favourites), Modifier.padding(top = spacing.sm).size(18.dp), tint = MaterialTheme.colorScheme.tertiary)
                 }
                 if (note.isPinned) {
-                    Icon(Icons.Filled.PushPin, stringResource(R.string.library_pinned), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Filled.PushPin, stringResource(R.string.library_pinned), Modifier.padding(top = spacing.sm).size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+                if (onMore != null) {
+                    IconButton(onClick = onMore, modifier = Modifier.testTag("note_more_${note.id.value}")) {
+                        Icon(Icons.Filled.MoreVert, stringResource(R.string.note_more_for, heading), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
-            if (isInk && inkThumbnail != null) {
-                InkThumbnailView(note, inkThumbnail)
-            }
-            val coverFile = note.coverImage
-            if (!isInk && coverFile != null && cover != null) {
-                CoverPhoto(coverFile, cover)
-            }
-            if (body.isNotBlank()) {
-                Text(
-                    text = body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 8,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(spacing.xs),
-                itemVerticalAlignment = Alignment.CenterVertically,
-            ) {
-                note.notebookTitle?.let { MetaChip(it, emphasised = true) }
-                note.tags.take(3).forEach { MetaChip("#${it.name}") }
-                if (note.attachmentCount > 0) AttachmentCountChip(note.attachmentCount)
-                note.nextReminderAt?.let { ReminderChip(it) }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = NoteDates.format(note.updatedAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Column(Modifier.padding(end = if (onMore != null) spacing.md else 0.dp), verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                if (isInk && inkThumbnail != null) {
+                    InkThumbnailView(note, inkThumbnail)
+                }
+                val coverFile = note.coverImage
+                if (!isInk && coverFile != null && cover != null) {
+                    CoverPhoto(coverFile, cover)
+                }
+                if (body.isNotBlank()) {
+                    Text(
+                        text = body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 8,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                val hasMeta = note.notebookTitle != null || note.tags.isNotEmpty() || note.attachmentCount > 0 || note.nextReminderAt != null
+                if (hasMeta) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                        verticalArrangement = Arrangement.spacedBy(spacing.xs),
+                        itemVerticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        note.notebookTitle?.let { MetaChip(it, emphasised = true) }
+                        note.tags.take(3).forEach { MetaChip("#${it.name}") }
+                        if (note.attachmentCount > 0) AttachmentCountChip(note.attachmentCount)
+                        note.nextReminderAt?.let { ReminderChip(it) }
+                    }
+                }
             }
         }
     }

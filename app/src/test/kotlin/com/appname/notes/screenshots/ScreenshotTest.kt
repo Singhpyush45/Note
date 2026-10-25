@@ -14,6 +14,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appname.notes.MainActivity
@@ -244,6 +246,24 @@ abstract class ScreenshotTestBase(private val device: String) {
         waitAdvancing { exists(hasText("Groceries")) }
         snap("library_light")
 
+        // The single + and its menu (owner brief §3), then the template picker.
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.NEW_NOTE)) }
+        snap("library_create_menu_light")
+        composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.TEMPLATE_PICKER)) }
+        snap("template_picker_light")
+        composeRule.onNodeWithText(string(R.string.action_cancel)).performClick()
+        waitAdvancing { !exists(hasTestTag(LibraryTestTags.TEMPLATE_PICKER)) }
+
+        // Long-press selects; the header becomes the selection bar.
+        composeRule.onNodeWithText("Groceries").performTouchInput { longClick() }
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.SELECTION_BAR)) }
+        composeRule.onNodeWithText("Project meeting").performClick()
+        snap("library_selecting_light")
+        composeRule.onNodeWithTag(LibraryTestTags.SELECTION_CLEAR).performClick()
+        waitAdvancing { !exists(hasTestTag(LibraryTestTags.SELECTION_BAR)) }
+
         composeRule.onNodeWithText("Lecture 4 — Chain rule").performClick()
         waitAdvancing { exists(hasTestTag(EditorTestTags.BODY)) }
         snap("editor_light")
@@ -274,6 +294,8 @@ class PhoneScreenshotTest : ScreenshotTestBase("phone") {
 
     @Test
     fun editorIsFullScreenOnPhones() {
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.NEW_NOTE)) }
         composeRule.onNodeWithTag(LibraryTestTags.NEW_NOTE).performClick()
         waitAdvancing { exists(hasTestTag(EditorTestTags.BODY)) }
         assertThat(exists(hasTestTag(LibraryTestTags.SCREEN))).isFalse()
@@ -296,6 +318,8 @@ class TabletScreenshotTest : ScreenshotTestBase("tablet") {
     @Test
     fun tabletShowsListAndNoteSideBySide() {
         waitAdvancing { exists(hasTestTag("detail_placeholder")) }
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.NEW_NOTE)) }
         composeRule.onNodeWithTag(LibraryTestTags.NEW_NOTE).performClick()
         waitAdvancing { exists(hasTestTag(EditorTestTags.BODY)) }
         assertThat(exists(hasTestTag(LibraryTestTags.SCREEN))).isTrue()
@@ -306,7 +330,11 @@ class TabletScreenshotTest : ScreenshotTestBase("tablet") {
 
     @Test
     fun handwritingIsFullScreenOnTablets() {
-        composeRule.onNodeWithTag(LibraryTestTags.NEW_INK_NOTE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.CHOOSE_TEMPLATE)) }
+        composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.template(PageTemplate.LINED))) }
+        composeRule.onNodeWithTag(LibraryTestTags.template(PageTemplate.LINED)).performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
         assertThat(exists(hasTestTag(LibraryTestTags.SCREEN))).isFalse() // no list pane
         assertThat(exists(hasTestTag("nav_settings"))).isFalse() // no navigation rail

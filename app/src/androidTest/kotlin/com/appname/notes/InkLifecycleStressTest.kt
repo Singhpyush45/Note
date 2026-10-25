@@ -1,5 +1,6 @@
 package com.appname.notes
 
+import com.appname.notes.core.ink.model.PageTemplate
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
@@ -41,7 +42,12 @@ class InkLifecycleStressTest {
     private fun canvasOrNull() = findCanvas(composeRule.activity.window.decorView)
 
     private fun openNewInkNote() {
-        composeRule.onNodeWithTag(LibraryTestTags.NEW_INK_NOTE).performClick()
+        // + → Choose template → Lined (owner brief §3)
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        composeRule.waitUntil(5_000) { composeRule.onAllNodes(hasTestTag(LibraryTestTags.CHOOSE_TEMPLATE)).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
+        composeRule.waitUntil(5_000) { composeRule.onAllNodes(hasTestTag(LibraryTestTags.template(PageTemplate.LINED))).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithTag(LibraryTestTags.template(PageTemplate.LINED)).performClick()
         composeRule.waitUntil(10_000) { composeRule.onAllNodes(hasTestTag(InkTestTags.CANVAS)).fetchSemanticsNodes().isNotEmpty() }
         composeRule.waitUntil(5_000) { (canvasOrNull()?.width ?: 0) > 0 }
     }

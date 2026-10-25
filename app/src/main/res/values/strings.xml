@@ -25,13 +25,11 @@
     <string name="collection_choose">Choose what to show. Current: %1$s</string>
     <string name="library_manage_notebooks">Manage notebooks</string>
     <string name="library_manage_tags">Manage tags</string>
-    <string name="library_new_note">New note</string>
     <string name="library_search">Search notes</string>
     <string name="library_sort">Sort</string>
     <string name="sort_modified">Last modified</string>
     <string name="sort_created">Date created</string>
     <string name="sort_title">Title</string>
-    <string name="library_import">Import Markdown or text</string>
     <string name="library_empty_trash">Empty trash</string>
     <string name="library_pinned">Pinned</string>
     <string name="library_others">Others</string>
@@ -190,7 +188,6 @@
     <string name="settings_save_failed">Couldn\'t save that setting. Please try again.</string>
 
     <!-- Handwriting (Phase 3) -->
-    <string name="ink_new_note">New handwritten note</string>
     <string name="ink_untitled">Handwritten note</string>
     <string name="ink_canvas_description">Handwriting page %1$d of %2$d. Draw with a stylus or finger; two fingers scroll and zoom.</string>
     <string name="ink_page_indicator">%1$d / %2$d</string>
@@ -256,7 +253,6 @@
     <string name="pdf_untitled">PDF</string>
     <string name="pdf_share">Share annotated PDF</string>
     <string name="pdf_share_title">Share PDF</string>
-    <string name="pdf_import">Import PDF</string>
     <string name="pdf_importing">Importing PDF…</string>
     <string name="pdf_import_not_pdf">That file isn\'t a PDF this app can open.</string>
     <string name="pdf_import_password">Password-protected PDFs can\'t be imported yet.</string>
@@ -429,4 +425,38 @@
     <string name="settings_reset_appearance_summary">Theme, colours, glass, corners, wallpaper and density back to the defaults</string>
     <string name="settings_reset_appearance_confirm">Your notes aren\'t affected. A wallpaper photo you chose is removed from the app.</string>
     <string name="settings_reset">Reset</string>
+
+    <!-- Phase 6b: notes-first home (owner brief §2–3) -->
+    <string name="create_open">Create</string>
+    <string name="create_close">Close create menu</string>
+    <string name="create_state_open">Open</string>
+    <string name="create_state_closed">Closed</string>
+    <string name="create_blank_note">Blank note</string>
+    <string name="create_choose_template">Choose template</string>
+    <string name="create_scan_note">Scan note</string>
+    <string name="create_import_file">Import file</string>
+    <string name="note_rename">Rename</string>
+    <string name="note_select">Select</string>
+    <string name="note_title_label">Name</string>
+    <string name="note_more_for">More actions for %1$s</string>
+    <string name="library_selected_note">Selected</string>
+    <string name="library_loading">Loading notes</string>
+    <string name="selection_clear">Cancel selection</string>
+    <string name="selection_select_all">Select all</string>
+    <plurals name="selection_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <string name="msg_renamed">Renamed</string>
+    <string name="msg_pinned">Pinned</string>
+    <string name="msg_unpinned">Unpinned</string>
+    <string name="msg_pinned_many">%1$s notes pinned</string>
+    <string name="msg_unpinned_many">%1$s notes unpinned</string>
+    <string name="msg_archived_many">%1$s notes archived</string>
+    <string name="msg_unarchived_many">%1$s notes moved back from the archive</string>
+    <string name="msg_trashed_many">%1$s notes moved to trash</string>
+    <string name="msg_restored_many">%1$s notes restored</string>
+    <string name="msg_deleted_many">%1$s notes deleted forever</string>
+    <string name="confirm_delete_many_title">Delete these notes forever?</string>
+    <string name="confirm_delete_many_body">The selected notes will be removed permanently. This can\'t be undone.</string>
 </resources>

@@ -23,6 +23,7 @@ import com.appname.notes.core.domain.model.NoteCollection
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.domain.model.NoteSummary
+import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.domain.model.Notebook
 import com.appname.notes.core.domain.model.NotebookId
 import com.appname.notes.core.domain.model.Tag
@@ -127,11 +128,10 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { settings.setLibrarySort(sort).reportFailure() }
     }
 
-    /** Creates a note in the current notebook (if any) and returns its id, or null on failure. */
-    /** New handwritten note in the shown notebook/tag, like [createNote]. */
-    suspend fun createInkNote(): NoteId? {
+    /** New handwritten note with [template] pages in the shown notebook/tag, like [createNote]. */
+    suspend fun createInkNote(template: PageTemplate = PageTemplate.LINED): NoteId? {
         val notebook = (collection.value as? NoteCollection.InNotebook)?.id
-        return when (val result = ink.createInkNote(notebook, PageTemplate.LINED)) {
+        return when (val result = ink.createInkNote(notebook, template)) {
             is AppResult.Success -> {
                 (collection.value as? NoteCollection.WithTag)?.let { notes.setTags(result.value, setOf(it.id)) }
                 result.value
@@ -265,6 +265,82 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    // ------------------------------------------------------------------ owner brief §2–3: home actions
+
+    /** Renames a note (blank names are allowed: the card then shows the first line). */
+    fun rename(id: NoteId, title: String) {
+        launchAction(UserMessage(R.string.msg_renamed)) { notes.setTitle(id, title.trim()) }
+    }
+
+    /** Several selected notes at once (long-press to select). */
+    fun setPinned(ids: Set<NoteId>, pinned: Boolean) {
+        launchAction(many(ids, if (pinned) R.string.msg_pinned_many else R.string.msg_unpinned_many, if (pinned) R.string.msg_pinned else R.string.msg_unpinned)) {
+            notes.setPinned(ids, pinned)
+        }
+    }
+
+    fun setFavourite(ids: Set<NoteId>, favourite: Boolean) {
+        launchAction { notes.setFavourite(ids, favourite) }
+    }
+
+    fun setArchived(ids: Set<NoteId>, archived: Boolean) {
+        launchAction(
+            many(
+                ids,
+                if (archived) R.string.msg_archived_many else R.string.msg_unarchived_many,
+                if (archived) R.string.msg_archived else R.string.msg_unarchived,
+                undo = { setArchived(ids, !archived) },
+            ),
+        ) { notes.setArchived(ids, archived) }
+    }
+
+    fun moveToTrash(ids: Set<NoteId>) {
+        launchAction(many(ids, R.string.msg_trashed_many, R.string.msg_trashed, undo = { restore(ids) })) { notes.moveToTrash(ids) }
+    }
+
+    fun restore(ids: Set<NoteId>) {
+        launchAction(many(ids, R.string.msg_restored_many, R.string.msg_restored)) { notes.restoreFromTrash(ids) }
+    }
+
+    fun deleteForever(ids: Set<NoteId>) {
+        launchAction(many(ids, R.string.msg_deleted_many, R.string.msg_deleted)) {
+            notes.deletePermanently(ids).also { cleanUpPdfFiles() }
+        }
+    }
+
+    fun moveToNotebook(ids: Set<NoteId>, notebook: NotebookId?) {
+        launchAction(UserMessage(R.string.msg_moved)) { notes.moveToNotebook(ids, notebook) }
+    }
+
+    /**
+     * "Import file" from the + menu: a PDF becomes a PDF note, Markdown/text a text note, and anything else
+     * (photos, recordings, documents) a new note with the file attached. Returns the note to open.
+     */
+    suspend fun importFile(uri: Uri): Pair<NoteId, NoteType>? {
+        val (mimeType, displayName) = files.typeAndName(uri)
+        return importFile(uri, mimeType, displayName)
+    }
+
+    internal suspend fun importFile(uri: Uri, mimeType: String?, displayName: String?): Pair<NoteId, NoteType>? {
+        val name = displayName.orEmpty().lowercase()
+        return when {
+            mimeType == "application/pdf" || name.endsWith(".pdf") -> importPdf(uri)?.let { it to NoteType.PDF }
+            mimeType in TEXT_TYPES || name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".txt") ->
+                import(uri)?.let { it to NoteType.TEXT }
+            else -> {
+                val notebook = (collection.value as? NoteCollection.InNotebook)?.id
+                val (id, outcome) = attacher.createNote(notebook, listOf(uri))
+                outcome.errorMessage?.let { message.value = UserMessage(it) }
+                if (id != null) (collection.value as? NoteCollection.WithTag)?.let { notes.setTags(id, setOf(it.id)) }
+                id?.let { it to NoteType.TEXT }
+            }
+        }
+    }
+
+    /** "3 notes archived", or the one-note wording when only one was selected. */
+    private fun many(ids: Set<NoteId>, manyRes: Int, oneRes: Int, undo: (() -> Unit)? = null): UserMessage =
+        if (ids.size == 1) UserMessage(oneRes, undo = undo) else UserMessage(manyRes, listOf(ids.size.toString()), undo = undo)
+
     fun messageShown() {
         message.value = null
     }
@@ -286,6 +362,7 @@ class LibraryViewModel @Inject constructor(
         private const val KEY_COLLECTION = "collection"
         private const val THUMBNAIL_CACHE = 60
         private const val COVER_PX = 480
+        private val TEXT_TYPES = setOf("text/markdown", "text/x-markdown", "text/plain")
 
         fun encode(c: NoteCollection): String = when (c) {
             NoteCollection.All -> "all"

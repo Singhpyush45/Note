@@ -135,11 +135,11 @@ class PdfFlowRobolectricTest {
     }
 
     @Test
-    fun importPdfIsOfferedInTheLibraryMenu() {
+    fun importAndScanAreOfferedInTheCreateMenu() {
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SCREEN)) }
-        composeRule.onNodeWithContentDescription(string(R.string.action_more)).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
         composeRule.waitForIdle()
-        assertThat(exists(hasTestTag(LibraryTestTags.IMPORT_PDF))).isTrue()
+        assertThat(exists(hasTestTag(LibraryTestTags.IMPORT_FILE))).isTrue()
         assertThat(exists(hasTestTag(LibraryTestTags.SCAN))).isTrue()
     }
 

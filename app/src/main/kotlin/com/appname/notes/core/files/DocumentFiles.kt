@@ -63,6 +63,20 @@ class DocumentFiles @Inject constructor(
         }
     }
 
+    /** The picked file's MIME type and full name (with extension), either of which may be unknown. */
+    suspend fun typeAndName(uri: Uri): Pair<String?, String?> = withContext(dispatchers.io) {
+        try {
+            val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+            resolver.getType(uri) to name
+        } catch (e: SecurityException) {
+            null to null
+        } catch (e: IllegalArgumentException) {
+            null to null
+        }
+    }
+
     private fun displayName(uri: Uri): String? =
         resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null

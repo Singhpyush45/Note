@@ -642,7 +642,7 @@ private fun TemplateDialog(current: PageTemplate, onPick: (PageTemplate) -> Unit
 }
 
 @StringRes
-private fun PageTemplate.label(): Int = when (this) {
+internal fun PageTemplate.label(): Int = when (this) {
     PageTemplate.BLANK -> R.string.ink_template_blank
     PageTemplate.LINED -> R.string.ink_template_lined
     PageTemplate.GRID -> R.string.ink_template_grid

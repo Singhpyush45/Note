@@ -29,6 +29,7 @@ import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.domain.repository.InkPageContent
 import com.appname.notes.core.ink.input.EditorTool
+import com.appname.notes.core.ink.model.PageTemplate
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.ShapeItem
 import com.appname.notes.core.ink.model.ShapeKind
@@ -96,7 +97,12 @@ class InkFlowRobolectricTest {
     private fun canvas(): InkCanvasView = findCanvas(composeRule.activity.window.decorView)!!
 
     private fun openNewInkNote() {
-        composeRule.onNodeWithTag(LibraryTestTags.NEW_INK_NOTE).performClick()
+        // + → Choose template → Lined (owner brief §3)
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitFor(LibraryTestTags.CHOOSE_TEMPLATE)
+        composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
+        waitFor(LibraryTestTags.template(PageTemplate.LINED))
+        composeRule.onNodeWithTag(LibraryTestTags.template(PageTemplate.LINED)).performClick()
         waitFor(InkTestTags.CANVAS)
         waitAdvancing { findCanvas(composeRule.activity.window.decorView)?.width ?: 0 > 0 }
     }

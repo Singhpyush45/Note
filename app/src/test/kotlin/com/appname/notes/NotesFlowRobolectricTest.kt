@@ -65,7 +65,14 @@ class NotesFlowRobolectricTest {
         composeRule.waitForIdle()
     }
 
+    /** The single + opens the create menu (owner brief §3). */
+    private fun openCreateMenu() {
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitFor(LibraryTestTags.NEW_NOTE)
+    }
+
     private fun createNote(title: String, body: String) {
+        openCreateMenu()
         composeRule.onNodeWithTag(LibraryTestTags.NEW_NOTE).performClick()
         waitFor(EditorTestTags.BODY)
         composeRule.onNodeWithTag(EditorTestTags.TITLE).performTextInput(title)
@@ -95,6 +102,7 @@ class NotesFlowRobolectricTest {
 
     @Test
     fun emptyNewNoteIsDiscardedWhenLeft() {
+        openCreateMenu()
         composeRule.onNodeWithTag(LibraryTestTags.NEW_NOTE).performClick()
         waitFor(EditorTestTags.BODY)
         pressBack()
@@ -132,29 +140,74 @@ class NotesFlowRobolectricTest {
         pressBack()
         waitForText("Disposable")
 
-        composeRule.onNodeWithText("Disposable").performTouchInput { longClick() }
+        // ⋮ on the card → Move to trash
+        val id = allNotes().single { it.title == "Disposable" }.id
+        composeRule.onNodeWithTag(LibraryTestTags.more(id)).performClick()
         composeRule.onNodeWithText(string(R.string.note_trash)).performClick()
         waitAdvancing { !exists(hasText("Disposable")) }
 
         composeRule.onNodeWithTag(LibraryTestTags.COLLECTION_BUTTON).performClick()
         composeRule.onNodeWithText(string(R.string.collection_trash)).performClick()
         waitForText("Disposable")
-        composeRule.onNodeWithText("Disposable").performTouchInput { longClick() }
+        composeRule.onNodeWithTag(LibraryTestTags.more(id)).performClick()
         composeRule.onNodeWithText(string(R.string.note_restore)).performClick()
         waitAdvancing { !exists(hasText("Disposable")) }
 
-        composeRule.onNodeWithTag(LibraryTestTags.COLLECTION_BUTTON).performClick()
-        composeRule.onNodeWithText(string(R.string.collection_all)).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.CHIP_ALL).performClick()
         waitForText("Disposable")
+    }
+
+    /** Long-press selects; the selection bar acts on all selected notes (owner brief §2). */
+    @Test
+    fun selectSeveralNotesAndArchiveThem() {
+        createNote("First", "one")
+        pressBack()
+        createNote("Second", "two")
+        pressBack()
+        createNote("Third", "three")
+        pressBack()
+        waitForText("Third")
+
+        composeRule.onNodeWithText("First").performTouchInput { longClick() }
+        waitFor(LibraryTestTags.SELECTION_BAR)
+        composeRule.onNodeWithText("Second").performClick() // in selection mode a tap selects instead of opening
+        waitForText(composeRule.activity.resources.getQuantityString(R.plurals.selection_count, 2, 2))
+        assertThat(exists(hasTestTag(EditorTestTags.BODY))).isFalse()
+
+        composeRule.onNodeWithTag(LibraryTestTags.SELECTION_ARCHIVE).performClick()
+        waitAdvancing { !exists(hasText("First")) && !exists(hasText("Second")) }
+        assertThat(exists(hasTestTag(LibraryTestTags.SELECTION_BAR))).isFalse()
+        waitForText("Third")
+        waitAdvancing { allNotes().map { it.title } == listOf("Third") }
+
+        // Select all, then Back cancels the selection without doing anything.
+        composeRule.onNodeWithText("Third").performTouchInput { longClick() }
+        waitFor(LibraryTestTags.SELECTION_BAR)
+        pressBack()
+        waitAdvancing { !exists(hasTestTag(LibraryTestTags.SELECTION_BAR)) }
+        assertThat(allNotes().map { it.title }).containsExactly("Third")
+    }
+
+    /** The dialog itself is covered in HomePartsTest (text-field dialogs don't settle inside the full app here). */
+    @Test
+    fun cardMenuOffersRename() {
+        createNote("Old name", "body")
+        pressBack()
+        waitForText("Old name")
+        val id = allNotes().single().id
+        composeRule.onNodeWithTag(LibraryTestTags.more(id)).performClick()
+        waitForText(string(R.string.note_rename))
+        waitForText(string(R.string.note_select))
     }
 
     @Test
     fun noteInANotebookFlow() {
         val notebook = runBlocking { data.notebooks().create("Maths") }
         assertThat(notebook).isInstanceOf(com.appname.notes.core.common.result.AppResult.Success::class.java)
-        composeRule.onNodeWithTag(LibraryTestTags.COLLECTION_BUTTON).performClick()
-        waitForText("Maths")
-        composeRule.onNodeWithText("Maths").performClick()
+        // The notebook's quick filter under the header.
+        val maths = runBlocking { data.notebooks().observeNotebooks().first() }.single()
+        waitFor(LibraryTestTags.chip(maths))
+        composeRule.onNodeWithTag(LibraryTestTags.chip(maths)).performClick()
 
         createNote("Algebra", "in a notebook")
         pressBack()

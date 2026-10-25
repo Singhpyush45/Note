@@ -40,9 +40,15 @@ class LifecycleE2ETest {
         launch(clearTask = true)
     }
 
+    /** + → Blank note (owner brief §3). */
+    private fun newTextNote() {
+        find("fab_create").click()
+        find("fab_new_note").click()
+    }
+
     @Test
     fun textAndScreenSurviveProcessDeath() {
-        find("fab_new_note").click()
+        newTextNote()
         typeInto(find("editor_title"), "Survivor")
         typeInto(find("editor_body"), "This text must survive process death")
 
@@ -58,7 +64,7 @@ class LifecycleE2ETest {
 
     @Test
     fun noteSurvivesForceStop() {
-        find("fab_new_note").click()
+        newTextNote()
         typeInto(find("editor_body"), "Force stop safe")
 
         device.pressHome()
@@ -72,7 +78,9 @@ class LifecycleE2ETest {
 
     @Test
     fun handwritingSurvivesProcessDeath() {
-        find("fab_new_ink_note").click()
+        find("fab_create").click() // + → Choose template → Lined
+        find("create_choose_template").click()
+        find("template_lined").click()
         val canvas = findCanvas().visibleBounds
         val y = canvas.top + canvas.height() / 4
         // A fresh install has no stylus seen yet, so a finger draws.

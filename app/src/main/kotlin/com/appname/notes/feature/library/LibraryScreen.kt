@@ -1,34 +1,35 @@
 package com.appname.notes.feature.library
 
-import androidx.compose.material.icons.outlined.DocumentScanner
-import com.appname.notes.feature.attachments.rememberDocumentScanner
 import android.graphics.Bitmap
-import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.ui.zIndex
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.MoreVert
@@ -38,14 +39,13 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Unarchive
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -53,55 +53,91 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
-import androidx.compose.foundation.layout.Column
-import com.appname.notes.ui.common.InkThumbnail
-import com.appname.notes.feature.ink.InkIcons
-import androidx.compose.material3.SmallFloatingActionButton
-import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.designsystem.component.EmptyState
+import com.appname.notes.core.designsystem.component.GlassSurface
+import com.appname.notes.core.designsystem.component.backdropSource
+import com.appname.notes.core.designsystem.component.rememberBackdrop
 import com.appname.notes.core.designsystem.theme.AppTheme
 import com.appname.notes.core.domain.model.NoteCollection
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.domain.model.NoteSummary
+import com.appname.notes.core.domain.model.NoteType
+import com.appname.notes.core.domain.model.Notebook
+import com.appname.notes.core.domain.model.NotebookId
+import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.feature.attachments.rememberDocumentScanner
 import com.appname.notes.ui.common.ActionSheet
 import com.appname.notes.ui.common.CardAction
+import com.appname.notes.ui.common.InkThumbnail
 import com.appname.notes.ui.common.MessageEffect
 import com.appname.notes.ui.common.MoveToNotebookSheet
 import com.appname.notes.ui.common.NoteCard
 import com.appname.notes.ui.common.SheetAction
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 object LibraryTestTags {
     const val SCREEN = "screen_home"
+    const val HEADER = "home_header"
+    const val CREATE = "fab_create"
+    const val CREATE_SCRIM = "create_scrim"
     const val NEW_NOTE = "fab_new_note"
-    const val NEW_INK_NOTE = "fab_new_ink_note"
+    const val CHOOSE_TEMPLATE = "create_choose_template"
+    const val SCAN = "action_scan"
+    const val IMPORT_FILE = "action_import_file"
+    const val TEMPLATE_PICKER = "template_picker"
     const val COLLECTION_BUTTON = "collection_button"
     const val SEARCH = "action_search"
     const val GRID = "notes_grid"
-    const val IMPORT_PDF = "action_import_pdf"
-    const val SCAN = "action_scan"
+    const val LOADING = "library_loading"
     const val IMPORTING_PDF = "importing_pdf"
+    const val CHIPS = "collection_chips"
+    const val CHIP_ALL = "chip_all"
+    const val CHIP_FAVOURITES = "chip_favourites"
+    const val SELECTION_BAR = "selection_bar"
+    const val SELECTION_COUNT = "selection_count"
+    const val SELECTION_CLEAR = "selection_clear"
+    const val SELECT_ALL = "selection_select_all"
+    const val SELECTION_PIN = "selection_pin"
+    const val SELECTION_MOVE = "selection_move"
+    const val SELECTION_ARCHIVE = "selection_archive"
+    const val SELECTION_TRASH = "selection_trash"
+    const val SELECTION_RESTORE = "selection_restore"
+    const val SELECTION_DELETE = "selection_delete"
+    const val RENAME_DIALOG = "rename_dialog"
+    const val RENAME_FIELD = "rename_field"
+    const val RENAME_SAVE = "rename_save"
+
+    fun template(t: PageTemplate) = "template_${t.name.lowercase()}"
+    fun chip(nb: Notebook) = "chip_nb_${nb.id.value}"
+    fun card(id: NoteId) = "note_card_${id.value}"
+    fun more(id: NoteId) = "note_more_${id.value}"
 }
 
 @Composable
@@ -115,12 +151,9 @@ fun LibraryRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch { viewModel.import(uri)?.let { onOpenNote(it, NoteType.TEXT) } }
-    }
     // The system file picker grants read access to the one file picked; no storage permission needed.
-    val importPdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch { viewModel.importPdf(uri)?.let { onOpenNote(it, NoteType.PDF) } }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch { viewModel.importFile(uri)?.let { (id, type) -> onOpenNote(id, type) } }
     }
     val importingPdf by viewModel.importingPdf.collectAsStateWithLifecycle()
     val scan = rememberDocumentScanner(
@@ -138,17 +171,19 @@ fun LibraryRoute(
         state = state,
         selectedNoteId = selectedNoteId,
         onOpenNote = onOpenNote,
-        onNewNote = { scope.launch { viewModel.createNote()?.let { onOpenNote(it, NoteType.TEXT) } } },
-        onNewInkNote = { scope.launch { viewModel.createInkNote()?.let { onOpenNote(it, NoteType.INK) } } },
+        create = CreateActions(
+            blankNote = { scope.launch { viewModel.createNote()?.let { onOpenNote(it, NoteType.TEXT) } } },
+            chooseTemplate = {}, // replaced inside LibraryScreen by the template picker
+            scanNote = scan,
+            importFile = { importLauncher.launch(arrayOf("*/*")) },
+        ),
+        onTemplatePicked = { t -> scope.launch { viewModel.createInkNote(t)?.let { onOpenNote(it, NoteType.INK) } } },
         inkThumbnail = viewModel::inkThumbnail,
         cover = viewModel::cover,
         onOpenSearch = onOpenSearch,
         onSelectCollection = viewModel::selectCollection,
         onSort = viewModel::setSort,
-        onImport = { importLauncher.launch(arrayOf("text/markdown", "text/x-markdown", "text/plain", "application/octet-stream")) },
-        onImportPdf = { importPdfLauncher.launch(arrayOf("application/pdf")) },
         importingPdf = importingPdf,
-        onScan = scan,
         onManageNotebooks = onManageNotebooks,
         onManageTags = onManageTags,
         actions = NoteActions(
@@ -161,6 +196,15 @@ fun LibraryRoute(
             duplicate = viewModel::duplicate,
             move = viewModel::moveToNotebook,
             emptyTrash = viewModel::emptyTrash,
+            rename = viewModel::rename,
+        ),
+        bulk = BulkActions(
+            setPinned = viewModel::setPinned,
+            setArchived = viewModel::setArchived,
+            trash = viewModel::moveToTrash,
+            restore = viewModel::restore,
+            deleteForever = viewModel::deleteForever,
+            move = viewModel::moveToNotebook,
         ),
         onMessageShown = viewModel::messageShown,
     )
@@ -175,122 +219,201 @@ data class NoteActions(
     val restore: (NoteId) -> Unit,
     val deleteForever: (NoteId) -> Unit,
     val duplicate: (NoteId) -> Unit,
-    val move: (NoteId, com.appname.notes.core.domain.model.NotebookId?) -> Unit,
+    val move: (NoteId, NotebookId?) -> Unit,
     val emptyTrash: () -> Unit,
+    val rename: (NoteId, String) -> Unit = { _, _ -> },
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** The same actions for several selected notes at once. */
+data class BulkActions(
+    val setPinned: (Set<NoteId>, Boolean) -> Unit,
+    val setArchived: (Set<NoteId>, Boolean) -> Unit,
+    val trash: (Set<NoteId>) -> Unit,
+    val restore: (Set<NoteId>) -> Unit,
+    val deleteForever: (Set<NoteId>) -> Unit,
+    val move: (Set<NoteId>, NotebookId?) -> Unit,
+)
+
+/** Selected note ids survive rotation and process death. */
+private val SelectionSaver = Saver<MutableState<Set<String>>, ArrayList<String>>(
+    save = { ArrayList(it.value) },
+    restore = { mutableStateOf(it.toSet()) },
+)
+
+/**
+ * The notes-first home (owner brief §2–3): a glass header (collection, search, sort, more) with quick filters,
+ * the notes as cards scrolling under it, and one "+" that opens the create menu. Long-press selects notes for
+ * actions on several at once; each card's ⋮ has that note's actions.
+ */
 @Composable
 fun LibraryScreen(
     state: LibraryUiState,
     selectedNoteId: String?,
     onOpenNote: (NoteId, NoteType) -> Unit,
-    onNewNote: () -> Unit,
-    onNewInkNote: () -> Unit,
+    create: CreateActions,
+    onTemplatePicked: (PageTemplate) -> Unit,
     inkThumbnail: suspend (NoteSummary) -> InkThumbnail?,
     onOpenSearch: () -> Unit,
     onSelectCollection: (NoteCollection) -> Unit,
     onSort: (NoteSort) -> Unit,
-    onImport: () -> Unit,
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
     actions: NoteActions,
     onMessageShown: () -> Unit,
-    onImportPdf: () -> Unit = {},
+    bulk: BulkActions? = null,
     importingPdf: Boolean = false,
     cover: (suspend (String) -> Bitmap?)? = null,
-    onScan: () -> Unit = {},
 ) {
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(state.message, snackbar, onMessageShown)
 
     var showCollections by rememberSaveable { mutableStateOf(false) }
+    var createOpen by rememberSaveable { mutableStateOf(false) }
+    var showTemplates by rememberSaveable { mutableStateOf(false) }
     var actionsFor by remember { mutableStateOf<NoteSummary?>(null) }
+    var renameFor by remember { mutableStateOf<NoteSummary?>(null) }
     var moveFor by remember { mutableStateOf<NoteSummary?>(null) }
+    var moveSelected by remember { mutableStateOf(false) }
     var confirmDeleteFor by remember { mutableStateOf<NoteSummary?>(null) }
+    var confirmDeleteSelected by remember { mutableStateOf(false) }
     var confirmEmptyTrash by rememberSaveable { mutableStateOf(false) }
+    var selected by rememberSaveable(saver = SelectionSaver) { mutableStateOf(emptySet()) }
+
+    val all = remember(state.pinned, state.others) { state.pinned + state.others }
+    val selecting = selected.isNotEmpty()
+    val selectedNotes = all.filter { it.id.value in selected }
+    // Notes that left this view (deleted, moved, other collection) drop out of the selection.
+    LaunchedEffect(all) {
+        if (!state.loading) {
+            val ids = all.mapTo(HashSet()) { it.id.value }
+            if (!ids.containsAll(selected)) selected = selected intersect ids
+        }
+    }
+    // Switching to another collection ends selecting (but rotation and process death keep it).
+    var selectionScope by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.collection, state.loading) {
+        if (state.loading) return@LaunchedEffect
+        val key = LibraryViewModel.encode(state.collection)
+        if (selectionScope != null && selectionScope != key) selected = emptySet()
+        selectionScope = key
+    }
+    BackHandler(enabled = selecting) { selected = emptySet() }
+
+    fun toggle(note: NoteSummary) {
+        val id = note.id.value
+        selected = if (id in selected) selected - id else selected + id
+    }
+    val selectedIds = { selectedNotes.mapTo(HashSet()) { it.id } }
 
     val title = collectionTitle(state)
     val importingDescription = stringResource(R.string.pdf_importing)
     val inTrash = state.collection == NoteCollection.Trash
+    val density = LocalDensity.current
+    var headerHeight by remember { mutableStateOf(0.dp) }
+    val backdrop = rememberBackdrop()
 
     Scaffold(
         modifier = Modifier.testTag(LibraryTestTags.SCREEN),
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    val description = stringResource(R.string.collection_choose, title)
-                    TextButton(
-                        onClick = { showCollections = true },
-                        modifier = Modifier
-                            .testTag(LibraryTestTags.COLLECTION_BUTTON)
-                            .semantics { contentDescription = description },
-                    ) {
-                        Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
-                        Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onOpenSearch, modifier = Modifier.testTag(LibraryTestTags.SEARCH)) {
-                        Icon(Icons.Outlined.Search, stringResource(R.string.library_search))
-                    }
-                    SortMenu(state.sort, onSort)
-                    OverflowMenu(
-                        inTrash = inTrash,
-                        onImport = onImport,
-                        onImportPdf = onImportPdf,
-                        onScan = onScan,
-                        onEmptyTrash = { confirmEmptyTrash = true },
-                        onManageNotebooks = onManageNotebooks,
-                        onManageTags = onManageTags,
-                    )
-                },
-            )
-        },
         floatingActionButton = {
-            if (state.canCreate) {
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-                    SmallFloatingActionButton(
-                        onClick = onNewInkNote,
-                        modifier = Modifier.testTag(LibraryTestTags.NEW_INK_NOTE),
-                    ) {
-                        Icon(InkIcons.Handwriting, contentDescription = stringResource(R.string.ink_new_note))
-                    }
-                    ExtendedFloatingActionButton(
-                        onClick = onNewNote,
-                        icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                        text = { Text(stringResource(R.string.library_new_note)) },
-                        modifier = Modifier.testTag(LibraryTestTags.NEW_NOTE),
-                    )
-                }
+            if (state.canCreate && !selecting) {
+                CreateMenu(
+                    expanded = createOpen,
+                    onExpandedChange = { createOpen = it },
+                    actions = create.copy(chooseTemplate = { showTemplates = true }),
+                )
             }
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
+            // The notes scroll under the glass header, which blurs them (Android 12+).
+            Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
+                when {
+                    state.loading -> LoadingNotes(Modifier.align(Alignment.Center))
+                    state.isEmpty -> EmptyCollection(state.collection, Modifier.align(Alignment.Center).padding(top = headerHeight))
+                    else -> NotesGrid(
+                        state = state,
+                        topPadding = headerHeight,
+                        selectedNoteId = selectedNoteId,
+                        selected = selected,
+                        onClick = { note -> if (selecting) toggle(note) else onOpenNote(note.id, note.type) },
+                        onLongPress = ::toggle,
+                        onMore = if (selecting) null else { note: NoteSummary -> actionsFor = note },
+                        inkThumbnail = inkThumbnail,
+                        cover = cover,
+                        accessibilityActions = { note ->
+                            noteActions(
+                                note, state.collection, actions,
+                                onMove = { moveFor = it }, onDelete = { confirmDeleteFor = it },
+                                onRename = { renameFor = it }, onSelect = ::toggle,
+                            ).map { CardAction(stringResourceLabel(it.label), it.onClick) }
+                        },
+                    )
+                }
+            }
+            GlassSurface(
+                shape = MaterialTheme.shapes.extraLarge,
+                elevation = 3.dp,
+                backdrop = backdrop,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(1f)
+                    // Measured with the status bar and margins: the grid starts below all of it.
+                    .onSizeChanged { with(density) { headerHeight = it.height.toDp() } }
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .fillMaxWidth()
+                    .testTag(LibraryTestTags.HEADER),
+            ) {
+                Column(Modifier.padding(vertical = 4.dp)) {
+                    if (selecting) {
+                        SelectionBar(
+                            count = selectedNotes.size,
+                            collection = state.collection,
+                            allPinned = selectedNotes.isNotEmpty() && selectedNotes.all { it.isPinned },
+                            actions = SelectionActions(
+                                clear = { selected = emptySet() },
+                                selectAll = { selected = all.mapTo(HashSet()) { it.id.value } },
+                                pin = {
+                                    val pin = !selectedNotes.all { it.isPinned }
+                                    bulk?.setPinned?.invoke(selectedIds(), pin)
+                                    selected = emptySet()
+                                },
+                                move = { moveSelected = true },
+                                archive = {
+                                    bulk?.setArchived?.invoke(selectedIds(), state.collection != NoteCollection.Archive)
+                                    selected = emptySet()
+                                },
+                                trash = { bulk?.trash?.invoke(selectedIds()); selected = emptySet() },
+                                restore = { bulk?.restore?.invoke(selectedIds()); selected = emptySet() },
+                                deleteForever = { confirmDeleteSelected = true },
+                            ),
+                        )
+                    } else {
+                        HomeTopRow(
+                            title = title,
+                            sort = state.sort,
+                            inTrash = inTrash,
+                            onCollections = { showCollections = true },
+                            onOpenSearch = onOpenSearch,
+                            onSort = onSort,
+                            onEmptyTrash = { confirmEmptyTrash = true },
+                            onManageNotebooks = onManageNotebooks,
+                            onManageTags = onManageTags,
+                        )
+                        CollectionChips(state.collection, state.notebooks, onSelectCollection, Modifier.padding(bottom = 6.dp))
+                    }
+                }
+            }
             if (importingPdf) {
                 LinearProgressIndicator(
-                    Modifier.fillMaxWidth().align(Alignment.TopCenter).zIndex(1f).testTag(LibraryTestTags.IMPORTING_PDF)
+                    Modifier.fillMaxWidth().align(Alignment.TopCenter).zIndex(2f).testTag(LibraryTestTags.IMPORTING_PDF)
                         .semantics { contentDescription = importingDescription },
                 )
             }
-            when {
-                state.loading -> Unit
-                state.isEmpty -> EmptyCollection(state.collection, Modifier.align(Alignment.Center))
-                else -> NotesGrid(
-                    state = state,
-                    selectedNoteId = selectedNoteId,
-                    onOpenNote = onOpenNote,
-                    inkThumbnail = inkThumbnail,
-                    cover = cover,
-                    onLongPress = { actionsFor = it },
-                    accessibilityActions = { note ->
-                        noteActions(note, state.collection, actions, onMove = { moveFor = it }, onDelete = { confirmDeleteFor = it })
-                            .map { CardAction(stringResourceLabel(it.label), it.onClick) }
-                    },
-                )
-            }
+            CreateMenuScrim(visible = createOpen, onDismiss = { createOpen = false })
         }
     }
 
@@ -298,16 +421,34 @@ fun LibraryScreen(
         CollectionSheet(state, onSelect = { showCollections = false; onSelectCollection(it) }, onDismiss = { showCollections = false },
             onManageNotebooks = { showCollections = false; onManageNotebooks() }, onManageTags = { showCollections = false; onManageTags() })
     }
+    if (showTemplates) {
+        TemplatePickerDialog(onPick = onTemplatePicked, onDismiss = { showTemplates = false })
+    }
     actionsFor?.let { note ->
         ActionSheet(
-            title = note.title.ifBlank { note.preview.lineSequence().firstOrNull().orEmpty() }.ifBlank { stringResource(R.string.untitled) },
-            actions = noteActions(note, state.collection, actions, onMove = { moveFor = it }, onDelete = { confirmDeleteFor = it })
-                .map { SheetAction(stringResource(it.label), it.icon, it.onClick) },
+            title = note.displayTitle(),
+            actions = noteActions(
+                note, state.collection, actions,
+                onMove = { moveFor = it }, onDelete = { confirmDeleteFor = it },
+                onRename = { renameFor = it }, onSelect = ::toggle,
+            ).map { SheetAction(stringResource(it.label), it.icon, it.onClick) },
             onDismiss = { actionsFor = null },
         )
     }
+    renameFor?.let { note ->
+        RenameNoteDialog(current = note.title, onRename = { actions.rename(note.id, it) }, onDismiss = { renameFor = null })
+    }
     moveFor?.let { note ->
         MoveToNotebookSheet(state.notebooks, note.notebookId, onPick = { actions.move(note.id, it) }, onDismiss = { moveFor = null })
+    }
+    if (moveSelected) {
+        val current = selectedNotes.map { it.notebookId }.distinct().singleOrNull()
+        MoveToNotebookSheet(
+            state.notebooks,
+            current,
+            onPick = { bulk?.move?.invoke(selectedIds(), it); selected = emptySet() },
+            onDismiss = { moveSelected = false },
+        )
     }
     confirmDeleteFor?.let { note ->
         ConfirmDialog(
@@ -316,6 +457,15 @@ fun LibraryScreen(
             confirm = stringResource(R.string.action_delete),
             onConfirm = { actions.deleteForever(note.id) },
             onDismiss = { confirmDeleteFor = null },
+        )
+    }
+    if (confirmDeleteSelected) {
+        ConfirmDialog(
+            title = stringResource(R.string.confirm_delete_many_title),
+            body = stringResource(R.string.confirm_delete_many_body),
+            confirm = stringResource(R.string.action_delete),
+            onConfirm = { bulk?.deleteForever?.invoke(selectedIds()); selected = emptySet() },
+            onDismiss = { confirmDeleteSelected = false },
         )
     }
     if (confirmEmptyTrash) {
@@ -328,6 +478,63 @@ fun LibraryScreen(
         )
     }
 }
+
+@Composable
+private fun NoteSummary.displayTitle(): String =
+    title.ifBlank { preview.lineSequence().firstOrNull().orEmpty() }.ifBlank { stringResource(R.string.untitled) }
+
+/** "All notes ▾" (all collections, archive, trash, tags), search, sort and more. */
+@Composable
+private fun HomeTopRow(
+    title: String,
+    sort: NoteSort,
+    inTrash: Boolean,
+    onCollections: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onSort: (NoteSort) -> Unit,
+    onEmptyTrash: () -> Unit,
+    onManageNotebooks: () -> Unit,
+    onManageTags: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        val description = stringResource(R.string.collection_choose, title)
+        TextButton(
+            onClick = onCollections,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .testTag(LibraryTestTags.COLLECTION_BUTTON)
+                .semantics { contentDescription = description },
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                modifier = Modifier.semantics { heading() },
+            )
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+        }
+        Box(Modifier.weight(1f))
+        IconButton(onClick = onOpenSearch, modifier = Modifier.testTag(LibraryTestTags.SEARCH)) {
+            Icon(Icons.Outlined.Search, stringResource(R.string.library_search))
+        }
+        SortMenu(sort, onSort)
+        OverflowMenu(inTrash, onEmptyTrash, onManageNotebooks, onManageTags)
+    }
+}
+
+@Composable
+private fun LoadingNotes(modifier: Modifier) {
+    // Only after a moment, so a quick load doesn't flash a spinner.
+    var show by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(LOADING_DELAY_MS); show = true }
+    if (show) {
+        val description = stringResource(R.string.library_loading)
+        CircularProgressIndicator(modifier.testTag(LibraryTestTags.LOADING).semantics { contentDescription = description })
+    }
+}
+
+private const val LOADING_DELAY_MS = 400L
 
 /** Resolves a string resource id to text inside composition (used for accessibility action labels). */
 @Composable
@@ -346,33 +553,45 @@ private fun collectionTitle(state: LibraryUiState): String = when (val c = state
 @Composable
 private fun NotesGrid(
     state: LibraryUiState,
+    topPadding: androidx.compose.ui.unit.Dp,
     selectedNoteId: String?,
-    onOpenNote: (NoteId, NoteType) -> Unit,
+    selected: Set<String>,
+    onClick: (NoteSummary) -> Unit,
+    onLongPress: (NoteSummary) -> Unit,
+    onMore: ((NoteSummary) -> Unit)?,
     inkThumbnail: suspend (NoteSummary) -> InkThumbnail?,
     cover: (suspend (String) -> Bitmap?)?,
-    onLongPress: (NoteSummary) -> Unit,
     accessibilityActions: @Composable (NoteSummary) -> List<CardAction>,
 ) {
     val spacing = AppTheme.spacing
+    val card: @Composable (NoteSummary) -> Unit = { note ->
+        NoteCard(
+            note = note,
+            onClick = { onClick(note) },
+            onLongClick = { onLongPress(note) },
+            accessibilityActions = accessibilityActions(note),
+            selected = note.id.value == selectedNoteId,
+            inkThumbnail = inkThumbnail,
+            cover = cover,
+            onMore = onMore?.let { { it(note) } },
+            checked = note.id.value in selected,
+        )
+    }
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Adaptive(minSize = 260.dp),
-        contentPadding = PaddingValues(start = spacing.lg, end = spacing.lg, top = spacing.sm, bottom = 96.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing.md),
+        contentPadding = PaddingValues(start = spacing.lg, end = spacing.lg, top = topPadding + spacing.xs, bottom = 112.dp),
+        horizontalArrangement = Arrangement.spacedBy(spacing.md),
         verticalItemSpacing = spacing.md,
         modifier = Modifier.fillMaxSize().testTag(LibraryTestTags.GRID),
     ) {
         if (state.pinned.isNotEmpty()) {
             item(key = "h_pinned", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.library_pinned)) }
-            items(state.pinned, key = { it.id.value }) { note ->
-                NoteCard(note, { onOpenNote(note.id, note.type) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId, inkThumbnail = inkThumbnail, cover = cover)
-            }
+            items(state.pinned, key = { it.id.value }) { card(it) }
             if (state.others.isNotEmpty()) {
                 item(key = "h_others", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.library_others)) }
             }
         }
-        items(state.others, key = { it.id.value }) { note ->
-            NoteCard(note, { onOpenNote(note.id, note.type) }, { onLongPress(note) }, accessibilityActions(note), selected = note.id.value == selectedNoteId, inkThumbnail = inkThumbnail, cover = cover)
-        }
+        items(state.others, key = { it.id.value }) { card(it) }
     }
 }
 
@@ -397,12 +616,16 @@ private fun noteActions(
     a: NoteActions,
     onMove: (NoteSummary) -> Unit,
     onDelete: (NoteSummary) -> Unit,
+    onRename: (NoteSummary) -> Unit,
+    onSelect: (NoteSummary) -> Unit,
 ): List<ActionSpec> = when (collection) {
     NoteCollection.Trash -> listOf(
         ActionSpec(R.string.note_restore, Icons.Outlined.RestoreFromTrash) { a.restore(note.id) },
         ActionSpec(R.string.note_delete_forever, Icons.Outlined.DeleteForever) { onDelete(note) },
+        ActionSpec(R.string.note_select, Icons.Outlined.CheckCircle) { onSelect(note) },
     )
     else -> buildList {
+        add(ActionSpec(R.string.note_rename, Icons.Outlined.DriveFileRenameOutline) { onRename(note) })
         add(ActionSpec(if (note.isPinned) R.string.note_unpin else R.string.note_pin, Icons.Outlined.PushPin) { a.setPinned(note.id, !note.isPinned) })
         add(
             ActionSpec(
@@ -420,6 +643,7 @@ private fun noteActions(
             },
         )
         add(ActionSpec(R.string.note_trash, Icons.Outlined.DeleteOutline) { a.trash(note.id) })
+        add(ActionSpec(R.string.note_select, Icons.Outlined.CheckCircle) { onSelect(note) })
     }
 }
 
@@ -462,12 +686,10 @@ private fun SortMenu(current: NoteSort, onSort: (NoteSort) -> Unit) {
     }
 }
 
+/** Less frequent things; creating and importing live in the + menu (owner brief §3). */
 @Composable
 private fun OverflowMenu(
     inTrash: Boolean,
-    onImport: () -> Unit,
-    onImportPdf: () -> Unit,
-    onScan: () -> Unit,
     onEmptyTrash: () -> Unit,
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
@@ -483,23 +705,6 @@ private fun OverflowMenu(
                     onClick = { open = false; onEmptyTrash() },
                 )
             }
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.library_import)) },
-                leadingIcon = { Icon(Icons.Outlined.FileOpen, null) },
-                onClick = { open = false; onImport() },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.scan_document)) },
-                leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) },
-                onClick = { open = false; onScan() },
-                modifier = Modifier.testTag(LibraryTestTags.SCAN),
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.pdf_import)) },
-                leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, null) },
-                onClick = { open = false; onImportPdf() },
-                modifier = Modifier.testTag(LibraryTestTags.IMPORT_PDF),
-            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.library_manage_notebooks)) },
                 leadingIcon = { Icon(Icons.Outlined.Folder, null) },
