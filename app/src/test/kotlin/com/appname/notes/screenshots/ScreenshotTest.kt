@@ -218,6 +218,26 @@ abstract class ScreenshotTestBase(private val device: String) {
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SCREEN)) }
     }
 
+    /** Settings in the Liquid Glass design (owner brief §19), light and dark, with the wallpaper picker. */
+    @Test
+    fun captureSettings() {
+        composeRule.onNodeWithTag("nav_settings").performClick()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.LIST)) }
+        snap("settings_light")
+        composeRule.onNodeWithTag(com.appname.notes.feature.settings.SettingsTestTags.WALLPAPER).performClick()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.WALLPAPER_DIALOG)) }
+        snap("settings_wallpaper_light")
+        composeRule.onNodeWithText(string(R.string.action_close)).performClick()
+        waitAdvancing { !exists(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.WALLPAPER_DIALOG)) }
+        composeRule.onNodeWithText(string(R.string.settings_theme_dark)).performClick()
+        waitAdvancing { exists(hasText(string(R.string.settings_theme_dark)) and isSelected()) }
+        snap("settings_dark")
+        // A different accent and the Ocean wallpaper, compact.
+        composeRule.onNodeWithTag(com.appname.notes.feature.settings.SettingsTestTags.accent(com.appname.notes.core.designsystem.theme.Accent.VIOLET)).performClick()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.accent(com.appname.notes.core.designsystem.theme.Accent.VIOLET)) and isSelected()) }
+        snap("settings_violet_dark")
+    }
+
     @Test
     fun captureScreens() {
         seed()

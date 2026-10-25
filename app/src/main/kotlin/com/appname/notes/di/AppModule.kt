@@ -77,4 +77,7 @@ abstract class AppBindsModule {
     @Binds
     @Singleton
     abstract fun bindSettingsRepository(impl: DataStoreSettingsRepository): SettingsRepository
+
+    @Binds
+    abstract fun bindWallpaperPhotos(impl: com.appname.notes.feature.settings.WallpaperStore): com.appname.notes.feature.settings.WallpaperPhotos
 }

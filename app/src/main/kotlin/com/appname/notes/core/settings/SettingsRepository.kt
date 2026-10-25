@@ -23,6 +23,12 @@ interface SettingsRepository {
 
     suspend fun setDynamicColor(enabled: Boolean): AppResult<Unit>
 
+    /** Reads the appearance settings, applies [change] and saves the result (values are clamped to valid ranges). */
+    suspend fun updateAppearance(change: (AppearanceSettings) -> AppearanceSettings): AppResult<Unit>
+
+    /** Back to the default look (theme, accent, glass, corners, wallpaper, density). */
+    suspend fun resetAppearance(): AppResult<Unit>
+
     suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit>
 
     /** Reads the current ink settings, applies [change] and saves the result in one transaction. */

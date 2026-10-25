@@ -26,10 +26,25 @@ data class Spacing(
 
 val LocalSpacing = staticCompositionLocalOf { Spacing() }
 
-internal val AppShapes = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(14.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(28.dp),
-)
+/** Spacing for a [UiDensity]: Compact tightens gaps and paddings; touch targets stay 48 dp. */
+fun spacingFor(density: UiDensity): Spacing = when (density) {
+    UiDensity.COMFORTABLE -> Spacing()
+    UiDensity.COMPACT -> Spacing(xxs = 2.dp, xs = 3.dp, sm = 6.dp, md = 9.dp, lg = 12.dp, xl = 18.dp, xxl = 24.dp, xxxl = 36.dp)
+}
+
+/**
+ * Shapes from the "Corner radius" setting (owner brief §19): [radius] is the large (card) radius; the others keep
+ * the same proportions as Material's scale, so small chips stay small.
+ */
+fun shapesFor(radius: Dp): Shapes {
+    val r = radius.value.coerceIn(CornerRadius.MIN.value, CornerRadius.MAX.value)
+    return Shapes(
+        extraSmall = RoundedCornerShape((r * 0.3f).dp),
+        small = RoundedCornerShape((r * 0.5f).dp),
+        medium = RoundedCornerShape((r * 0.7f).dp),
+        large = RoundedCornerShape(r.dp),
+        extraLarge = RoundedCornerShape((r * 1.4f).dp),
+    )
+}
+
+internal val AppShapes = shapesFor(CornerRadius.DEFAULT)

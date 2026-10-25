@@ -1,5 +1,11 @@
 package com.appname.notes
 
+import com.appname.notes.core.designsystem.component.WallpaperSpec
+import com.appname.notes.core.settings.WallpaperChoice
+import com.appname.notes.feature.settings.WallpaperPhotos
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapLatest
 import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
@@ -42,6 +48,7 @@ class MainActivityViewModel @Inject constructor(
     settingsRepository: SettingsRepository,
     private val pdfImporter: PdfImporter,
     private val attacher: Attacher,
+    private val wallpaperPhotos: WallpaperPhotos,
 ) : ViewModel() {
 
     private val _shared = MutableStateFlow<SharedImport?>(null)
@@ -86,6 +93,22 @@ class MainActivityViewModel @Inject constructor(
         if (_shared.value !is SharedImport.Importing) _shared.value = null
     }
 
+
+    /** What's drawn behind the screens (owner brief §19); a photo is loaded off the main thread. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val wallpaper: StateFlow<WallpaperSpec> = settingsRepository.appearance
+        .map { it.wallpaper }
+        .distinctUntilChanged()
+        .mapLatest { choice ->
+            when (choice) {
+                WallpaperChoice.None -> WallpaperSpec.None
+                is WallpaperChoice.Preset -> WallpaperSpec.Preset(choice.preset)
+                is WallpaperChoice.Photo ->
+                    wallpaperPhotos.load(choice.fileName)?.let { WallpaperSpec.Photo(it) }
+                        ?: WallpaperSpec.None
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, WallpaperSpec.None)
 
     // Eagerly: the splash screen reads `.value` before any UI subscribes.
     val uiState: StateFlow<MainUiState> = settingsRepository.appearance

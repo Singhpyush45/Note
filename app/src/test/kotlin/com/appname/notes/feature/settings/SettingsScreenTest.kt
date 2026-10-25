@@ -1,5 +1,10 @@
 package com.appname.notes.feature.settings
 
+import androidx.compose.ui.test.hasTestTag
+import com.appname.notes.core.designsystem.theme.Accent
+import com.appname.notes.core.designsystem.theme.UiDensity
+import com.appname.notes.core.designsystem.theme.WallpaperPreset
+import com.appname.notes.core.settings.WallpaperChoice
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
@@ -36,6 +41,8 @@ class SettingsScreenTest {
         onTheme: (ThemeMode) -> Unit = {},
         onDynamic: (Boolean) -> Unit = {},
         onErrorShown: () -> Unit = {},
+        actions: AppearanceActions = AppearanceActions(),
+        blurSupported: Boolean = true,
     ) = composeRule.setContent {
         AppTheme {
             SettingsScreen(
@@ -44,6 +51,8 @@ class SettingsScreenTest {
                 onDynamicColorChanged = onDynamic,
                 onSaveErrorShown = onErrorShown,
                 dynamicColorSupported = dynamicSupported,
+                appearanceActions = actions,
+                blurSupported = blurSupported,
             )
         }
     }
@@ -100,5 +109,67 @@ class SettingsScreenTest {
         composeRule.onNodeWithText(string(R.string.settings_storage_value)).assertIsDisplayed()
         list.performScrollToNode(hasText(string(R.string.settings_version)))
         composeRule.onNodeWithText(string(R.string.settings_version)).assertIsDisplayed()
+    }
+
+    @Test
+    fun accentColours_reportTheChoice_andCustomOpensAHuePicker() {
+        var accent: Accent? = null
+        var hue: Float? = null
+        show(SettingsUiState.Ready(AppearanceSettings()), actions = AppearanceActions(onAccent = { accent = it }, onCustomHue = { hue = it }))
+        composeRule.onNodeWithTag(SettingsTestTags.accent(Accent.BLUE)).assertIsSelected()
+        composeRule.onNodeWithTag(SettingsTestTags.accent(Accent.PINK)).performClick()
+        assertThat(accent).isEqualTo(Accent.PINK)
+        composeRule.onNodeWithTag(SettingsTestTags.ACCENT_CUSTOM).performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.HUE_SLIDER).assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.HUE_SAVE).performClick()
+        assertThat(hue).isEqualTo(AppearanceSettings.DEFAULT_CUSTOM_HUE)
+    }
+
+    @Test
+    fun glassBlurAndCornerSliders_showTheirValues() {
+        show(SettingsUiState.Ready(AppearanceSettings(glassIntensity = 60, blurIntensity = 40, cornerRadius = 20)))
+        composeRule.onNodeWithText("60%").assertExists()
+        composeRule.onNodeWithText("40%").assertExists()
+        composeRule.onNodeWithText("20 dp").assertExists()
+    }
+
+    @Test
+    fun blurIsExplainedOnPhonesWithoutIt() {
+        show(SettingsUiState.Ready(AppearanceSettings()), blurSupported = false)
+        composeRule.onNodeWithText(string(R.string.settings_blur_unsupported)).assertExists()
+    }
+
+    @Test
+    fun densityAndWallpaper_reportTheChoice() {
+        var density: UiDensity? = null
+        var wallpaper: WallpaperChoice? = null
+        show(
+            SettingsUiState.Ready(AppearanceSettings()),
+            actions = AppearanceActions(onDensity = { density = it }, onWallpaper = { wallpaper = it }),
+        )
+        val list = composeRule.onNodeWithTag(SettingsTestTags.LIST)
+        list.performScrollToNode(hasTestTag(SettingsTestTags.DENSITY_COMPACT))
+        composeRule.onNodeWithTag(SettingsTestTags.DENSITY_COMFORTABLE).assertIsSelected()
+        composeRule.onNodeWithTag(SettingsTestTags.DENSITY_COMPACT).performClick()
+        assertThat(density).isEqualTo(UiDensity.COMPACT)
+
+        list.performScrollToNode(hasTestTag(SettingsTestTags.WALLPAPER))
+        composeRule.onNodeWithTag(SettingsTestTags.WALLPAPER).performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.WALLPAPER_DIALOG).assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.wallpaper(WallpaperChoice.DEFAULT)).assertIsSelected()
+        val ocean = WallpaperChoice.Preset(WallpaperPreset.OCEAN)
+        composeRule.onNodeWithTag(SettingsTestTags.wallpaper(ocean)).performClick()
+        assertThat(wallpaper).isEqualTo(ocean)
+    }
+
+    @Test
+    fun resetAsksFirst() {
+        var reset = 0
+        show(SettingsUiState.Ready(AppearanceSettings()), actions = AppearanceActions(onReset = { reset++ }))
+        composeRule.onNodeWithTag(SettingsTestTags.LIST).performScrollToNode(hasTestTag(SettingsTestTags.RESET))
+        composeRule.onNodeWithTag(SettingsTestTags.RESET).performClick()
+        assertThat(reset).isEqualTo(0)
+        composeRule.onNodeWithTag(SettingsTestTags.RESET_CONFIRM).performClick()
+        assertThat(reset).isEqualTo(1)
     }
 }

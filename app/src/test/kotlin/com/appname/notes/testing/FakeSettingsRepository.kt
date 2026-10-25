@@ -19,6 +19,8 @@ class FakeSettingsRepository(initial: AppearanceSettings = AppearanceSettings())
 
     override val appearance: Flow<AppearanceSettings> = state
 
+    fun current(): AppearanceSettings = state.value
+
     private val librarySettings = MutableStateFlow(LibrarySettings())
     override val library: Flow<LibrarySettings> = librarySettings
 
@@ -46,6 +48,11 @@ class FakeSettingsRepository(initial: AppearanceSettings = AppearanceSettings())
 
     override suspend fun setDynamicColor(enabled: Boolean): AppResult<Unit> =
         write { state.value = state.value.copy(dynamicColor = enabled) }
+
+    override suspend fun updateAppearance(change: (AppearanceSettings) -> AppearanceSettings): AppResult<Unit> =
+        write { state.value = change(state.value).clamped() }
+
+    override suspend fun resetAppearance(): AppResult<Unit> = write { state.value = AppearanceSettings() }
 
     private fun write(change: () -> Unit): AppResult<Unit> {
         if (failWrites) return AppResult.Failure(DomainError.Storage())

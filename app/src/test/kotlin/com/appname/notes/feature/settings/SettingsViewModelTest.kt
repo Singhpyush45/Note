@@ -3,6 +3,10 @@ package com.appname.notes.feature.settings
 import app.cash.turbine.test
 import com.appname.notes.core.settings.AppearanceSettings
 import com.appname.notes.core.settings.ThemeMode
+import com.appname.notes.core.settings.WallpaperChoice
+import com.appname.notes.core.designsystem.theme.Accent
+import com.appname.notes.core.designsystem.theme.UiDensity
+import com.appname.notes.core.designsystem.theme.WallpaperPreset
 import com.appname.notes.testing.FakeSettingsRepository
 import com.appname.notes.testing.MainDispatcherRule
 import com.google.common.truth.Truth.assertThat
@@ -19,6 +23,16 @@ class SettingsViewModelTest {
     private val repository = FakeSettingsRepository()
     private val switched = mutableListOf<Boolean>()
 
+    private class FakePhotos : WallpaperPhotos {
+        var importResult: String? = "w1.jpg"
+        val kept = mutableListOf<String?>()
+        override suspend fun import(uri: android.net.Uri): String? = importResult
+        override suspend fun deleteAllExcept(keep: String?) { kept += keep }
+        override suspend fun load(fileName: String): androidx.compose.ui.graphics.ImageBitmap? = null
+    }
+
+    private val photos = FakePhotos()
+
     // Created in @Before, after the rule has installed the test Main dispatcher.
     private lateinit var viewModel: SettingsViewModel
 
@@ -28,6 +42,7 @@ class SettingsViewModelTest {
             repository = repository,
             indexRebuilder = { com.appname.notes.core.common.result.AppResult.Success(Unit) },
             documentTextSwitch = { switched += it },
+            wallpaperPhotos = photos,
         )
     }
 
@@ -99,6 +114,59 @@ class SettingsViewModelTest {
         viewModel.onDocumentTextChanged(true)
         assertThat(switched).containsExactly(false, true).inOrder()
         assertThat(repository.documentTextEnabled.value).isTrue()
+    }
+
+    @Test
+    fun `appearance choices are saved`() = runTest {
+        viewModel.onAccentSelected(Accent.PINK)
+        assertThat(repository.current().accent).isEqualTo(Accent.PINK)
+        viewModel.onCustomHueSelected(123f)
+        assertThat(repository.current().accent).isNull()
+        assertThat(repository.current().accentHue).isEqualTo(123f)
+        viewModel.onGlassIntensityChanged(20)
+        viewModel.onBlurIntensityChanged(90)
+        viewModel.onCornerRadiusChanged(28)
+        viewModel.onDensitySelected(UiDensity.COMPACT)
+        val a = repository.current()
+        assertThat(listOf(a.glassIntensity, a.blurIntensity, a.cornerRadius)).containsExactly(20, 90, 28).inOrder()
+        assertThat(a.density).isEqualTo(UiDensity.COMPACT)
+    }
+
+    @Test
+    fun `choosing an accent turns wallpaper colours off`() = runTest {
+        viewModel.onDynamicColorChanged(true)
+        viewModel.onAccentSelected(Accent.MINT)
+        assertThat(repository.current().dynamicColor).isFalse()
+    }
+
+    @Test
+    fun `a picked photo becomes the wallpaper; choosing a preset deletes the photo`() = runTest {
+        viewModel.onWallpaperPhotoPicked(android.net.Uri.EMPTY)
+        assertThat(repository.current().wallpaper).isEqualTo(WallpaperChoice.Photo("w1.jpg"))
+        assertThat(photos.kept.last()).isEqualTo("w1.jpg") // older photos removed
+        viewModel.onWallpaperSelected(WallpaperChoice.Preset(WallpaperPreset.OCEAN))
+        assertThat(photos.kept.last()).isNull()
+    }
+
+    @Test
+    fun `an unreadable photo is reported and the wallpaper stays`() = runTest {
+        photos.importResult = null
+        viewModel.uiState.test {
+            skipUntilReady()
+            viewModel.onWallpaperPhotoPicked(android.net.Uri.EMPTY)
+            assertThat(awaitReady().showPhotoFailed).isTrue()
+            viewModel.onPhotoFailedShown()
+            assertThat(awaitReady().showPhotoFailed).isFalse()
+        }
+        assertThat(repository.current().wallpaper).isEqualTo(WallpaperChoice.DEFAULT)
+    }
+
+    @Test
+    fun `reset brings the default look back and removes the photo`() = runTest {
+        viewModel.onAccentSelected(Accent.ORANGE)
+        viewModel.onResetAppearance()
+        assertThat(repository.current()).isEqualTo(AppearanceSettings())
+        assertThat(photos.kept.last()).isNull()
     }
 
     @Test

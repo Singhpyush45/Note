@@ -170,7 +170,7 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
-    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_appearance">Appearance &amp; customisation</string>
     <string name="settings_theme_system">System default</string>
     <string name="settings_theme_system_summary">Follow your phone\'s light or dark setting</string>
     <string name="settings_theme_light">Light</string>
@@ -395,4 +395,38 @@
     <string name="voice_error_language">This English variant isn\'t installed for on-phone recognition.</string>
     <string name="voice_error_other">Speech recognition stopped. Tap Resume to try again.</string>
     <string name="voice_mic_denied">Voice typing needs the microphone. You can allow it in Settings.</string>
+
+    <!-- Appearance (owner brief §19) -->
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system_short">System</string>
+    <string name="settings_accent">Accent colour</string>
+    <string name="settings_accent_custom">Custom colour</string>
+    <string name="settings_accent_preview">Preview</string>
+    <string name="accent_blue">Blue</string>
+    <string name="accent_violet">Violet</string>
+    <string name="accent_pink">Pink</string>
+    <string name="accent_orange">Orange</string>
+    <string name="accent_amber">Amber</string>
+    <string name="accent_mint">Mint</string>
+    <string name="settings_glass">Glass intensity</string>
+    <string name="settings_blur">Background blur</string>
+    <string name="settings_blur_unsupported">Needs Android 12 or newer. Glass is shown more solid instead.</string>
+    <string name="settings_corner_radius">Corner radius</string>
+    <string name="settings_wallpaper">Wallpaper / background</string>
+    <string name="settings_wallpaper_none">None</string>
+    <string name="settings_wallpaper_photo">Your photo</string>
+    <string name="settings_wallpaper_choose_photo">Choose photo</string>
+    <string name="settings_wallpaper_photo_failed">That photo couldn\'t be used. Try another one.</string>
+    <string name="wallpaper_aurora">Aurora</string>
+    <string name="wallpaper_ocean">Ocean</string>
+    <string name="wallpaper_sunset">Sunset</string>
+    <string name="wallpaper_meadow">Meadow</string>
+    <string name="wallpaper_mist">Mist</string>
+    <string name="settings_density">UI density</string>
+    <string name="settings_density_compact">Compact</string>
+    <string name="settings_density_comfortable">Comfortable</string>
+    <string name="settings_reset_appearance">Reset appearance</string>
+    <string name="settings_reset_appearance_summary">Theme, colours, glass, corners, wallpaper and density back to the defaults</string>
+    <string name="settings_reset_appearance_confirm">Your notes aren\'t affected. A wallpaper photo you chose is removed from the app.</string>
+    <string name="settings_reset">Reset</string>
 </resources>

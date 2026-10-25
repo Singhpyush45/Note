@@ -68,6 +68,63 @@ class DataStoreSettingsRepositoryTest {
     }
 
     @Test
+    fun `the whole look is saved, survives a restart, and resets to defaults`() = testScope.runTest {
+        val firstRun = Job()
+        val repo = DataStoreSettingsRepository(openStore(firstRun), NoOpLogger)
+        val custom = AppearanceSettings(
+            themeMode = ThemeMode.LIGHT,
+            accent = null,
+            customHue = 75f,
+            glassIntensity = 35,
+            blurIntensity = 80,
+            cornerRadius = 12,
+            wallpaper = WallpaperChoice.Photo("abc.jpg"),
+            density = com.appname.notes.core.designsystem.theme.UiDensity.COMPACT,
+        )
+        assertThat(repo.updateAppearance { custom }).isEqualTo(AppResult.Success(Unit))
+        firstRun.cancelAndJoin()
+
+        val secondRun = Job()
+        val reopened = DataStoreSettingsRepository(openStore(secondRun), NoOpLogger)
+        assertThat(reopened.appearance.first()).isEqualTo(custom)
+        assertThat(reopened.appearance.first().accentHue).isEqualTo(75f)
+        reopened.updateAppearance { it.copy(accent = com.appname.notes.core.designsystem.theme.Accent.MINT) }
+        assertThat(reopened.appearance.first().accentHue).isEqualTo(com.appname.notes.core.designsystem.theme.Accent.MINT.hue)
+        reopened.resetAppearance()
+        assertThat(reopened.appearance.first()).isEqualTo(AppearanceSettings())
+        secondRun.cancelAndJoin()
+    }
+
+    @Test
+    fun `out-of-range and unknown appearance values are corrected`() = testScope.runTest {
+        val job = Job()
+        val store = openStore(job)
+        store.edit {
+            it[androidx.datastore.preferences.core.intPreferencesKey("glass_intensity")] = 250
+            it[androidx.datastore.preferences.core.intPreferencesKey("corner_radius")] = 2
+            it[stringPreferencesKey("accent")] = "NEON"
+            it[stringPreferencesKey("wallpaper")] = "preset:GALAXY"
+            it[stringPreferencesKey("ui_density")] = "TINY"
+        }
+        val a = DataStoreSettingsRepository(store, NoOpLogger).appearance.first()
+        assertThat(a.glassIntensity).isEqualTo(100)
+        assertThat(a.cornerRadius).isEqualTo(8)
+        assertThat(a.accent).isEqualTo(com.appname.notes.core.designsystem.theme.Accent.DEFAULT)
+        assertThat(a.wallpaper).isEqualTo(WallpaperChoice.DEFAULT)
+        assertThat(a.density).isEqualTo(com.appname.notes.core.designsystem.theme.UiDensity.COMFORTABLE)
+        job.cancelAndJoin()
+    }
+
+    @Test
+    fun `wallpaper choices round-trip through their stored form`() {
+        val all = listOf(WallpaperChoice.None, WallpaperChoice.Photo("x.jpg")) +
+            com.appname.notes.core.designsystem.theme.WallpaperPreset.entries.map { WallpaperChoice.Preset(it) }
+        all.forEach { assertThat(WallpaperChoice.parse(it.stored)).isEqualTo(it) }
+        assertThat(WallpaperChoice.parse(null)).isEqualTo(WallpaperChoice.DEFAULT)
+        assertThat(WallpaperChoice.parse("photo:")).isEqualTo(WallpaperChoice.DEFAULT)
+    }
+
+    @Test
     fun `theme mode parsing handles null and every enum name`() {
         assertThat((null as String?).toThemeMode()).isEqualTo(ThemeMode.SYSTEM)
         ThemeMode.entries.forEach { assertThat(it.name.toThemeMode()).isEqualTo(it) }

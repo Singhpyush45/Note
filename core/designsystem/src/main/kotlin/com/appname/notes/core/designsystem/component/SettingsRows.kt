@@ -22,6 +22,23 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import com.appname.notes.core.designsystem.theme.AppTheme
 
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material3.Slider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.dp
+
 /*
  * Settings building blocks. The whole row is the touch target (≥48dp) and carries the accessibility
  * role, so TalkBack reads "Dynamic colour, switch, on" instead of two separate items (SRS 8.2).
@@ -152,3 +169,114 @@ private fun RowText(title: String, summary: String?, enabled: Boolean, modifier:
 }
 
 private const val DISABLED_ALPHA = 0.38f
+
+/** A group of settings on a glass card (owner brief §19), with its heading above. */
+@Composable
+fun SettingsCard(title: String?, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val spacing = AppTheme.spacing
+    Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg)) {
+        if (title != null) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = spacing.xs, top = spacing.xl, bottom = spacing.sm).semantics { heading() },
+            )
+        }
+        GlassSurface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, elevation = 2.dp) {
+            Column(Modifier.fillMaxWidth().padding(vertical = spacing.xs), content = content)
+        }
+    }
+}
+
+/**
+ * A slider with its title and current value ("60%"). The value is saved when the finger lifts
+ * ([onValueCommitted]); while dragging, the label follows the finger.
+ */
+@Composable
+fun SettingsSliderRow(
+    title: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    valueLabel: (Float) -> String,
+    onValueCommitted: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    steps: Int = 0,
+    summary: String? = null,
+    enabled: Boolean = true,
+) {
+    val spacing = AppTheme.spacing
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    val shown = dragging ?: value
+    Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.sm)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RowText(title = title, summary = summary, enabled = enabled, modifier = Modifier.weight(1f))
+            Text(
+                valueLabel(shown),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
+            )
+        }
+        Slider(
+            value = shown,
+            onValueChange = { dragging = it },
+            onValueChangeFinished = { dragging?.let(onValueCommitted); dragging = null },
+            valueRange = valueRange,
+            steps = steps,
+            enabled = enabled,
+            modifier = Modifier.semantics { contentDescription = title },
+        )
+    }
+}
+
+/** One choice out of a few, as a segmented button row ("Light | Dark | System", "Compact | Comfortable"). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsSegmentedRow(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    optionTag: (Int) -> String = { "segment_$it" },
+) {
+    val spacing = AppTheme.spacing
+    Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.sm)) {
+        Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = spacing.sm)) {
+            options.forEachIndexed { i, label ->
+                SegmentedButton(
+                    selected = i == selectedIndex,
+                    onClick = { onSelect(i) },
+                    shape = SegmentedButtonDefaults.itemShape(i, options.size),
+                    modifier = Modifier.testTag(optionTag(i)),
+                ) { Text(label, maxLines = 1) }
+            }
+        }
+    }
+}
+
+/** A row that opens something, showing what's chosen on the right (e.g. the wallpaper's thumbnail). */
+@Composable
+fun SettingsLinkRow(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    trailing: @Composable () -> Unit = {},
+) {
+    val spacing = AppTheme.spacing
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = spacing.minTouchTarget + spacing.sm)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = spacing.lg, vertical = spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.md),
+    ) {
+        RowText(title = title, summary = summary, enabled = true, modifier = Modifier.weight(1f))
+        trailing()
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}

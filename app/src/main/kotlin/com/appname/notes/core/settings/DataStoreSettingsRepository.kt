@@ -13,6 +13,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.appname.notes.core.common.logging.AppLogger
 import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.common.result.DomainError
+import com.appname.notes.core.designsystem.theme.Accent
+import com.appname.notes.core.designsystem.theme.UiDensity
 import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.ink.input.EditorTool
 import com.appname.notes.core.ink.input.EraserMode
@@ -47,10 +49,7 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override val appearance: Flow<AppearanceSettings> = prefs
         .map { prefs ->
-            AppearanceSettings(
-                themeMode = prefs[Keys.THEME_MODE].toThemeMode(),
-                dynamicColor = prefs[Keys.DYNAMIC_COLOR] ?: false,
-            )
+            prefs.toAppearance()
         }
         .distinctUntilChanged()
 
@@ -110,6 +109,42 @@ class DataStoreSettingsRepository @Inject constructor(
     override suspend fun setDynamicColor(enabled: Boolean): AppResult<Unit> =
         write { it[Keys.DYNAMIC_COLOR] = enabled }
 
+    override suspend fun updateAppearance(change: (AppearanceSettings) -> AppearanceSettings): AppResult<Unit> = write { prefs ->
+        val new = change(prefs.toAppearance()).clamped()
+        prefs[Keys.THEME_MODE] = new.themeMode.name
+        prefs[Keys.DYNAMIC_COLOR] = new.dynamicColor
+        prefs[Keys.ACCENT] = new.accent?.name ?: CUSTOM_ACCENT
+        prefs[Keys.CUSTOM_HUE] = new.customHue
+        prefs[Keys.GLASS] = new.glassIntensity
+        prefs[Keys.BLUR] = new.blurIntensity
+        prefs[Keys.CORNER] = new.cornerRadius
+        prefs[Keys.WALLPAPER] = new.wallpaper.stored
+        prefs[Keys.DENSITY] = new.density.name
+    }
+
+    override suspend fun resetAppearance(): AppResult<Unit> = write { prefs ->
+        listOf(
+            Keys.THEME_MODE, Keys.DYNAMIC_COLOR, Keys.ACCENT, Keys.CUSTOM_HUE, Keys.GLASS, Keys.BLUR, Keys.CORNER,
+            Keys.WALLPAPER, Keys.DENSITY,
+        ).forEach { prefs.remove(it) }
+    }
+
+    private fun Preferences.toAppearance(): AppearanceSettings {
+        val d = AppearanceSettings()
+        val accentName = this[Keys.ACCENT]
+        return AppearanceSettings(
+            themeMode = this[Keys.THEME_MODE].toThemeMode(),
+            dynamicColor = this[Keys.DYNAMIC_COLOR] ?: false,
+            accent = if (accentName == CUSTOM_ACCENT) null else Accent.fromName(accentName) ?: d.accent,
+            customHue = this[Keys.CUSTOM_HUE]?.takeIf { it.isFinite() } ?: d.customHue,
+            glassIntensity = this[Keys.GLASS] ?: d.glassIntensity,
+            blurIntensity = this[Keys.BLUR] ?: d.blurIntensity,
+            cornerRadius = this[Keys.CORNER] ?: d.cornerRadius,
+            wallpaper = WallpaperChoice.parse(this[Keys.WALLPAPER]),
+            density = UiDensity.fromName(this[Keys.DENSITY]),
+        ).clamped()
+    }
+
     private suspend fun write(change: (MutablePreferences) -> Unit): AppResult<Unit> = try {
         dataStore.edit { change(it) }
         AppResult.Success(Unit)
@@ -130,10 +165,18 @@ class DataStoreSettingsRepository @Inject constructor(
         val INK_ERASER = stringPreferencesKey("ink_eraser_mode")
         val DOCUMENT_TEXT = booleanPreferencesKey("document_text_search")
         val VOICE_LANGUAGE = stringPreferencesKey("voice_typing_language")
+        val ACCENT = stringPreferencesKey("accent")
+        val CUSTOM_HUE = floatPreferencesKey("accent_custom_hue")
+        val GLASS = intPreferencesKey("glass_intensity")
+        val BLUR = intPreferencesKey("blur_intensity")
+        val CORNER = intPreferencesKey("corner_radius")
+        val WALLPAPER = stringPreferencesKey("wallpaper")
+        val DENSITY = stringPreferencesKey("ui_density")
     }
 
     private companion object {
         const val TAG = "Settings"
+        const val CUSTOM_ACCENT = "CUSTOM"
     }
 }
 

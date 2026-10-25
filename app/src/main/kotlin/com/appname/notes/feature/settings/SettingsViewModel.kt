@@ -1,5 +1,9 @@
 package com.appname.notes.feature.settings
 
+import android.net.Uri
+import com.appname.notes.core.designsystem.theme.Accent
+import com.appname.notes.core.designsystem.theme.UiDensity
+import com.appname.notes.core.settings.WallpaperChoice
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appname.notes.core.common.result.AppResult
@@ -16,6 +20,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -32,6 +41,8 @@ sealed interface SettingsUiState {
         val showSaveError: Boolean = false,
         /** True after the search index was rebuilt, until the screen has shown the confirmation. */
         val showIndexRebuilt: Boolean = false,
+        /** True after a picked wallpaper photo couldn't be read, until shown. */
+        val showPhotoFailed: Boolean = false,
     ) : SettingsUiState
 }
 
@@ -49,14 +60,21 @@ class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
     private val indexRebuilder: SearchIndexRebuilder,
     private val documentTextSwitch: DocumentTextSwitch,
+    private val wallpaperPhotos: WallpaperPhotos,
 ) : ViewModel() {
 
     private val saveFailed = MutableStateFlow(false)
     private val indexRebuilt = MutableStateFlow(false)
+    private val photoFailed = MutableStateFlow(false)
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(repository.appearance, repository.ink, repository.documentText, saveFailed, indexRebuilt) { appearance, ink, docText, failed, rebuilt ->
-            SettingsUiState.Ready(appearance, ink, documentText = docText, showSaveError = failed, showIndexRebuilt = rebuilt)
+        combine(
+            combine(repository.appearance, repository.ink, repository.documentText, ::Triple),
+            saveFailed,
+            indexRebuilt,
+            photoFailed,
+        ) { (appearance, ink, docText), failed, rebuilt, photo ->
+            SettingsUiState.Ready(appearance, ink, documentText = docText, showSaveError = failed, showIndexRebuilt = rebuilt, showPhotoFailed = photo)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -70,6 +88,66 @@ class SettingsViewModel @Inject constructor(
     fun onDynamicColorChanged(enabled: Boolean) {
         viewModelScope.launch { handle(repository.setDynamicColor(enabled)) }
     }
+
+    // ------------------------------------------------------------------ appearance (owner brief §19)
+
+    private fun appearance(change: (AppearanceSettings) -> AppearanceSettings) {
+        viewModelScope.launch { handle(repository.updateAppearance(change)) }
+    }
+
+    /** A preset accent; turns wallpaper colours off (the accent is what the user just chose to see). */
+    fun onAccentSelected(accent: Accent) = appearance { it.copy(accent = accent, dynamicColor = false) }
+
+    fun onCustomHueSelected(hue: Float) = appearance { it.copy(accent = null, customHue = hue, dynamicColor = false) }
+
+    fun onGlassIntensityChanged(value: Int) = appearance { it.copy(glassIntensity = value) }
+
+    fun onBlurIntensityChanged(value: Int) = appearance { it.copy(blurIntensity = value) }
+
+    fun onCornerRadiusChanged(value: Int) = appearance { it.copy(cornerRadius = value) }
+
+    fun onDensitySelected(density: UiDensity) = appearance { it.copy(density = density) }
+
+    /** A built-in wallpaper or none; a previously picked photo is deleted. */
+    fun onWallpaperSelected(choice: WallpaperChoice) {
+        viewModelScope.launch {
+            val saved = repository.updateAppearance { it.copy(wallpaper = choice) }
+            handle(saved)
+            if (saved is AppResult.Success) wallpaperPhotos.deleteAllExcept((choice as? WallpaperChoice.Photo)?.fileName)
+        }
+    }
+
+    /** A photo from the photo picker becomes the wallpaper. */
+    fun onWallpaperPhotoPicked(uri: Uri) {
+        viewModelScope.launch {
+            val name = wallpaperPhotos.import(uri)
+            if (name == null) {
+                photoFailed.value = true
+                return@launch
+            }
+            onWallpaperSelected(WallpaperChoice.Photo(name))
+        }
+    }
+
+    fun onPhotoFailedShown() {
+        photoFailed.value = false
+    }
+
+    fun onResetAppearance() {
+        viewModelScope.launch {
+            val reset = repository.resetAppearance()
+            handle(reset)
+            if (reset is AppResult.Success) wallpaperPhotos.deleteAllExcept(null)
+        }
+    }
+
+    /** The wallpaper photo, for its thumbnail; null when none is chosen. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val wallpaperPhoto: StateFlow<ImageBitmap?> = repository.appearance
+        .map { (it.wallpaper as? WallpaperChoice.Photo)?.fileName }
+        .distinctUntilChanged()
+        .mapLatest { name -> name?.let { wallpaperPhotos.load(it) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     fun onShapeCorrectionChanged(enabled: Boolean) {
         viewModelScope.launch { handle(repository.updateInk { it.copy(shapeCorrection = enabled) }) }

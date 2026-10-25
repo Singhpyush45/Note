@@ -25,6 +25,10 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.core.designsystem.theme.AppTheme
+import com.appname.notes.core.designsystem.theme.GlassStyle
+import com.appname.notes.core.designsystem.component.AppBackground
+import com.appname.notes.core.settings.AppearanceSettings
+import androidx.compose.ui.unit.dp
 import com.appname.notes.core.settings.ThemeMode
 import com.appname.notes.navigation.NotesApp
 import com.appname.notes.core.domain.model.NoteType
@@ -47,7 +51,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             val darkTheme = shouldUseDarkTheme(uiState)
-            val dynamicColor = (uiState as? MainUiState.Ready)?.appearance?.dynamicColor == true
+            val appearance = (uiState as? MainUiState.Ready)?.appearance ?: AppearanceSettings()
+            val wallpaper by viewModel.wallpaper.collectAsStateWithLifecycle()
 
             // Draw behind system bars; flip status/nav bar icon colours with the app's theme,
             // which can differ from the system theme when the user forces Light or Dark.
@@ -59,28 +64,37 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
 
-            AppTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
-                // Exposes test tags as resource ids so UiAutomator tests (which run in another process,
-                // e.g. the process-death tests in :e2e) can find screens and fields.
-                val shared by viewModel.shared.collectAsStateWithLifecycle()
-                val context = LocalContext.current
-                LaunchedEffect(shared) {
-                    when (val s = shared) {
-                        is SharedImport.Importing -> Toast.makeText(context, s.message, Toast.LENGTH_SHORT).show()
-                        is SharedImport.Failed -> {
-                            Toast.makeText(context, s.message, Toast.LENGTH_LONG).show()
-                            viewModel.sharedHandled()
+            AppTheme(
+                darkTheme = darkTheme,
+                dynamicColor = appearance.dynamicColor,
+                accentHue = appearance.accentHue,
+                glass = GlassStyle(intensity = appearance.glassIntensity / 100f, blur = appearance.blurIntensity / 100f),
+                cornerRadius = appearance.cornerRadius.dp,
+                density = appearance.density,
+            ) {
+                AppBackground(wallpaper) {
+                    // Exposes test tags as resource ids so UiAutomator tests (which run in another process,
+                    // e.g. the process-death tests in :e2e) can find screens and fields.
+                    val shared by viewModel.shared.collectAsStateWithLifecycle()
+                    val context = LocalContext.current
+                    LaunchedEffect(shared) {
+                        when (val s = shared) {
+                            is SharedImport.Importing -> Toast.makeText(context, s.message, Toast.LENGTH_SHORT).show()
+                            is SharedImport.Failed -> {
+                                Toast.makeText(context, s.message, Toast.LENGTH_LONG).show()
+                                viewModel.sharedHandled()
+                            }
+                            is SharedImport.Opened -> s.notice?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                            null -> Unit
                         }
-                        is SharedImport.Opened -> s.notice?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
-                        null -> Unit
                     }
+                    val opened = shared as? SharedImport.Opened
+                    NotesApp(
+                        Modifier.semantics { testTagsAsResourceId = true },
+                        openNoteRequest = opened?.let { it.noteId to it.type },
+                        onOpenNoteRequestHandled = viewModel::sharedHandled,
+                    )
                 }
-                val opened = shared as? SharedImport.Opened
-                NotesApp(
-                    Modifier.semantics { testTagsAsResourceId = true },
-                    openNoteRequest = opened?.let { it.noteId to it.type },
-                    onOpenNoteRequestHandled = viewModel::sharedHandled,
-                )
             }
         }
     }

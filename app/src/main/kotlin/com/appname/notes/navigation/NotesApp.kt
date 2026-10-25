@@ -1,5 +1,7 @@
 package com.appname.notes.navigation
 
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -78,6 +80,12 @@ fun NotesApp(
 
     NavigationSuiteScaffold(
         modifier = modifier,
+        // The wallpaper (AppBackground) shows behind screens that are transparent; the bar is translucent.
+        containerColor = Color.Transparent,
+        navigationSuiteColors = NavigationSuiteDefaults.colors(
+            navigationBarContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
+            navigationRailContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
+        ),
         layoutType = if (editingFullScreen) {
             NavigationSuiteType.None
         } else {
