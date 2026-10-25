@@ -1,5 +1,12 @@
 package com.appname.notes.feature.library
 
+import com.appname.notes.core.domain.model.FolderTree
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AssistChip
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -187,6 +194,12 @@ fun LibraryRoute(
         onSelectCollection = viewModel::selectCollection,
         onSort = viewModel::setSort,
         importingPdf = importingPdf,
+        folders = FolderActions(
+            create = viewModel::createFolder,
+            rename = viewModel::renameFolder,
+            move = viewModel::moveFolder,
+            delete = viewModel::deleteFolder,
+        ),
         onManageNotebooks = onManageNotebooks,
         onManageTags = onManageTags,
         actions = NoteActions(
@@ -265,8 +278,18 @@ fun LibraryScreen(
     bulk: BulkActions? = null,
     importingPdf: Boolean = false,
     cover: (suspend (String) -> Bitmap?)? = null,
+    folders: FolderActions? = null,
 ) {
     val snackbar = remember { SnackbarHostState() }
+    // Folders inside folders: new / actions / rename / move / delete.
+    var newFolder by rememberSaveable { mutableStateOf(false) }
+    var folderActionsFor by remember { mutableStateOf<Notebook?>(null) }
+    var renameFolderFor by remember { mutableStateOf<Notebook?>(null) }
+    var moveFolderFor by remember { mutableStateOf<Notebook?>(null) }
+    var deleteFolderFor by remember { mutableStateOf<Notebook?>(null) }
+    // Back from a folder inside a folder goes up one level.
+    val parentFolder = state.parentFolder
+    BackHandler(enabled = parentFolder != null) { parentFolder?.let { onSelectCollection(NoteCollection.InNotebook(it.id)) } }
     MessageEffect(state.message, snackbar, onMessageShown)
 
     var showCollections by rememberSaveable { mutableStateOf(false) }
@@ -333,7 +356,7 @@ fun LibraryScreen(
             Box(Modifier.fillMaxSize().backdropSource(backdrop)) {
                 when {
                     state.loading -> LoadingNotes(Modifier.align(Alignment.Center))
-                    state.isEmpty -> EmptyCollection(state.collection, Modifier.align(Alignment.Center).padding(top = headerHeight))
+                    state.isEmpty && state.currentFolder == null -> EmptyCollection(state.collection, Modifier.align(Alignment.Center).padding(top = headerHeight))
                     else -> NotesGrid(
                         state = state,
                         topPadding = headerHeight,
@@ -344,6 +367,9 @@ fun LibraryScreen(
                         onMore = if (selecting) null else { note: NoteSummary -> actionsFor = note },
                         inkThumbnail = inkThumbnail,
                         cover = cover,
+                        onOpenFolder = { onSelectCollection(NoteCollection.InNotebook(it.id)) },
+                        onFolderMore = if (folders != null && !selecting) { nb: Notebook -> folderActionsFor = nb } else null,
+                        onNewFolder = if (folders != null && !selecting) { { newFolder = true } } else null,
                         accessibilityActions = { note ->
                             noteActions(
                                 note, state.collection, actions,
@@ -403,8 +429,18 @@ fun LibraryScreen(
                             onEmptyTrash = { confirmEmptyTrash = true },
                             onManageNotebooks = onManageNotebooks,
                             onManageTags = onManageTags,
+                            onNewFolder = if (folders != null && state.canCreate) { { newFolder = true } } else null,
                         )
-                        CollectionChips(state.collection, state.notebooks, onSelectCollection, Modifier.padding(bottom = 6.dp))
+                        if (parentFolder != null) {
+                            // Inside a folder that is inside another: one tap back up.
+                            AssistChip(
+                                onClick = { onSelectCollection(NoteCollection.InNotebook(parentFolder.id)) },
+                                label = { Text(stringResource(R.string.folder_up, parentFolder.title), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(18.dp)) },
+                                modifier = Modifier.padding(start = 12.dp).testTag(FolderTestTags.UP),
+                            )
+                        }
+                        CollectionChips(state.collection, FolderTree.children(state.notebooks, null), onSelectCollection, Modifier.padding(bottom = 6.dp))
                     }
                 }
             }
@@ -418,6 +454,58 @@ fun LibraryScreen(
         }
     }
 
+    if (newFolder && folders != null) {
+        RenameNoteDialog(
+            current = "",
+            onRename = { if (it.isNotBlank()) folders.create(it) },
+            onDismiss = { newFolder = false },
+            titleRes = R.string.folder_new,
+            labelRes = R.string.folder_name,
+        )
+    }
+    folderActionsFor?.let { nb ->
+        ActionSheet(
+            title = nb.title,
+            actions = listOf(
+                SheetAction(stringResource(R.string.action_rename), Icons.Outlined.Edit) { renameFolderFor = nb },
+                SheetAction(stringResource(R.string.folder_move), Icons.Outlined.DriveFileMove) { moveFolderFor = nb },
+                SheetAction(stringResource(R.string.action_delete), Icons.Outlined.Delete) { deleteFolderFor = nb },
+            ),
+            onDismiss = { folderActionsFor = null },
+        )
+    }
+    renameFolderFor?.let { nb ->
+        RenameNoteDialog(
+            current = nb.title,
+            onRename = { folders?.rename?.invoke(nb.id, it) },
+            onDismiss = { renameFolderFor = null },
+            titleRes = R.string.folder_rename,
+            labelRes = R.string.folder_name,
+        )
+    }
+    moveFolderFor?.let { nb ->
+        // Not into itself or a folder inside it.
+        val blocked = FolderTree.descendants(state.notebooks, nb.id)
+        MoveToNotebookSheet(
+            state.notebooks.filter { it.id !in blocked },
+            nb.parentId,
+            onPick = { folders?.move?.invoke(nb.id, it) },
+            onDismiss = { moveFolderFor = null },
+            noneLabel = stringResource(R.string.folder_top_level),
+        )
+    }
+    deleteFolderFor?.let { nb ->
+        ConfirmDialog(
+            title = stringResource(R.string.folder_delete_title, nb.title),
+            body = stringResource(R.string.folder_delete_body),
+            confirm = stringResource(R.string.action_delete),
+            onConfirm = {
+                folders?.delete?.invoke(nb.id)
+                if (state.currentFolder in FolderTree.descendants(state.notebooks, nb.id)) onSelectCollection(NoteCollection.All)
+            },
+            onDismiss = { deleteFolderFor = null },
+        )
+    }
     if (showCollections) {
         CollectionSheet(state, onSelect = { showCollections = false; onSelectCollection(it) }, onDismiss = { showCollections = false },
             onManageNotebooks = { showCollections = false; onManageNotebooks() }, onManageTags = { showCollections = false; onManageTags() })
@@ -493,6 +581,7 @@ private fun HomeTopRow(
     onEmptyTrash: () -> Unit,
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
+    onNewFolder: (() -> Unit)? = null,
 ) {
     Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         val description = stringResource(R.string.collection_choose, title)
@@ -524,7 +613,7 @@ private fun HomeTopRow(
             Icon(Icons.Outlined.Search, stringResource(R.string.library_search))
         }
         SortMenu(sort, onSort)
-        OverflowMenu(inTrash, onEmptyTrash, onManageNotebooks, onManageTags)
+        OverflowMenu(inTrash, onEmptyTrash, onManageNotebooks, onManageTags, onNewFolder)
     }
 }
 
@@ -567,6 +656,9 @@ private fun NotesGrid(
     inkThumbnail: suspend (NoteSummary) -> InkThumbnail?,
     cover: (suspend (String) -> Bitmap?)?,
     accessibilityActions: @Composable (NoteSummary) -> List<CardAction>,
+    onOpenFolder: (Notebook) -> Unit = {},
+    onFolderMore: ((Notebook) -> Unit)? = null,
+    onNewFolder: (() -> Unit)? = null,
 ) {
     val spacing = AppTheme.spacing
     val card: @Composable (NoteSummary) -> Unit = { note ->
@@ -589,6 +681,19 @@ private fun NotesGrid(
         verticalItemSpacing = spacing.md,
         modifier = Modifier.fillMaxSize().testTag(LibraryTestTags.GRID),
     ) {
+        // Folders inside this folder come first, like a file manager.
+        if (state.currentFolder != null) {
+            if (state.subfolders.isNotEmpty()) {
+                item(key = "h_folders", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.folder_section)) }
+                items(state.subfolders, key = { "f_" + it.id.value }) { nb ->
+                    FolderCard(nb, state.notebooks, onOpen = { onOpenFolder(nb) }, onMore = onFolderMore?.let { { it(nb) } })
+                }
+            }
+            if (onNewFolder != null) item(key = "f_new") { NewFolderCard(onNewFolder) }
+            if (state.pinned.isNotEmpty() || state.others.isNotEmpty()) {
+                item(key = "h_notes", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.folder_notes_section)) }
+            }
+        }
         if (state.pinned.isNotEmpty()) {
             item(key = "h_pinned", span = StaggeredGridItemSpan.FullLine) { SectionLabel(stringResource(R.string.library_pinned)) }
             items(state.pinned, key = { it.id.value }) { card(it) }
@@ -698,6 +803,7 @@ private fun OverflowMenu(
     onEmptyTrash: () -> Unit,
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
+    onNewFolder: (() -> Unit)?,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -708,6 +814,14 @@ private fun OverflowMenu(
                     text = { Text(stringResource(R.string.library_empty_trash)) },
                     leadingIcon = { Icon(Icons.Outlined.DeleteForever, null) },
                     onClick = { open = false; onEmptyTrash() },
+                )
+            }
+            if (onNewFolder != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.folder_new)) },
+                    leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
+                    onClick = { open = false; onNewFolder() },
+                    modifier = Modifier.testTag(FolderTestTags.NEW_FOLDER + "_menu"),
                 )
             }
             DropdownMenuItem(

@@ -1,5 +1,11 @@
 package com.appname.notes.feature.library
 
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import com.appname.notes.ui.common.FolderIcon
+import com.appname.notes.core.domain.model.FolderTree
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,9 +56,12 @@ fun CollectionSheet(
             item { Choice(stringResource(R.string.collection_favourites), Icons.Outlined.StarOutline, state.collection == NoteCollection.Favourites) { onSelect(NoteCollection.Favourites) } }
 
             item { Header(stringResource(R.string.collection_notebooks)) }
-            items(state.notebooks, key = { "nb_${it.id.value}" }) { nb ->
+            items(FolderTree.ordered(state.notebooks), key = { "nb_${it.first.id.value}" }) { (nb, depth) ->
                 val c = NoteCollection.InNotebook(nb.id)
-                Choice(nb.title, Icons.Outlined.Folder, state.collection == c, pluralStringResource(R.plurals.note_count, nb.noteCount, nb.noteCount)) { onSelect(c) }
+                Choice(
+                    nb.title, null, state.collection == c, pluralStringResource(R.plurals.note_count, nb.noteCount, nb.noteCount),
+                    indent = depth,
+                ) { onSelect(c) }
             }
             item { Choice(stringResource(R.string.library_manage_notebooks), Icons.Outlined.Settings, false, onClick = onManageNotebooks) }
 
@@ -83,10 +92,16 @@ private fun Header(text: String) {
 }
 
 @Composable
-private fun Choice(title: String, icon: ImageVector, selected: Boolean, trailing: String? = null, onClick: () -> Unit) {
+private fun Choice(title: String, icon: ImageVector?, selected: Boolean, trailing: String? = null, indent: Int = 0, onClick: () -> Unit) {
     ListItem(
         headlineContent = { Text(title, maxLines = 1) },
-        leadingContent = { Icon(icon, contentDescription = null) },
+        leadingContent = {
+            // Folders inside folders are indented; a folder gets the folder picture.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width((20 * indent.coerceAtMost(6)).dp))
+                if (icon != null) Icon(icon, contentDescription = null) else FolderIcon(size = 26.dp)
+            }
+        },
         trailingContent = trailing?.let { { Text(it, style = MaterialTheme.typography.labelMedium) } },
         colors = if (selected) {
             ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)

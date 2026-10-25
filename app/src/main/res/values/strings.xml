@@ -342,7 +342,7 @@
     <string name="search_in_attachment">In %1$s</string>
     <string name="search_in_attachment_page">In %1$s, page %2$d</string>
     <string name="scan_document">Scan document</string>
-    <string name="scan_unavailable">The document scanner isn\'t available on this phone (it needs Google Play services).</string>
+    <string name="scan_unavailable">Couldn\'t scan: no scanner or camera app is available on this phone.</string>
     <!-- Audio notes (Phase 5, FR-012) -->
     <string name="audio_record">Record audio</string>
     <string name="audio_recording">Recording</string>
@@ -643,4 +643,21 @@
     <string name="ink_export_pdf">Export as PDF</string>
     <string name="ink_share_pdf">Share as PDF</string>
     <string name="ink_pdf_exported">PDF saved</string>
+    <!-- Folders inside folders -->
+    <string name="folder_new">New folder</string>
+    <string name="folder_name">Folder name</string>
+    <string name="folder_rename">Rename folder</string>
+    <string name="folder_move">Move to folder</string>
+    <string name="folder_top_level">Top level (no parent folder)</string>
+    <string name="folder_up">Back to %1$s</string>
+    <string name="folder_section">Folders</string>
+    <string name="folder_notes_section">Notes</string>
+    <string name="folder_actions">Actions for folder %1$s</string>
+    <string name="folder_summary">%1$s · %2$s</string>
+    <string name="folder_delete_title">Delete \"%1$s\"?</string>
+    <string name="folder_delete_body">The folder and the folders inside it are deleted. Their notes are kept and move to No notebook.</string>
+    <plurals name="folder_count">
+        <item quantity="one">%d folder</item>
+        <item quantity="other">%d folders</item>
+    </plurals>
 </resources>

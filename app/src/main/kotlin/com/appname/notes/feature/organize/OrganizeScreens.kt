@@ -100,7 +100,7 @@ fun NotebooksRoute(onBack: () -> Unit, viewModel: NotebooksViewModel = hiltViewM
                         ListItem(
                             headlineContent = { Text(nb.title) },
                             supportingContent = { Text(pluralStringResource(R.plurals.note_count, nb.noteCount, nb.noteCount)) },
-                            leadingContent = { Icon(Icons.Outlined.Folder, null) },
+                            leadingContent = { com.appname.notes.ui.common.FolderIcon(size = 28.dp) },
                             trailingContent = {
                                 androidx.compose.foundation.layout.Row {
                                     IconButton(onClick = { viewModel.move(nb.id, -1) }, enabled = index > 0) {

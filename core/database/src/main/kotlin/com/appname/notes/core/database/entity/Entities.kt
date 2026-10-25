@@ -24,6 +24,8 @@ data class NotebookEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long? = null,
+    /** The folder this folder is inside (v10); null at the top level. No foreign key: a missing parent = top level. */
+    val parentId: String? = null,
 )
 
 @Entity(

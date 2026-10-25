@@ -40,6 +40,7 @@ import com.appname.notes.core.database.entity.TextIndexJobEntity
  * - v7 (Phase 5): reminders. New table only; generated migration.
  * - v8 (Phase 6): custom_templates; ink_pages.layoutJson (nullable). Generated migration.
  * - v9 (Phase 6): ink_note_settings (page arrangement per note). New table only; generated migration.
+ * - v10 (Phase 7): notebooks.parentId (nullable): folders inside folders. Generated migration.
  */
 @Database(
     entities = [
@@ -48,9 +49,9 @@ import com.appname.notes.core.database.entity.TextIndexJobEntity
         ExtractedTextEntity::class, ExtractedTextFtsEntity::class, TextIndexJobEntity::class, ReminderEntity::class, CustomTemplateEntity::class,
         InkNoteSettingsEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10)],
 )
 abstract class NotesDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao

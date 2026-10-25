@@ -26,6 +26,8 @@ import com.appname.notes.core.domain.model.NoteSummary
 import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.domain.model.Notebook
 import com.appname.notes.core.domain.model.NotebookId
+import com.appname.notes.core.domain.model.FolderTree
+import com.appname.notes.core.domain.model.NotebookDeleteMode
 import com.appname.notes.core.domain.model.Tag
 import com.appname.notes.core.domain.model.TagId
 import com.appname.notes.core.domain.repository.InkRepository
@@ -63,7 +65,17 @@ data class LibraryUiState(
     val loading: Boolean = true,
     val message: UserMessage? = null,
 ) {
-    val isEmpty: Boolean get() = !loading && pinned.isEmpty() && others.isEmpty()
+    /** The folder being shown, if any. */
+    val currentFolder: NotebookId? get() = (collection as? NoteCollection.InNotebook)?.id
+
+    /** Folders inside the shown folder (shown above its notes). */
+    val subfolders: List<Notebook> get() = currentFolder?.let { FolderTree.children(notebooks, it) }.orEmpty()
+
+    /** The folder the shown folder is inside (for "up"), if any. */
+    val parentFolder: Notebook?
+        get() = currentFolder?.let { id -> notebooks.firstOrNull { it.id == id }?.parentId }?.let { p -> notebooks.firstOrNull { it.id == p } }
+
+    val isEmpty: Boolean get() = !loading && pinned.isEmpty() && others.isEmpty() && subfolders.isEmpty()
     val canCreate: Boolean get() = collection != NoteCollection.Archive && collection != NoteCollection.Trash
 }
 
@@ -72,7 +84,7 @@ data class LibraryUiState(
 class LibraryViewModel @Inject constructor(
     private val notes: NoteRepository,
     private val ink: InkRepository,
-    notebooks: NotebookRepository,
+    private val folders: NotebookRepository,
     tags: TagRepository,
     private val settings: SettingsRepository,
     private val files: DocumentFiles,
@@ -95,7 +107,7 @@ class LibraryViewModel @Inject constructor(
 
     val uiState: StateFlow<LibraryUiState> = combine(
         noteList,
-        notebooks.observeNotebooks(),
+        folders.observeNotebooks(),
         tags.observeTags(),
         message,
     ) { (c, sort, list), books, tagList, msg ->
@@ -116,6 +128,27 @@ class LibraryViewModel @Inject constructor(
             message = msg,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    // ------------------------------------------------------------ folders inside folders
+
+    /** A new folder inside the shown folder (or at the top level). */
+    fun createFolder(title: String) {
+        val parent = (collection.value as? NoteCollection.InNotebook)?.id
+        viewModelScope.launch { folders.create(title, parent).reportFailure() }
+    }
+
+    fun renameFolder(id: NotebookId, title: String) {
+        viewModelScope.launch { folders.rename(id, title).reportFailure() }
+    }
+
+    fun moveFolder(id: NotebookId, parent: NotebookId?) {
+        viewModelScope.launch { folders.move(id, parent).reportFailure() }
+    }
+
+    /** Deletes the folder and its subfolders; their notes move to "No notebook" (nothing is lost). */
+    fun deleteFolder(id: NotebookId) {
+        viewModelScope.launch { folders.delete(id, NotebookDeleteMode.KEEP_NOTES).reportFailure() }
+    }
 
     fun selectCollection(value: NoteCollection) {
         collection.value = value

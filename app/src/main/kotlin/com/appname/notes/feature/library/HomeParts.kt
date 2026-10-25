@@ -72,17 +72,18 @@ fun CollectionChips(current: NoteCollection, notebooks: List<Notebook>, onSelect
         }
         items(notebooks, key = { "nb_" + it.id.value }) { nb ->
             val c = NoteCollection.InNotebook(nb.id)
-            Chip(nb.title, current == c, LibraryTestTags.chip(nb)) { onSelect(c) }
+            Chip(nb.title, current == c, LibraryTestTags.chip(nb), folder = true) { onSelect(c) }
         }
     }
 }
 
 @Composable
-private fun Chip(label: String, selected: Boolean, tag: String, onClick: () -> Unit) {
+private fun Chip(label: String, selected: Boolean, tag: String, folder: Boolean = false, onClick: () -> Unit) {
     FilterChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingIcon = if (folder) ({ com.appname.notes.ui.common.FolderIcon(size = 18.dp) }) else null,
         shape = MaterialTheme.shapes.extraLarge,
         colors = FilterChipDefaults.filterChipColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
@@ -152,7 +153,13 @@ private fun BarAction(icon: ImageVector, label: Int, tag: String, onClick: () ->
 
 /** Rename a note from the home screen. An empty name is allowed: the card then shows the first line. */
 @Composable
-fun RenameNoteDialog(current: String, onRename: (String) -> Unit, onDismiss: () -> Unit) {
+fun RenameNoteDialog(
+    current: String,
+    onRename: (String) -> Unit,
+    onDismiss: () -> Unit,
+    @androidx.annotation.StringRes titleRes: Int = R.string.note_rename,
+    @androidx.annotation.StringRes labelRes: Int = R.string.note_title_label,
+) {
     var value by remember { mutableStateOf(TextFieldValue(current, TextRange(0, current.length))) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
@@ -160,14 +167,14 @@ fun RenameNoteDialog(current: String, onRename: (String) -> Unit, onDismiss: () 
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag(LibraryTestTags.RENAME_DIALOG),
-        title = { Text(stringResource(R.string.note_rename)) },
+        title = { Text(stringResource(titleRes)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it },
                     singleLine = true,
-                    label = { Text(stringResource(R.string.note_title_label)) },
+                    label = { Text(stringResource(labelRes)) },
                     placeholder = { Text(stringResource(R.string.untitled)) },
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { save() }),

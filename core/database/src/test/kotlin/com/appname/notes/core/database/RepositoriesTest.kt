@@ -308,4 +308,32 @@ class RepositoriesTest {
         note("live", "x")
         assertThat(flow.first()).hasSize(1)
     }
+
+    @Test
+    fun foldersInsideFolders() = runTest {
+        val school = notebooks.create("School").getOrNull()!!
+        val physics = notebooks.create("Physics", parent = school).getOrNull()!!
+        val waves = notebooks.create("Waves", parent = physics).getOrNull()!!
+        val home = notebooks.create("Home").getOrNull()!!
+        val n = note("lecture", "x", notebook = waves)
+        val list = notebooks.observeNotebooks().first()
+        assertThat(list.first { it.id == waves }.parentId).isEqualTo(physics)
+        assertThat(com.appname.notes.core.domain.model.FolderTree.ordered(list).map { it.first.title to it.second })
+            .containsExactly("School" to 0, "Physics" to 1, "Waves" to 2, "Home" to 0).inOrder()
+        assertThat(com.appname.notes.core.domain.model.FolderTree.path(list, waves).map { it.title }).containsExactly("School", "Physics", "Waves").inOrder()
+
+        // Never into itself or a folder inside it.
+        assertThat(notebooks.move(school, waves)).isInstanceOf(AppResult.Failure::class.java)
+        assertThat(notebooks.move(school, school)).isInstanceOf(AppResult.Failure::class.java)
+        assertThat(notebooks.move(physics, home)).isEqualTo(AppResult.Success(Unit))
+        assertThat(notebooks.observeNotebooks().first().first { it.id == physics }.parentId).isEqualTo(home)
+
+        // Deleting a folder deletes the folders inside it; their notes are kept.
+        notebooks.delete(home, NotebookDeleteMode.KEEP_NOTES)
+        val left = notebooks.observeNotebooks().first().map { it.title }
+        assertThat(left).containsExactly("School")
+        val kept = notes.getNote(n)!!
+        assertThat(kept.trashedAt).isNull()
+        assertThat(kept.notebookId).isNull()
+    }
 }

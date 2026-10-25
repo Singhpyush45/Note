@@ -37,6 +37,13 @@ abstract class NotebookDao {
     @Query("UPDATE notebooks SET title = :title, updatedAt = :now WHERE id = :id AND deletedAt IS NULL")
     abstract suspend fun rename(id: String, title: String, now: Long): Int
 
+    @Query("UPDATE notebooks SET parentId = :parentId, updatedAt = :now WHERE id = :id AND deletedAt IS NULL")
+    abstract suspend fun setParent(id: String, parentId: String?, now: Long): Int
+
+    /** Live folder ids with their parent, for walking the tree. */
+    @Query("SELECT id, parentId FROM notebooks WHERE deletedAt IS NULL")
+    abstract suspend fun links(): List<FolderLink>
+
     @Query("UPDATE notebooks SET sortOrder = :sortOrder, updatedAt = :now WHERE id = :id")
     protected abstract suspend fun setSortOrder(id: String, sortOrder: Int, now: Long)
 
@@ -69,4 +76,12 @@ abstract class NotebookDao {
         unfileNotesIn(id)
         tombstone(id, now)
     }
+
+    /** Deletes a folder and every folder inside it, in one transaction. */
+    @Transaction
+    open suspend fun deleteTree(ids: List<String>, trashNotes: Boolean, now: Long) {
+        ids.forEach { delete(it, trashNotes, now) }
+    }
 }
+
+data class FolderLink(val id: String, val parentId: String?)

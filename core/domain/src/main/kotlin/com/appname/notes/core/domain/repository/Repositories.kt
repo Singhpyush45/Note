@@ -68,11 +68,16 @@ interface NoteRepository {
 
 interface NotebookRepository {
     fun observeNotebooks(): Flow<List<Notebook>>
-    suspend fun create(title: String): AppResult<NotebookId>
+    /** A new folder at the top level, or inside [parent]. */
+    suspend fun create(title: String, parent: NotebookId? = null): AppResult<NotebookId>
+
+    /** Moves a folder (with everything in it) into [parent] (null: top level). Not into itself or its own subfolders. */
+    suspend fun move(id: NotebookId, parent: NotebookId?): AppResult<Unit>
     suspend fun rename(id: NotebookId, title: String): AppResult<Unit>
 
     /** Saves a new manual order; [orderedIds] lists every notebook. */
     suspend fun reorder(orderedIds: List<NotebookId>): AppResult<Unit>
+    /** Deletes the folder and the folders inside it; their notes go as [mode] says. */
     suspend fun delete(id: NotebookId, mode: NotebookDeleteMode): AppResult<Unit>
 }
 

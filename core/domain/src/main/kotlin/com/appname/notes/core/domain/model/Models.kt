@@ -24,7 +24,59 @@ data class Notebook(
     val noteCount: Int,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** The folder this one is inside; null at the top level (folders can nest, owner request). */
+    val parentId: NotebookId? = null,
 )
+
+/** Folders inside folders: tree order, paths and descendants, from the flat list. */
+object FolderTree {
+    /** Every folder with its depth, parents before children, siblings in their order. Unknown parents = top level. */
+    fun ordered(all: List<Notebook>): List<Pair<Notebook, Int>> {
+        val ids = all.mapTo(HashSet()) { it.id }
+        val children = all.groupBy { it.parentId?.takeIf { p -> p in ids } }
+        val out = ArrayList<Pair<Notebook, Int>>(all.size)
+        val seen = HashSet<NotebookId>()
+        fun visit(parent: NotebookId?, depth: Int) {
+            for (nb in children[parent].orEmpty()) {
+                if (!seen.add(nb.id)) continue
+                out += nb to depth
+                visit(nb.id, depth + 1)
+            }
+        }
+        visit(null, 0)
+        // A loop in stored data (shouldn't happen) still shows every folder once, at the top level.
+        all.filter { it.id !in seen }.forEach { out += it to 0 }
+        return out
+    }
+
+    fun children(all: List<Notebook>, parent: NotebookId?): List<Notebook> {
+        val ids = all.mapTo(HashSet()) { it.id }
+        return all.filter { (it.parentId?.takeIf { p -> p in ids }) == parent }
+    }
+
+    /** [id] and every folder inside it, at any depth. */
+    fun descendants(all: List<Notebook>, id: NotebookId): Set<NotebookId> {
+        val result = linkedSetOf(id)
+        var added = true
+        while (added) {
+            added = false
+            for (nb in all) if (nb.parentId in result && result.add(nb.id)) added = true
+        }
+        return result
+    }
+
+    /** From the top-level folder down to [id]. */
+    fun path(all: List<Notebook>, id: NotebookId): List<Notebook> {
+        val byId = all.associateBy { it.id }
+        val out = ArrayList<Notebook>()
+        var cur = byId[id]
+        while (cur != null && out.none { it.id == cur!!.id }) {
+            out.add(0, cur)
+            cur = cur.parentId?.let { byId[it] }
+        }
+        return out
+    }
+}
 
 data class Tag(val id: TagId, val name: String, val noteCount: Int = 0)
 

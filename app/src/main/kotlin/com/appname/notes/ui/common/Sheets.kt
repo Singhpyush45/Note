@@ -1,5 +1,10 @@
 package com.appname.notes.ui.common
 
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import com.appname.notes.core.domain.model.FolderTree
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -69,6 +74,7 @@ fun MoveToNotebookSheet(
     current: NotebookId?,
     onPick: (NotebookId?) -> Unit,
     onDismiss: () -> Unit,
+    noneLabel: String? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -82,23 +88,29 @@ fun MoveToNotebookSheet(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
-            NotebookChoice(stringResource(R.string.no_notebook), current == null) { onPick(null); onDismiss() }
-            notebooks.forEach { nb ->
-                NotebookChoice(nb.title, current == nb.id) { onPick(nb.id); onDismiss() }
+            NotebookChoice(noneLabel ?: stringResource(R.string.no_notebook), current == null, none = true) { onPick(null); onDismiss() }
+            // Folders in tree order, indented by depth.
+            FolderTree.ordered(notebooks).forEach { (nb, depth) ->
+                NotebookChoice(nb.title, current == nb.id, depth = depth) { onPick(nb.id); onDismiss() }
             }
         }
     }
 }
 
 @Composable
-private fun NotebookChoice(title: String, selected: Boolean, onClick: () -> Unit) {
+private fun NotebookChoice(title: String, selected: Boolean, none: Boolean = false, depth: Int = 0, onClick: () -> Unit) {
     ListItem(
         headlineContent = { Text(title) },
-        leadingContent = { RadioButton(selected = selected, onClick = null) },
-        trailingContent = if (title == stringResource(R.string.no_notebook)) {
+        leadingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width((16 * depth.coerceAtMost(6)).dp))
+                RadioButton(selected = selected, onClick = null)
+            }
+        },
+        trailingContent = if (none) {
             { Icon(Icons.Outlined.FolderOff, contentDescription = null) }
         } else {
-            null
+            { FolderIcon(size = 24.dp) }
         },
         modifier = Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
     )

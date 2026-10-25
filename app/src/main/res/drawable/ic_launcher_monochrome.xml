@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon version (Android 13+): single colour, text lines cut out so the page stays readable. -->
+<!-- Themed-icon version (Android 13+): the folded-paper "N" as one shape, inside the safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -7,6 +7,5 @@
     android:viewportHeight="108">
     <path
         android:fillColor="#FF000000"
-        android:fillType="evenOdd"
-        android:pathData="M38,30h26l10,10v34a4,4 0,0 1,-4 4h-32a4,4 0,0 1,-4 -4v-40a4,4 0,0 1,4 -4z M41,48v3h26v-3z M41,56v3h26v-3z M41,64v3h16v-3z" />
+        android:pathData="M36,74V40a6,6 0,0 1,10.5 -4L61,52V40a5.5,5.5 0,0 1,11 0V68a6,6 0,0 1,-10.5 4L47,56V74a5.5,5.5 0,0 1,-11 0z" />
 </vector>

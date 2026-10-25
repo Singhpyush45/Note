@@ -94,7 +94,7 @@ class MigrationTest {
     @Test
     fun `latest schema is committed`() {
         // CI also fails when the exported schema differs from the committed one.
-        assertThat(committedVersions().last()).isEqualTo(9)
+        assertThat(committedVersions().last()).isEqualTo(10)
     }
 
     @Test
