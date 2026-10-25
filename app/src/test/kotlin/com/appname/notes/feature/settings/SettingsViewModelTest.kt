@@ -140,7 +140,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `a picked photo becomes the wallpaper; choosing a preset deletes the photo`() = runTest {
+    fun `a picked photo becomes the wallpaper and choosing a preset deletes the photo`() = runTest {
         viewModel.onWallpaperPhotoPicked(android.net.Uri.EMPTY)
         assertThat(repository.current().wallpaper).isEqualTo(WallpaperChoice.Photo("w1.jpg"))
         assertThat(photos.kept.last()).isEqualTo("w1.jpg") // older photos removed
