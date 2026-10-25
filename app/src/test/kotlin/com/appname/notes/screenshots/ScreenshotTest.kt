@@ -1,5 +1,6 @@
 package com.appname.notes.screenshots
 
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performScrollToNode
 import com.appname.notes.core.ink.template.HeaderStyle
