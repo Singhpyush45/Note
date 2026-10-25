@@ -273,7 +273,7 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.waitForIdle()
         snap("color_custom_light")
         pressBackInDialog()
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.LASER)).performScrollTo().performClick()
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.LASER)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         composeRule.waitForIdle()
         snap("laser_tools_light")
         // A rainbow trail, mid-gesture (the pointer is still down).
