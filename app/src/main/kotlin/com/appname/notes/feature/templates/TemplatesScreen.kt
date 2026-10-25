@@ -407,7 +407,7 @@ fun TemplatePreview(layout: TemplateLayout, modifier: Modifier = Modifier) {
             c.nativeCanvas.withSave {
                 translate(left, top)
                 scale(scale, scale)
-                renderer.drawPage(this, layout)
+                renderer.drawPage(this, layout, pxPerUnit = scale)
             }
         }
         drawRect(

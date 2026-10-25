@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.appname.notes.R
-import com.appname.notes.core.designsystem.component.GlassSurface
+import androidx.compose.material3.Surface
 import com.appname.notes.core.domain.repository.TemplateRepository
 import com.appname.notes.core.ink.template.PageFormat
 import com.appname.notes.core.ink.template.TemplateDefinition
@@ -64,10 +64,12 @@ fun TemplatePreviewDialog(
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassSurface(
+        // Solid, not glass: the page preview must read clearly over the busy grid behind it.
+        Surface(
             shape = MaterialTheme.shapes.extraLarge,
-            tint = MaterialTheme.colorScheme.surfaceContainerHigh,
-            elevation = 6.dp,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 2.dp,
+            shadowElevation = 8.dp,
             // A dialog is its own window: expose test tags as resource ids here too (UI Automator tests).
             modifier = Modifier
                 .padding(20.dp)

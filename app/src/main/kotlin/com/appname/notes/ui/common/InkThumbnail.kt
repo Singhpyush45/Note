@@ -79,7 +79,7 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
             val canvas = c.nativeCanvas
             canvas.withScale(scale, scale) {
                 clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
-                thumbnail.design?.let { templateRenderer.drawDesign(this, it) }
+                thumbnail.design?.let { templateRenderer.drawDesign(this, it, pxPerUnit = scale) }
                 thumbnail.pdfPage?.let { pageRect.set(0f, 0f, thumbnail.width, thumbnail.height); drawBitmap(it, null, pageRect, bitmapPaint) }
                 for (pass in 0..1) {
                     for (item in thumbnail.items) {

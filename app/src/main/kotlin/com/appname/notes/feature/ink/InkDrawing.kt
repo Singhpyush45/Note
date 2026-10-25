@@ -157,7 +157,8 @@ internal class InkRenderer {
             canvas.drawRect(r, paperPaint)
             paperPaint.color = InkPaints.PAPER
             // The design is drawn at the page's own size, whatever size the template was made for.
-            canvas.withMatrix(pageToScreen) { templateRenderer.drawDesign(this, layout.resized(width, height)) }
+            val zoom = pageToScreen.mapRadius(1f)
+            canvas.withMatrix(pageToScreen) { templateRenderer.drawDesign(this, layout.resized(width, height), zoom) }
             return
         }
         canvas.drawRect(r, paperPaint)

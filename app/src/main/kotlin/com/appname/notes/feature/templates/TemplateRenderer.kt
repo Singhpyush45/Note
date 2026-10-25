@@ -34,15 +34,22 @@ class TemplateRenderer {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG or Paint.LINEAR_TEXT_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
     private val rect = RectF()
 
-    /** Paper colour, ruling and printed parts. */
-    fun drawPage(canvas: Canvas, layout: TemplateLayout) {
+    /** Lines and dots never get thinner than one screen pixel, so small previews still show the ruling. */
+    private var minLine = 0f
+    private var minDot = 0f
+
+    /** Paper colour, ruling and printed parts. [pxPerUnit]: screen pixels per page unit (the zoom). */
+    fun drawPage(canvas: Canvas, layout: TemplateLayout, pxPerUnit: Float = 1f) {
         fill.color = layout.paperColor
         canvas.drawRect(0f, 0f, layout.width, layout.height, fill)
-        drawDesign(canvas, layout)
+        drawDesign(canvas, layout, pxPerUnit)
     }
 
     /** Ruling and printed parts only (the caller has drawn the paper). */
-    fun drawDesign(canvas: Canvas, layout: TemplateLayout) {
+    fun drawDesign(canvas: Canvas, layout: TemplateLayout, pxPerUnit: Float = 1f) {
+        val unitsPerPx = if (pxPerUnit > 0f) 1f / pxPerUnit else 1f
+        minLine = unitsPerPx
+        minDot = unitsPerPx * 0.9f
         canvas.withClip(0f, 0f, layout.width, layout.height) {
             drawRuling(this, layout.paper, layout.width, layout.height)
             for (c in layout.components) draw(this, c)
@@ -71,7 +78,7 @@ class TemplateRenderer {
                 var y = first
                 while (y < h) {
                     var x = s
-                    while (x < w) { canvas.drawCircle(x, y, DOT_RADIUS, fill); x += s }
+                    while (x < w) { canvas.drawCircle(x, y, maxOf(DOT_RADIUS, minDot), fill); x += s }
                     y += s
                 }
             }
@@ -117,7 +124,7 @@ class TemplateRenderer {
                 var y = c.y + s / 2
                 while (y < c.y + c.h) {
                     var x = c.x + s / 2
-                    while (x < c.x + c.w) { canvas.drawCircle(x, y, DOT_RADIUS, fill); x += s }
+                    while (x < c.x + c.w) { canvas.drawCircle(x, y, maxOf(DOT_RADIUS, minDot), fill); x += s }
                     y += s
                 }
             }
@@ -196,7 +203,7 @@ class TemplateRenderer {
 
     private fun line(color: Int, width: Float) {
         stroke.color = color
-        stroke.strokeWidth = width
+        stroke.strokeWidth = maxOf(width, minLine)
     }
 
     private companion object {

@@ -74,6 +74,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -495,23 +496,30 @@ private fun HomeTopRow(
 ) {
     Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         val description = stringResource(R.string.collection_choose, title)
-        TextButton(
-            onClick = onCollections,
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .testTag(LibraryTestTags.COLLECTION_BUTTON)
-                .semantics { contentDescription = description },
-        ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                modifier = Modifier.semantics { heading() },
-            )
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp).size(22.dp))
+        // The title takes the free space; a long name is shortened, the ▾ always shows.
+        Box(Modifier.weight(1f)) {
+            TextButton(
+                onClick = onCollections,
+                modifier = Modifier
+                    .testTag(LibraryTestTags.COLLECTION_BUTTON)
+                    .semantics { contentDescription = description },
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false).semantics { heading() },
+                )
+                Icon(
+                    Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 2.dp).size(24.dp),
+                )
+            }
         }
-        Box(Modifier.weight(1f))
         IconButton(onClick = onOpenSearch, modifier = Modifier.testTag(LibraryTestTags.SEARCH)) {
             Icon(Icons.Outlined.Search, stringResource(R.string.library_search))
         }
