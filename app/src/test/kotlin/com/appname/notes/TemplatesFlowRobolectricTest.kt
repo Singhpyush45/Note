@@ -69,7 +69,8 @@ class TemplatesFlowRobolectricTest {
     private fun openTemplates() {
         click(LibraryTestTags.CREATE)
         click(LibraryTestTags.CHOOSE_TEMPLATE)
-        waitFor(TemplatesTestTags.SCREEN)
+        // Wait for the templates themselves, not just the (possibly still empty) screen.
+        waitFor(TemplatesTestTags.tile("basic.blank"))
     }
 
     /** Scrolls the grid to a template (tiles further down aren't composed until then). */
