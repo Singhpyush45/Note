@@ -40,6 +40,8 @@ object PdfInkOps {
                 when (item) {
                     is StrokeItem -> stroke(item, out)
                     is ShapeItem -> shape(item, out)
+                    // Photos and text boxes aren't vector ink; PDF notes don't offer them.
+                    is com.appname.notes.core.ink.model.ImageItem, is com.appname.notes.core.ink.model.TextItem -> Unit
                 }
             }
         }

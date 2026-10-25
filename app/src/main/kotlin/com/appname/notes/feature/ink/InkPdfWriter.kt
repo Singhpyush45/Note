@@ -49,9 +49,9 @@ object InkPdfWriter {
                     renderer.drawDesign(this, design)
                     // Highlighter under everything else, as on screen.
                     val ordered = p.items.sortedWith(PaintOrder)
-                    for (pass in 0..1) {
+                    for (pass in com.appname.notes.feature.ink.InkLayers.PASSES) {
                         for (item in ordered) {
-                            if ((pass == 0) != (item.brush.tool == InkTool.HIGHLIGHTER)) continue
+                            if (com.appname.notes.feature.ink.InkLayers.of(item) != pass) continue
                             ink.set(InkPaints.inkPaint(item.brush))
                             InkPaths.drawItem(this, item, ink, styled)
                         }

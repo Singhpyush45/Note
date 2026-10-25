@@ -1,5 +1,6 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.outlined.Flip
 import androidx.compose.ui.graphics.asImageBitmap
@@ -148,7 +149,7 @@ data class InkToolActions(
 
 /** The tools in the bar, in order (owner brief §13). Only tools that work are shown. */
 private val BarTools = listOf(
-    EditorTool.PEN, EditorTool.MARKER, EditorTool.PENCIL, EditorTool.BRUSH, EditorTool.HIGHLIGHTER, EditorTool.SHAPE, EditorTool.ERASER, EditorTool.LASSO, EditorTool.LASER,
+    EditorTool.PEN, EditorTool.MARKER, EditorTool.PENCIL, EditorTool.BRUSH, EditorTool.HIGHLIGHTER, EditorTool.SHAPE, EditorTool.TEXT, EditorTool.ERASER, EditorTool.LASSO, EditorTool.LASER,
 )
 
 /** Laser widths in dp: thin, medium, bold. */
@@ -200,6 +201,7 @@ fun InkToolbar(
                     val raw = when (tool) {
                         EditorTool.LASER -> ui.laser.colorArgb
                         EditorTool.SHAPE -> tools.shapeColor
+                        EditorTool.TEXT -> 0xFF1F1F1F.toInt()
                         else -> tools.brushFor(tool)?.colorArgb ?: 0
                     }
                     val ink = if (darkPaper) DarkPaper.map(raw or OPAQUE) else raw
@@ -264,6 +266,12 @@ fun InkToolbar(
                     }
                     tools.tool == EditorTool.LASER -> LaserControls(ui.laser, actions)
                     tools.tool == EditorTool.SHAPE -> ShapeControls(ui.shapeSettings, ui.recentColors, actions)
+                    tools.tool == EditorTool.TEXT -> Text(
+                        stringResource(R.string.text_tool_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
                     tools.tool == EditorTool.LASSO -> if (ui.hasSelection) {
                         IconButton(onClick = actions.onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
                         IconButton(onClick = actions.onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
@@ -680,6 +688,7 @@ private fun EditorTool.icon(): ImageVector = when (this) {
     EditorTool.LASSO -> InkIcons.Lasso
     EditorTool.LASER -> InkIcons.Laser
     EditorTool.SHAPE -> Icons.Outlined.Category
+    EditorTool.TEXT -> Icons.Outlined.TextFields
 }
 
 @StringRes
@@ -693,6 +702,7 @@ private fun EditorTool.label(): Int = when (this) {
     EditorTool.LASSO -> R.string.ink_tool_lasso
     EditorTool.LASER -> R.string.ink_tool_laser
     EditorTool.SHAPE -> R.string.ink_tool_shape
+    EditorTool.TEXT -> R.string.ink_tool_text
 }
 
 @StringRes

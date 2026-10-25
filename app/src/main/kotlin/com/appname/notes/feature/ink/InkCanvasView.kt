@@ -72,6 +72,12 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         fun onUndoRequested()
 
         fun onRedoRequested()
+
+        /** A tap with the text tool at [x], [y] on [pageId] (page units), on [existing] text if any. */
+        fun onTextTap(pageId: String, x: Double, y: Double, existing: com.appname.notes.core.ink.model.TextItem?) {}
+
+        /** Ctrl+V on a keyboard. */
+        fun onPasteRequested() {}
     }
 
     var listener: Listener? = null
@@ -347,7 +353,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 when (mode) {
                     Mode.INK -> if (e.isCanceledTouch()) cancelGesture(e) else finishInk(e)
                     Mode.LASER -> laserTrail.end()
-                    Mode.PAN -> fling(e)
+                    Mode.PAN -> if (isTextTap(e)) textTap(e, 0) else fling(e)
                     else -> Unit
                 }
                 endTouch()
@@ -383,6 +389,14 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         }
         val mouseScroll = source == PointerSource.MOUSE &&
             e.buttonState and (MotionEvent.BUTTON_SECONDARY or MotionEvent.BUTTON_TERTIARY) != 0
+        // Text tool: any pointer scrolls as usual; a tap (no movement) places or edits a text box on lift.
+        if (controller?.tools?.tool == EditorTool.TEXT && source != PointerSource.STYLUS_ERASER) {
+            textTapX = e.getX(index)
+            textTapY = e.getY(index)
+            startPan(e, index)
+            return
+        }
+        textTapX = Float.NaN
         if ((source == PointerSource.FINGER && !fingerDraws) || mouseScroll) {
             startPan(e, index)
         } else {
@@ -390,9 +404,56 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         }
     }
 
-    /** Ink, or the laser pointer when it is the tool (the pen's eraser end still erases). */
+    /** Ink, or the laser pointer / text tool when chosen (the pen's eraser end still erases). */
     private fun startDrawing(e: MotionEvent, index: Int, source: PointerSource) {
-        if (controller?.tools?.tool == EditorTool.LASER && source != PointerSource.STYLUS_ERASER) startLaser(e, index, source) else startInk(e, index, source)
+        val tool = controller?.tools?.tool
+        when {
+            source == PointerSource.STYLUS_ERASER -> startInk(e, index, source)
+            tool == EditorTool.LASER -> startLaser(e, index, source)
+            else -> startInk(e, index, source)
+        }
+    }
+
+    private var textTapX = Float.NaN
+    private var textTapY = Float.NaN
+
+    private fun isTextTap(e: MotionEvent): Boolean {
+        if (textTapX.isNaN() || controller?.tools?.tool != EditorTool.TEXT) return false
+        val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+        val moved = kotlin.math.hypot(e.getX(0) - textTapX, e.getY(0) - textTapY)
+        textTapX = Float.NaN
+        return moved <= slop && e.eventTime - e.downTime < android.view.ViewConfiguration.getLongPressTimeout() * 2
+    }
+
+    /** Text tool: the tap goes to the screen (edit the text box there, or start one). */
+    private fun textTap(e: MotionEvent, index: Int) {
+        val s = session ?: return
+        val v = viewport ?: return
+        val page = stack.pageAt(v.toWorld(Vec(e.getX(index).toDouble(), e.getY(index).toDouble())))
+        if (page < 0) return
+        mode = Mode.IGNORE
+        val p = screenToPage(page, v, e.getX(index), e.getY(index))
+        val hit = s.pages[page].items.items
+            .filterIsInstance<com.appname.notes.core.ink.model.TextItem>()
+            .lastOrNull { it.place.contains(p) }
+        listener?.onTextTap(s.pages[page].id, p.x, p.y, hit)
+    }
+
+    /** Where a drop or paste at screen [x], [y] lands: page id and page point, or null off the pages. */
+    fun pagePointAt(x: Float, y: Float): Pair<String, Vec>? {
+        val s = session ?: return null
+        val v = viewport ?: return null
+        val page = stack.pageAt(v.toWorld(Vec(x.toDouble(), y.toDouble())))
+        if (page < 0) return null
+        return s.pages[page].id to screenToPage(page, v, x, y)
+    }
+
+    private val imagesReady: () -> Unit = { surface.invalidate() }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        InkImages.init(context)
+        InkImages.addListener(imagesReady)
     }
 
     private fun onExtraPointer(e: MotionEvent, index: Int) {
@@ -740,12 +801,14 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 keyCode == KeyEvent.KEYCODE_Z && event.isShiftPressed -> { listener?.onRedoRequested(); return true }
                 keyCode == KeyEvent.KEYCODE_Z -> { listener?.onUndoRequested(); return true }
                 keyCode == KeyEvent.KEYCODE_Y -> { listener?.onRedoRequested(); return true }
+                keyCode == KeyEvent.KEYCODE_V -> { listener?.onPasteRequested(); return true }
             }
         }
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onDetachedFromWindow() {
+        InkImages.removeListener(imagesReady)
         cancelGesture(null)
         super.onDetachedFromWindow()
     }
@@ -845,6 +908,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     selectionOutline.inset(-4 * density, -4 * density)
                     renderer.drawSelection(canvas, selectionOutline, density)
                     renderer.drawHandle(canvas, r.right, r.bottom, density)
+                    renderer.drawRotateHandle(canvas, r.centerX(), selectionOutline.top, r.top - (InkInputController.ROTATE_HANDLE_DP * density).toFloat(), density)
                 }
             }
             // The laser pointer: on top of everything, fading; keeps animating until it has gone.

@@ -290,6 +290,108 @@ sealed interface InkItem {
     fun withZ(z: Long): InkItem
 }
 
+/**
+ * Where a box-shaped item sits: centre, size and turn (degrees, clockwise), in page units. Photos and text boxes
+ * (owner request 8a) use it, so moving, resizing and turning them work like ink.
+ */
+data class Placement(val cx: Float, val cy: Float, val width: Float, val height: Float, val rotationDeg: Float = 0f) {
+    init {
+        require(width.isFinite() && height.isFinite() && width >= 0f && height >= 0f) { "bad size" }
+    }
+
+    /** The four corners, clockwise from top-left (after turning). */
+    fun corners(): List<Vec> {
+        val r = Math.toRadians(rotationDeg.toDouble())
+        val c = kotlin.math.cos(r)
+        val s = kotlin.math.sin(r)
+        val hw = width / 2.0
+        val hh = height / 2.0
+        return listOf(-hw to -hh, hw to -hh, hw to hh, -hw to hh).map { (x, y) -> Vec(cx + x * c - y * s, cy + x * s + y * c) }
+    }
+
+    fun bounds(): Rect = bounds(corners())
+
+    /** Points along the edges (for lasso and hit tests). */
+    fun outline(): List<Vec> {
+        val k = corners()
+        val out = ArrayList<Vec>()
+        for (i in 0 until 4) {
+            val a = k[i]
+            val b = k[(i + 1) % 4]
+            for (j in 0 until 8) out += Vec(a.x + (b.x - a.x) * j / 8, a.y + (b.y - a.y) * j / 8)
+        }
+        out += Vec(cx.toDouble(), cy.toDouble())
+        return out
+    }
+
+    fun contains(p: Vec): Boolean {
+        val r = Math.toRadians(-rotationDeg.toDouble())
+        val dx = p.x - cx
+        val dy = p.y - cy
+        val x = dx * kotlin.math.cos(r) - dy * kotlin.math.sin(r)
+        val y = dx * kotlin.math.sin(r) + dy * kotlin.math.cos(r)
+        return kotlin.math.abs(x) <= width / 2 && kotlin.math.abs(y) <= height / 2
+    }
+}
+
+/**
+ * A photo on the page (owner request 8a). The picture is a note attachment ([fileName] in attachment storage);
+ * [flipped] mirrors it left-right. [brush] is unused (photos have no ink) but keeps the item model uniform.
+ */
+data class ImageItem(
+    override val id: String,
+    override val z: Long,
+    val fileName: String,
+    val place: Placement,
+    val flipped: Boolean = false,
+) : InkItem {
+    override val brush: InkBrush get() = NO_INK
+
+    override fun bounds(): Rect = place.bounds()
+    override fun withZ(z: Long) = copy(z = z)
+
+    companion object {
+        val NO_INK = InkBrush(InkTool.PEN, 0, 1f)
+    }
+}
+
+/** Fonts for text boxes: the phone's own font families (no download). [code] is stored: never change one. */
+enum class TextFont(val code: Int) {
+    SANS(0), SERIF(1), MONO(2), CURSIVE(3), CASUAL(4), CONDENSED(5), ROUNDED(6);
+
+    companion object {
+        fun fromCode(code: Int): TextFont? = entries.firstOrNull { it.code == code }
+    }
+}
+
+enum class TextAlign(val code: Int) {
+    START(0), CENTER(1), END(2);
+
+    companion object {
+        fun fromCode(code: Int): TextAlign? = entries.firstOrNull { it.code == code }
+    }
+}
+
+/**
+ * Typed text on the page (owner request 8a: text with fonts on handwritten notes). [brush] gives the colour and
+ * the font size (page units); the text wraps inside [place]'s width, and [place]'s height is the measured height
+ * of the laid-out text (measured by the app, which knows the fonts).
+ */
+data class TextItem(
+    override val id: String,
+    override val z: Long,
+    override val brush: InkBrush,
+    val text: String,
+    val place: Placement,
+    val font: TextFont = TextFont.SANS,
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val align: TextAlign = TextAlign.START,
+) : InkItem {
+    override fun bounds(): Rect = place.bounds()
+    override fun withZ(z: Long) = copy(z = z)
+}
+
 data class StrokeItem(
     override val id: String,
     override val z: Long,

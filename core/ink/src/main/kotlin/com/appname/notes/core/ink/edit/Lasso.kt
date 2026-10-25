@@ -1,5 +1,7 @@
 package com.appname.notes.core.ink.edit
 
+import com.appname.notes.core.ink.model.TextItem
+import com.appname.notes.core.ink.model.ImageItem
 import com.appname.notes.core.ink.geometry.Vec
 import com.appname.notes.core.ink.geometry.bounds
 import com.appname.notes.core.ink.geometry.pointInPolygon
@@ -35,6 +37,8 @@ object Lasso {
             (0 until n step stride).map { item.points.point(it) }
         }
         is ShapeItem -> item.geometry.outline()
+        is ImageItem -> item.place.outline()
+        is TextItem -> item.place.outline()
     }
 
     fun move(selection: List<InkItem>, dx: Double, dy: Double): InkEdit = transform(selection, Similarity.translate(dx, dy))
@@ -51,6 +55,8 @@ object Lasso {
             when (item) {
                 is StrokeItem -> item.copy(brush = brush)
                 is ShapeItem -> item.copy(brush = brush)
+                is ImageItem -> item
+                is TextItem -> item.copy(brush = item.brush.copy(colorArgb = colorArgb or (0xFF shl 24)))
             }
         },
     )
@@ -72,6 +78,8 @@ object Lasso {
             when (moved) {
                 is StrokeItem -> moved.copy(id = newId())
                 is ShapeItem -> moved.copy(id = newId())
+                is ImageItem -> moved.copy(id = newId())
+                is TextItem -> moved.copy(id = newId())
             }
         }
         return InkEdit(emptyList(), copies)

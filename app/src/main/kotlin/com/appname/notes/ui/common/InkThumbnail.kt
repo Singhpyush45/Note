@@ -87,11 +87,12 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
                 clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
                 thumbnail.design?.let { templateRenderer.drawDesign(this, it, pxPerUnit = scale) }
                 thumbnail.pdfPage?.let { pageRect.set(0f, 0f, thumbnail.width, thumbnail.height); drawBitmap(it, null, pageRect, bitmapPaint) }
-                for (pass in 0..1) {
+                for (pass in com.appname.notes.feature.ink.InkLayers.PASSES) {
                     for (item in thumbnail.items) {
-                        if ((pass == 0) != (item.brush.tool == InkTool.HIGHLIGHTER)) continue
+                        if (com.appname.notes.feature.ink.InkLayers.of(item) != pass) continue
                         paint.set(InkPaints.inkPaint(item.brush))
-                        InkPaths.drawItem(this, item, paint, styled)
+                        // Main thread: photos come from the cache (a placeholder until decoded).
+                        InkPaths.drawItem(this, item, paint, styled, syncImages = false)
                     }
                 }
             }

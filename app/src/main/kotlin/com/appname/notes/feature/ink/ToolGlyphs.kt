@@ -40,6 +40,7 @@ fun ToolGlyph(tool: EditorTool, body: Color, ink: Color, modifier: Modifier = Mo
             EditorTool.LASSO -> lasso(w, body, inkBrush)
             EditorTool.LASER -> laser(w, shade, body, inkBrush)
             EditorTool.SHAPE -> shapes(w, body, inkBrush)
+            EditorTool.TEXT -> textGlyph(w, body, inkBrush)
         }
     }
 }
@@ -144,6 +145,14 @@ private fun DrawScope.laser(w: Float, shade: Brush, body: Color, ink: Brush) {
     }
     drawCircle(ink, w * 0.14f, Offset(w * 0.78f, w * 0.22f), alpha = 0.35f)
     drawCircle(ink, w * 0.08f, Offset(w * 0.78f, w * 0.22f))
+}
+
+/** Text: a serif "T" with a coloured underline (the text colour). */
+private fun DrawScope.textGlyph(w: Float, body: Color, ink: Brush) {
+    drawRoundRect(body, Offset(w * 0.18f, w * 0.12f), Size(w * 0.64f, w * 0.12f), CornerRadius(w * 0.03f, w * 0.03f))
+    drawRoundRect(body, Offset(w * 0.43f, w * 0.12f), Size(w * 0.14f, w * 0.62f), CornerRadius(w * 0.03f, w * 0.03f))
+    drawRect(body, Offset(w * 0.34f, w * 0.68f), Size(w * 0.32f, w * 0.07f))
+    drawRoundRect(ink, Offset(w * 0.14f, w * 0.84f), Size(w * 0.72f, w * 0.08f), CornerRadius(w * 0.04f, w * 0.04f))
 }
 
 /** Shapes: a square and a circle overlapping, the circle in the colour. */

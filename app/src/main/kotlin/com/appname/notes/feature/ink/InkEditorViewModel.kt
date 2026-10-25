@@ -20,6 +20,7 @@ import com.appname.notes.feature.pdf.PdfFileStore
 import com.appname.notes.feature.pdf.PdfPageRenderer
 import android.content.Context
 import android.net.Uri
+import com.appname.notes.core.ink.geometry.Vec
 import androidx.core.content.FileProvider
 import com.appname.notes.core.ink.model.InkItem
 import java.io.File
@@ -159,6 +160,7 @@ class InkEditorViewModel @AssistedInject constructor(
     private val logger: AppLogger,
     @param:ApplicationContext private val appContext: Context,
     reminderFactory: com.appname.notes.feature.reminders.NoteReminders.Factory,
+    private val attacher: com.appname.notes.feature.attachments.Attacher,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -750,6 +752,181 @@ class InkEditorViewModel @AssistedInject constructor(
         }
     }
 
+    // ------------------------------------------------------------ photos, text, PDF pages on the page (8a)
+
+    /** The text box being written or edited (null: none). */
+    private val _textEdit = MutableStateFlow<TextEditRequest?>(null)
+    val textEdit: StateFlow<TextEditRequest?> = _textEdit.asStateFlow()
+
+    /** Busy placing photos / PDF pages. */
+    private val _inserting = MutableStateFlow(false)
+    val inserting: StateFlow<Boolean> = _inserting.asStateFlow()
+
+    private fun canInsert(): Boolean = _ui.value.readOnly == null && !_ui.value.isPdf && session() != null
+
+    /**
+     * Places photos on a page (owner request 8a): from the photo picker, camera, paste or drag-and-drop. They are
+     * stored as the note's attachments; each is placed at [at] (page units) on [pageId], or in the middle of the
+     * shown page, at most 70 % of the page wide. PDFs among [uris] add their pages instead; other files are skipped.
+     */
+    fun insertFiles(uris: List<Uri>, pageId: String? = null, at: Vec? = null) {
+        if (uris.isEmpty() || !canInsert()) return
+        viewModelScope.launch {
+            _inserting.value = true
+            try {
+                val outcome = attacher.attach(noteId, uris)
+                outcome.errorMessage?.let { _message.value = UserMessage(it) }
+                val images = outcome.added.filter { it.kind == com.appname.notes.core.domain.model.AttachmentKind.IMAGE }
+                val pdfs = outcome.added.filter { it.kind == com.appname.notes.core.domain.model.AttachmentKind.PDF }
+                if (images.isNotEmpty()) placeImages(images, pageId, at)
+                for (pdf in pdfs) insertPdfPages(pdf.fileName)
+                if (images.isEmpty() && pdfs.isEmpty() && outcome.added.isNotEmpty()) _message.value = UserMessage(R.string.insert_not_supported)
+            } finally {
+                _inserting.value = false
+            }
+        }
+    }
+
+    private fun placeImages(images: List<com.appname.notes.core.domain.model.Attachment>, pageId: String?, at: Vec?) {
+        val s = session() ?: return
+        val page = pageId?.let { s.page(it) } ?: s.pages.getOrNull(_ui.value.currentPage) ?: return
+        var z = page.items.nextZ
+        val items = images.mapIndexed { i, a ->
+            val w0 = (a.width ?: 4).toFloat().coerceAtLeast(1f)
+            val h0 = (a.height ?: 3).toFloat().coerceAtLeast(1f)
+            val k = minOf(page.width * IMAGE_MAX_WIDTH / w0, page.height * IMAGE_MAX_HEIGHT / h0)
+            val w = w0 * k
+            val h = h0 * k
+            // Several photos at once fan out a little, so none hides another completely.
+            val shift = i * 24f
+            val cx = ((at?.x?.toFloat() ?: (page.width / 2)) + shift).coerceIn(w / 2, (page.width - w / 2).coerceAtLeast(w / 2))
+            val cy = ((at?.y?.toFloat() ?: (page.height / 2)) + shift).coerceIn(h / 2, (page.height - h / 2).coerceAtLeast(h / 2))
+            com.appname.notes.core.ink.model.ImageItem(ids.newId(), z++, a.fileName, com.appname.notes.core.ink.model.Placement(cx, cy, w, h))
+        }
+        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit(emptyList(), items))
+        refresh()
+    }
+
+    /** Each page of a PDF (already attached) becomes a new page at the end, showing that page as a picture. */
+    private suspend fun insertPdfPages(pdfFileName: String) {
+        val files = kotlinx.coroutines.withContext(dispatchers.io) { renderPdfPages(pdfFileName) }
+        if (files.isEmpty()) {
+            _message.value = UserMessage(R.string.pdf_cant_display)
+            return
+        }
+        val outcome = attacher.attach(noteId, files.map { Uri.fromFile(it) })
+        files.forEach { it.delete() }
+        outcome.errorMessage?.let { _message.value = UserMessage(it) }
+        val s = session() ?: return
+        var first = -1
+        for (a in outcome.added) {
+            val index = s.pages.size
+            appendPage(index, scroll = false)?.join() ?: return
+            val page = s.pages.getOrNull(index) ?: return
+            if (first < 0) first = index
+            val w0 = (a.width ?: 1).toFloat().coerceAtLeast(1f)
+            val h0 = (a.height ?: 1).toFloat().coerceAtLeast(1f)
+            val k = minOf(page.width / w0, page.height / h0)
+            val item = com.appname.notes.core.ink.model.ImageItem(
+                ids.newId(),
+                page.items.nextZ,
+                a.fileName,
+                com.appname.notes.core.ink.model.Placement(page.width / 2, page.height / 2, w0 * k, h0 * k),
+            )
+            s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(item))
+        }
+        if (first >= 0) _ui.update { it.copy(scrollRequest = ScrollRequest(first)) }
+        refresh()
+    }
+
+    /** Renders each page of an attached PDF to a JPEG (long side [PDF_PAGE_PX] px) in the cache. Empty if unreadable. */
+    private fun renderPdfPages(fileName: String): List<java.io.File> {
+        val src = java.io.File(java.io.File(appContext.filesDir, com.appname.notes.feature.attachments.AttachmentFileStore.DIR), fileName)
+        val out = ArrayList<java.io.File>()
+        val dir = java.io.File(appContext.cacheDir, "pdf-pages").apply { mkdirs() }
+        try {
+            android.os.ParcelFileDescriptor.open(src, android.os.ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                android.graphics.pdf.PdfRenderer(fd).use { r ->
+                    for (i in 0 until minOf(r.pageCount, MAX_PDF_PAGES)) {
+                        r.openPage(i).use { pg ->
+                            val k = PDF_PAGE_PX.toFloat() / maxOf(pg.width, pg.height)
+                            val bmp = android.graphics.Bitmap.createBitmap((pg.width * k).toInt().coerceAtLeast(1), (pg.height * k).toInt().coerceAtLeast(1), android.graphics.Bitmap.Config.ARGB_8888)
+                            bmp.eraseColor(android.graphics.Color.WHITE)
+                            pg.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            val f = java.io.File(dir, "Page ${i + 1}.jpg")
+                            f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+                            bmp.recycle()
+                            out += f
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            out.forEach { it.delete() }
+            return emptyList()
+        }
+        return out
+    }
+
+    /** Pasted or dropped text becomes a text box. */
+    fun insertPlainText(text: String, pageId: String? = null, at: Vec? = null) {
+        if (text.isBlank() || !canInsert()) return
+        val s = session() ?: return
+        val page = pageId?.let { s.page(it) } ?: s.pages.getOrNull(_ui.value.currentPage) ?: return
+        val style = textStyle
+        val width = minOf(TEXT_WIDTH, page.width * 0.8f)
+        val left = ((at?.x?.toFloat() ?: (page.width / 2 - width / 2))).coerceIn(0f, (page.width - width).coerceAtLeast(0f))
+        val top = (at?.y?.toFloat() ?: (page.height / 3)).coerceIn(0f, page.height)
+        val place = TextLayouts.place(text, style.font, style.bold, style.italic, style.align, style.size, width, left, top)
+        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(style.item(ids.newId(), page.items.nextZ, text, place)))
+        refresh()
+    }
+
+    /** The last used text style (font, size, colour …), for the next text box. */
+    private var textStyle = TextStyle()
+
+    /** A tap with the text tool: edit the text box there, or start a new one at the tap. */
+    fun onTextTap(pageId: String, x: Double, y: Double, existing: com.appname.notes.core.ink.model.TextItem?) {
+        if (!canInsert()) return
+        _textEdit.value = if (existing != null) {
+            TextEditRequest(pageId, existing.place.cx - existing.place.width / 2, existing.place.cy - existing.place.height / 2, existing.text, TextStyle.of(existing), existing)
+        } else {
+            TextEditRequest(pageId, x.toFloat(), y.toFloat(), "", textStyle, null)
+        }
+    }
+
+    fun nothingToPaste() {
+        _message.value = UserMessage(R.string.insert_nothing_to_paste)
+    }
+
+    fun showTextHint() {
+        _message.value = UserMessage(R.string.text_tool_hint)
+    }
+
+    fun dismissTextEdit() {
+        _textEdit.value = null
+    }
+
+    /** Saves the text box being edited (empty text removes an existing one). */
+    fun saveText(text: String, style: TextStyle) {
+        val req = _textEdit.value ?: return
+        _textEdit.value = null
+        textStyle = style
+        val s = session() ?: return
+        val page = s.page(req.pageId) ?: return
+        val old = req.existing
+        if (text.isBlank()) {
+            if (old != null) s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.remove(listOf(old)))
+            refresh()
+            return
+        }
+        val width = old?.place?.width ?: minOf(TEXT_WIDTH, (page.width - req.left).coerceAtLeast(TEXT_MIN_WIDTH))
+        val place = TextLayouts.place(text, style.font, style.bold, style.italic, style.align, style.size, width, req.left, req.top, old?.place?.rotationDeg ?: 0f)
+        val item = style.item(old?.id ?: ids.newId(), old?.z ?: page.items.nextZ, text, place)
+        s.apply(page.id, if (old != null) com.appname.notes.core.ink.edit.InkEdit(listOf(old), listOf(item)) else com.appname.notes.core.ink.edit.InkEdit.add(item))
+        refresh()
+    }
+
     fun deleteCurrentPage() {
         val s = session() ?: return
         if (_ui.value.readOnly != null || _ui.value.isPdf || s.pages.size <= 1) return
@@ -901,9 +1078,42 @@ class InkEditorViewModel @AssistedInject constructor(
         const val FIRST_RETRY_MS = 500L
         const val MAX_RETRY_MS = 5_000L
         const val ALPHA_MASK = 0xFF shl 24
+        const val IMAGE_MAX_WIDTH = 0.7f
+        const val IMAGE_MAX_HEIGHT = 0.6f
+        const val PDF_PAGE_PX = 1800
+        const val MAX_PDF_PAGES = 100
+        const val TEXT_WIDTH = 420f
+        const val TEXT_MIN_WIDTH = 120f
         const val RGB_MASK = 0xFFFFFF
         const val MIN_OPACITY = 0.1f
     }
 }
 
 internal fun EditorTool.inkTool(): InkTool? = inkTool
+
+/** Text box look: font, size (page units), colour, bold/italic, alignment. */
+data class TextStyle(
+    val font: com.appname.notes.core.ink.model.TextFont = com.appname.notes.core.ink.model.TextFont.SANS,
+    val size: Float = 20f,
+    val colorArgb: Int = 0xFF1F1F1F.toInt(),
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val align: com.appname.notes.core.ink.model.TextAlign = com.appname.notes.core.ink.model.TextAlign.START,
+) {
+    fun item(id: String, z: Long, text: String, place: com.appname.notes.core.ink.model.Placement) =
+        com.appname.notes.core.ink.model.TextItem(id, z, InkBrush(InkTool.PEN, colorArgb, size), text, place, font, bold, italic, align)
+
+    companion object {
+        fun of(t: com.appname.notes.core.ink.model.TextItem) = TextStyle(t.font, t.brush.size, t.brush.colorArgb, t.bold, t.italic, t.align)
+    }
+}
+
+/** A text box being written ([existing] null) or edited, with its top-left corner on [pageId]. */
+data class TextEditRequest(
+    val pageId: String,
+    val left: Float,
+    val top: Float,
+    val text: String,
+    val style: TextStyle,
+    val existing: com.appname.notes.core.ink.model.TextItem?,
+)

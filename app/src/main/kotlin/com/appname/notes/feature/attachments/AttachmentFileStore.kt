@@ -185,10 +185,11 @@ class AttachmentFileStore(
         }
     }
 
-    private companion object {
+    companion object {
+        /** Folder (under the app's files) where attachments, and photos placed on handwritten pages, live. */
         const val DIR = "attachments"
-        const val TAG = "AttachmentFileStore"
-        const val MAX_BYTES = 250L * 1024 * 1024
+        private const val TAG = "AttachmentFileStore"
+        private const val MAX_BYTES = 250L * 1024 * 1024
         /** Leave this much free so attaching never fills the phone completely. */
         const val RESERVE_BYTES = 50L * 1024 * 1024
         const val GRACE_MS = 10 * 60 * 1000L

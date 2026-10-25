@@ -1,5 +1,7 @@
 package com.appname.notes.core.ink.edit
 
+import com.appname.notes.core.ink.model.TextItem
+import com.appname.notes.core.ink.model.ImageItem
 import com.appname.notes.core.ink.geometry.Rect
 import com.appname.notes.core.ink.geometry.Vec
 import com.appname.notes.core.ink.geometry.bounds
@@ -33,6 +35,8 @@ object Eraser {
         val outline = when (item) {
             is StrokeItem -> item.points.toVecs()
             is ShapeItem -> item.geometry.outline()
+            // Photos and text boxes aren't ink: the eraser leaves them (remove them with the lasso).
+            is ImageItem, is TextItem -> return false
         }
         return polylinesWithin(outline, path, reach)
     }

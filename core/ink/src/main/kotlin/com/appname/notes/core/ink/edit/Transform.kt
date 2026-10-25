@@ -1,5 +1,8 @@
 package com.appname.notes.core.ink.edit
 
+import com.appname.notes.core.ink.model.Placement
+import com.appname.notes.core.ink.model.TextItem
+import com.appname.notes.core.ink.model.ImageItem
 import com.appname.notes.core.ink.geometry.Vec
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.Pt
@@ -80,7 +83,15 @@ fun InkItem.transformed(t: Similarity): InkItem {
     return when (this) {
         is StrokeItem -> copy(brush = brush, points = points.transformed(t))
         is ShapeItem -> copy(brush = brush, geometry = geometry.transformed(t), source = source?.transformed(t))
+        is ImageItem -> copy(place = place.transformed(t))
+        is TextItem -> copy(brush = brush, place = place.transformed(t))
     }
+}
+
+/** A box moved, scaled and turned with [t]. */
+fun Placement.transformed(t: Similarity): Placement {
+    val c = t.apply(Vec(cx.toDouble(), cy.toDouble()))
+    return Placement(c.x.toFloat(), c.y.toFloat(), (width * t.scale).toFloat(), (height * t.scale).toFloat(), (((rotationDeg + t.rotationDeg) % 360.0 + 360.0) % 360.0).toFloat())
 }
 
 /**
@@ -108,5 +119,17 @@ fun InkItem.flipped(horizontal: Boolean, axis: Double): InkItem {
             },
             source = source?.let { pts(it) },
         )
+        // A photo mirrors; text stays readable (only its place and turn mirror).
+        is ImageItem -> copy(place = mirrorPlace(place, horizontal, axis), flipped = !flipped).let {
+            if (horizontal) it else it.copy(place = it.place.copy(rotationDeg = (it.place.rotationDeg + 180f) % 360f))
+        }
+        is TextItem -> copy(place = mirrorPlace(place, horizontal, axis))
     }
 }
+
+private fun mirrorPlace(p: Placement, horizontal: Boolean, axis: Double): Placement =
+    if (horizontal) {
+        p.copy(cx = (2 * axis - p.cx).toFloat(), rotationDeg = ((-p.rotationDeg % 360f) + 360f) % 360f)
+    } else {
+        p.copy(cy = (2 * axis - p.cy).toFloat(), rotationDeg = ((-p.rotationDeg % 360f) + 360f) % 360f)
+    }

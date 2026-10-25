@@ -484,4 +484,37 @@ class InkFlowRobolectricTest {
         stroke(line(60f, 200f, 340f, 260f))
         waitAdvancing { items().size == 1 }
     }
+
+    // ------------------------------------------------------------ photos and text on the page (8a)
+
+    private fun pasteFromClipboard(clip: android.content.ClipData) {
+        composeRule.runOnUiThread {
+            val cm = composeRule.activity.getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(clip)
+        }
+        tap(com.appname.notes.feature.ink.InsertTags.BUTTON)
+        tap(com.appname.notes.feature.ink.InsertTags.PASTE)
+    }
+
+    @Test
+    fun pastedTextAndPhotoGoOnTheHandwrittenPage() {
+        openNewInkNote()
+        pasteFromClipboard(android.content.ClipData.newPlainText("t", "Lecture 5: waves"))
+        waitAdvancing { items().any { it is com.appname.notes.core.ink.model.TextItem } }
+        val text = items().filterIsInstance<com.appname.notes.core.ink.model.TextItem>().single()
+        assertThat(text.text).isEqualTo("Lecture 5: waves")
+        assertThat(text.place.height).isGreaterThan(0f)
+
+        // A picture (as a browser or gallery puts it on the clipboard: a link to the image).
+        val png = java.io.File(composeRule.activity.cacheDir, "pasted.png")
+        val bmp = android.graphics.Bitmap.createBitmap(400, 200, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
+        png.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        pasteFromClipboard(android.content.ClipData.newRawUri("p", android.net.Uri.fromFile(png)))
+        waitAdvancing { items().any { it is com.appname.notes.core.ink.model.ImageItem } }
+        val photo = items().filterIsInstance<com.appname.notes.core.ink.model.ImageItem>().single()
+        // Kept as the note's attachment, placed at its own shape (2:1).
+        assertThat(photo.place.width / photo.place.height).isWithin(0.01f).of(2f)
+        val attachments = runBlocking { (data.attachments().list(inkNote()) as AppResult.Success).value }
+        assertThat(attachments.map { it.fileName }).contains(photo.fileName)
+    }
 }

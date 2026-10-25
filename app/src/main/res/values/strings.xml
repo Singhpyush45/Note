@@ -676,4 +676,32 @@
     <string name="ink_selection_back">Send to back</string>
     <string name="ink_selection_flip_h">Flip left to right</string>
     <string name="ink_selection_flip_v">Flip upside down</string>
+    <!-- 8a: photos, PDF pages and text on handwritten pages -->
+    <string name="insert_menu">Insert</string>
+    <string name="insert_photo">Photo</string>
+    <string name="insert_camera">Take photo</string>
+    <string name="insert_text">Text box</string>
+    <string name="insert_pdf">PDF pages</string>
+    <string name="insert_paste">Paste</string>
+    <string name="insert_nothing_to_paste">Nothing to paste: copy a picture or some text first.</string>
+    <string name="insert_not_supported">Only photos, PDFs and text can go on a handwritten page.</string>
+    <string name="text_tool_hint">Tap the page where the text should go.</string>
+    <string name="ink_tool_text">Text</string>
+    <string name="text_box_new">New text box</string>
+    <string name="text_box_edit">Edit text box</string>
+    <string name="text_box_hint">Type here</string>
+    <string name="text_box_font">Font</string>
+    <string name="text_box_size">Size %1$d</string>
+    <string name="text_box_bold">Bold</string>
+    <string name="text_box_italic">Italic</string>
+    <string name="text_box_align_start">Align left</string>
+    <string name="text_box_align_center">Centre</string>
+    <string name="text_box_align_end">Align right</string>
+    <string name="font_sans">Sans</string>
+    <string name="font_serif">Serif</string>
+    <string name="font_mono">Mono</string>
+    <string name="font_cursive">Handwriting</string>
+    <string name="font_casual">Casual</string>
+    <string name="font_condensed">Condensed</string>
+    <string name="font_medium">Medium</string>
 </resources>

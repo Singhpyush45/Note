@@ -1,5 +1,7 @@
 package com.appname.notes.feature.ink
 
+import com.appname.notes.core.ink.model.TextItem
+import com.appname.notes.core.ink.model.ImageItem
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
@@ -39,6 +41,17 @@ internal object InkPaints {
 }
 
 /** Builds Android paths for our ink, in page coordinates. Used by the fallback renderer and thumbnails. */
+/** Paint order of a page: photos (0), highlighter (1), everything else (2), each in z order. */
+internal object InkLayers {
+    val PASSES = 0..2
+
+    fun of(item: InkItem): Int = when {
+        item is ImageItem -> 0
+        item.brush.tool == InkTool.HIGHLIGHTER && item !is TextItem -> 1
+        else -> 2
+    }
+}
+
 internal object InkPaths {
 
     fun shape(g: ShapeGeometry): Path = Path().apply {
@@ -102,7 +115,7 @@ internal object InkPaths {
      * Drawing of any item without Jetpack Ink (thumbnails, PDF export); canvas in page coordinates. Variants
      * (pencils, brushes …) are drawn by [styled], one per thread.
      */
-    fun drawItem(canvas: Canvas, item: InkItem, paint: Paint = InkPaints.inkPaint(item.brush), styled: StyledInk? = null) {
+    fun drawItem(canvas: Canvas, item: InkItem, paint: Paint = InkPaints.inkPaint(item.brush), styled: StyledInk? = null, syncImages: Boolean = true) {
         when (item) {
             is StrokeItem -> if (item.brush.usesJetpack) drawStroke(canvas, item, paint) else (styled ?: StyledInk(cache = false)).draw(canvas, item)
             is ShapeItem -> {
@@ -110,6 +123,9 @@ internal object InkPaths {
                 drawFill(canvas, item, path)
                 canvas.drawPath(path, paint)
             }
+            // Export and thumbnails run off the main thread: photos are decoded right here.
+            is ImageItem -> PageObjectPainter.drawImage(canvas, item, canvas.matrix.mapRadius(1f).coerceAtLeast(1f), sync = syncImages)
+            is TextItem -> PageObjectPainter.drawText(canvas, item)
         }
     }
 
@@ -231,11 +247,10 @@ internal class InkRenderer {
     ) {
         canvas.withMatrix(pageToScreen) {
             clipRect(0f, 0f, width, height)
-            // Highlighter first so writing stays crisp on top of it.
-            for (pass in 0..1) {
+            // Photos first, then highlighter, then writing, so writing stays crisp on top.
+            for (pass in InkLayers.PASSES) {
                 for (item in items) {
-                    val isHighlighter = item.brush.tool == InkTool.HIGHLIGHTER
-                    if ((pass == 0) != isHighlighter || item.id in hidden) continue
+                    if (InkLayers.of(item) != pass || item.id in hidden) continue
                     if (itemTransform != null && item.id in transformed) {
                         combined.set(pageToScreen)
                         combined.preConcat(itemTransform)
@@ -273,6 +288,8 @@ internal class InkRenderer {
                 paintFor(item.brush)
                 canvas.drawPath(path, itemPaint)
             }
+            is ImageItem -> PageObjectPainter.drawImage(canvas, item, transform.mapRadius(1f))
+            is TextItem -> PageObjectPainter.drawText(canvas, item)
         }
     }
 
@@ -336,6 +353,18 @@ internal class InkRenderer {
         selectionPaint.strokeWidth = 2f * density
         canvas.drawCircle(x, y, 7 * density, handleFill)
         canvas.drawCircle(x, y, 7 * density, selectionPaint)
+    }
+
+    /** The rotate handle: a ring with a turning arrow above the selection, joined to it by a short line. */
+    fun drawRotateHandle(canvas: Canvas, x: Float, topOfSelection: Float, y: Float, density: Float) {
+        selectionPaint.pathEffect = null
+        selectionPaint.strokeWidth = 1.5f * density
+        canvas.drawLine(x, topOfSelection, x, y + 9 * density, selectionPaint)
+        canvas.drawCircle(x, y, 9 * density, handleFill)
+        selectionPaint.strokeWidth = 2f * density
+        canvas.drawCircle(x, y, 9 * density, selectionPaint)
+        val r = 4.5f * density
+        canvas.drawArc(x - r, y - r, x + r, y + r, -60f, 270f, false, selectionPaint)
     }
 
     fun drawLasso(canvas: Canvas, pathScreen: List<Vec>, density: Float) {

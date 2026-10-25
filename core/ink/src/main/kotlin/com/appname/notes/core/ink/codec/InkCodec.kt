@@ -1,5 +1,10 @@
 package com.appname.notes.core.ink.codec
 
+import com.appname.notes.core.ink.model.TextAlign
+import com.appname.notes.core.ink.model.TextFont
+import com.appname.notes.core.ink.model.Placement
+import com.appname.notes.core.ink.model.TextItem
+import com.appname.notes.core.ink.model.ImageItem
 import com.appname.notes.core.ink.model.BrushStyle
 import com.appname.notes.core.ink.model.InkBrush
 import com.appname.notes.core.ink.model.InkItem
@@ -47,6 +52,9 @@ sealed interface DecodeResult {
  * Varint = 7 bits per byte, high bit means "more bytes" (like protobuf). Zig-zag maps signed to unsigned
  * so small negative deltas stay small: 0→0, −1→1, 1→2, −2→3 …
  *
+ * Format 3 adds photos (type 3: utf-8 file name, placement cx cy w h turn, u8 flags) and text boxes (type 4:
+ * utf-8 text, placement, u8 font, u8 bold/italic, u8 align); it is written only for those items.
+ *
  * Format 2 flags: bit0 pressure off, bit1 a fill colour follows (i32 ARGB, shapes only).
  *
  * Format 2 is written only when it is needed (a pencil, brush, non-classic variant, pressure off or a filled shape), so ink
@@ -58,7 +66,7 @@ sealed interface DecodeResult {
  */
 object InkCodec {
 
-    const val FORMAT_VERSION = 2
+    const val FORMAT_VERSION = 3
 
     private const val FLAG_NO_PRESSURE = 1
     private const val FLAG_FILL = 2
@@ -66,6 +74,14 @@ object InkCodec {
 
     private const val TYPE_STROKE = 1
     private const val TYPE_SHAPE = 2
+    private const val TYPE_IMAGE = 3
+    private const val TYPE_TEXT = 4
+    private const val IMAGE_FLIPPED = 1
+    private const val TEXT_BOLD = 1
+    private const val TEXT_ITALIC = 2
+
+    /** Sanity limits while decoding. */
+    private const val MAX_STRING = 100_000
     private const val GEO_SEGMENT = 1
     private const val GEO_ELLIPSE = 2
     private const val GEO_POLYGON = 3
@@ -102,6 +118,7 @@ object InkCodec {
     fun quantize(item: InkItem): InkItem = when (item) {
         is StrokeItem -> item.copy(points = quantize(item.points), brush = item.brush.normalized())
         is ShapeItem -> item.copy(source = item.source?.let { quantize(it) }, brush = item.brush.normalized())
+        is ImageItem, is TextItem -> item
     }
 
     /** Whether [b] needs format 2 (see the format description). */
@@ -120,10 +137,19 @@ object InkCodec {
     fun encode(item: InkItem): ByteArray {
         val w = Writer()
         val b = item.brush
-        val v2 = needsV2(item)
+        // Photos and text boxes need format 3; older versions open such pages read-only.
+        val v3 = item is ImageItem || item is TextItem
+        val v2 = v3 || needsV2(item)
         val fill = (item as? ShapeItem)?.fill
-        w.u8(if (v2) 2 else 1)
-        w.u8(if (item is StrokeItem) TYPE_STROKE else TYPE_SHAPE)
+        w.u8(if (v3) 3 else if (v2) 2 else 1)
+        w.u8(
+            when (item) {
+                is StrokeItem -> TYPE_STROKE
+                is ShapeItem -> TYPE_SHAPE
+                is ImageItem -> TYPE_IMAGE
+                is TextItem -> TYPE_TEXT
+            },
+        )
         w.u8(b.tool.code)
         w.i32(b.colorArgb)
         w.f32(b.size)
@@ -155,8 +181,34 @@ object InkCodec {
                 w.u8(if (src != null) 1 else 0)
                 if (src != null) writePoints(w, src)
             }
+            is ImageItem -> {
+                w.str(item.fileName)
+                writePlace(w, item.place)
+                w.u8(if (item.flipped) IMAGE_FLIPPED else 0)
+            }
+            is TextItem -> {
+                w.str(item.text)
+                writePlace(w, item.place)
+                w.u8(item.font.code)
+                w.u8((if (item.bold) TEXT_BOLD else 0) or (if (item.italic) TEXT_ITALIC else 0))
+                w.u8(item.align.code)
+            }
         }
         return w.bytes()
+    }
+
+    private fun writePlace(w: Writer, p: Placement) {
+        w.f32(p.cx); w.f32(p.cy); w.f32(p.width); w.f32(p.height); w.f32(p.rotationDeg)
+    }
+
+    private fun readPlace(r: Reader): Placement {
+        val cx = r.f32()
+        val cy = r.f32()
+        val width = r.f32()
+        val height = r.f32()
+        val rot = r.f32()
+        require(width >= 0f && height >= 0f) { "negative size" }
+        return Placement(cx, cy, width, height, rot)
     }
 
     private fun writePoints(w: Writer, p: StrokePoints) {
@@ -227,6 +279,24 @@ object InkCodec {
                     val source = if (r.u8() == 1) readPoints(r) else null
                     ShapeItem(id, z, brush, kind, geometry, source, fill)
                 }
+                TYPE_IMAGE -> {
+                    if (version < 3) return DecodeResult.Corrupt("image in old format")
+                    val name = r.str(MAX_STRING)
+                    val place = readPlace(r)
+                    val flags = r.u8()
+                    if (flags and IMAGE_FLIPPED.inv() != 0) return DecodeResult.NewerVersion(version)
+                    ImageItem(id, z, name, place, flipped = flags and IMAGE_FLIPPED != 0)
+                }
+                TYPE_TEXT -> {
+                    if (version < 3) return DecodeResult.Corrupt("text in old format")
+                    val text = r.str(MAX_STRING)
+                    val place = readPlace(r)
+                    val font = TextFont.fromCode(r.u8()) ?: return DecodeResult.NewerVersion(version)
+                    val style = r.u8()
+                    if (style and (TEXT_BOLD or TEXT_ITALIC).inv() != 0) return DecodeResult.NewerVersion(version)
+                    val align = TextAlign.fromCode(r.u8()) ?: return DecodeResult.NewerVersion(version)
+                    TextItem(id, z, brush, text, place, font, bold = style and TEXT_BOLD != 0, italic = style and TEXT_ITALIC != 0, align = align)
+                }
                 else -> return DecodeResult.Corrupt("unknown item type")
             }
             if (!r.atEnd) return DecodeResult.Corrupt("trailing bytes")
@@ -279,6 +349,12 @@ object InkCodec {
         }
         fun zigzag(v: Long) = varint((v shl 1) xor (v shr 63))
         fun bytes(): ByteArray = out.toByteArray()
+
+        fun str(v: String) {
+            val b = v.toByteArray(Charsets.UTF_8)
+            varint(b.size.toLong())
+            out.write(b)
+        }
     }
 
     private class Reader(private val b: ByteArray) {
@@ -305,6 +381,12 @@ object InkCodec {
         }
 
         /** A count that must be plausible for the remaining bytes. */
+        fun str(limit: Int): String {
+            val n = count(limit)
+            require(pos + n <= b.size) { "truncated" }
+            return String(b, pos, n, Charsets.UTF_8).also { pos += n }
+        }
+
         fun count(limit: Int): Int {
             val n = varint()
             require(n in 0..limit.toLong() && n <= b.size - pos) { "bad count" }

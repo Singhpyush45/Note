@@ -34,6 +34,9 @@ enum class EditorTool {
 
     /** Draws a chosen shape by dragging (owner brief §15). */
     SHAPE,
+
+    /** Typed text boxes on the page (owner request 8a). The canvas reports taps; the screen edits the text. */
+    TEXT,
     ;
 
     /** The ink this tool draws with, or null for tools that don't draw (eraser, lasso, laser). */
@@ -44,7 +47,7 @@ enum class EditorTool {
             HIGHLIGHTER -> InkTool.HIGHLIGHTER
             PENCIL -> InkTool.PENCIL
             BRUSH -> InkTool.BRUSH
-            ERASER, LASSO, LASER, SHAPE -> null
+            ERASER, LASSO, LASER, SHAPE, TEXT -> null
         }
 
     companion object {
@@ -168,6 +171,9 @@ class InkInputController(
     /** Where the resize handle is (bottom-right corner of the selection), in page units. */
     val resizeHandle: Vec? get() = selection?.let { Vec(it.bounds.right, it.bounds.bottom) }
 
+    /** Where the rotate handle is: centred above the selection, [ROTATE_HANDLE_DP] away. */
+    val rotateHandle: Vec? get() = selection?.let { Vec((it.bounds.left + it.bounds.right) / 2, it.bounds.top - ROTATE_HANDLE_DP * unitsPerDp) }
+
     /** Eraser position while erasing (to show its outline). */
     var eraserAt: Vec? = null
         private set
@@ -204,6 +210,9 @@ class InkInputController(
         class MoveSelection(override val pageId: String, val start: Vec) : Gesture
 
         class ShapeDraw(override val pageId: String, val start: Vec) : Gesture
+
+        /** Dragging the rotate handle: turns around the selection's centre. */
+        class RotateSelection(override val pageId: String, val center: Vec, val startAngle: Double) : Gesture
 
         /** Dragging the corner handle: scales around the opposite (top-left) corner. */
         class ResizeSelection(override val pageId: String, val anchor: Vec, val startDistance: Double) : Gesture
@@ -247,7 +256,7 @@ class InkInputController(
                 eraseAlong(pageId, listOf(p))
                 Response.REDRAW
             }
-            EditorTool.LASER -> Response.NONE // drawn by the canvas; nothing touches the note
+            EditorTool.LASER, EditorTool.TEXT -> Response.NONE // handled by the canvas and screen
             EditorTool.SHAPE -> {
                 selection = null
                 gesture = Gesture.ShapeDraw(pageId, p)
@@ -257,7 +266,11 @@ class InkInputController(
             EditorTool.LASSO -> {
                 val sel = selection
                 val handle = resizeHandle
-                if (sel != null && sel.pageId == pageId && handle != null && dist(handle, p) <= HANDLE_DP * unitsPerDp) {
+                val turn = rotateHandle
+                if (sel != null && sel.pageId == pageId && turn != null && dist(turn, p) <= HANDLE_DP * unitsPerDp) {
+                    val c = Vec((sel.bounds.left + sel.bounds.right) / 2, (sel.bounds.top + sel.bounds.bottom) / 2)
+                    gesture = Gesture.RotateSelection(pageId, c, angle(c, p))
+                } else if (sel != null && sel.pageId == pageId && handle != null && dist(handle, p) <= HANDLE_DP * unitsPerDp) {
                     val anchor = Vec(sel.bounds.left, sel.bounds.top)
                     gesture = Gesture.ResizeSelection(pageId, anchor, dist(anchor, p).coerceAtLeast(1e-6))
                 } else if (sel != null && sel.pageId == pageId && sel.bounds.inflate(8 * unitsPerDp).contains(p)) {
@@ -322,6 +335,14 @@ class InkInputController(
                 selectionTransform = Similarity(scale = k, pivot = g.anchor)
                 Response.REDRAW
             }
+            is Gesture.RotateSelection -> {
+                var deg = angle(g.center, p) - g.startAngle
+                // Snaps to every 15° within 4°, so straight angles are easy to hit.
+                val snapped = Math.round(deg / 15.0) * 15.0
+                if (kotlin.math.abs(deg - snapped) < 4.0) deg = snapped
+                selectionTransform = Similarity(rotationDeg = deg, pivot = g.center)
+                Response.REDRAW
+            }
         }
     }
 
@@ -370,11 +391,11 @@ class InkInputController(
                 }
                 Response.REDRAW
             }
-            is Gesture.MoveSelection, is Gesture.ResizeSelection -> {
+            is Gesture.MoveSelection, is Gesture.ResizeSelection, is Gesture.RotateSelection -> {
                 val t = selectionTransform
                 selectionTransform = null
                 val selected = selectedItems()
-                val moved = t != null && (Vec(t.dx, t.dy).length >= 2 * unitsPerDp || kotlin.math.abs(t.scale - 1) >= 0.01)
+                val moved = t != null && (Vec(t.dx, t.dy).length >= 2 * unitsPerDp || kotlin.math.abs(t.scale - 1) >= 0.01 || kotlin.math.abs(t.rotationDeg) >= 0.5)
                 if (moved && selected.isNotEmpty()) {
                     val edit = Lasso.transform(selected, t)
                     session.apply(g.pageId, InkEdit(edit.removed, edit.added.map { InkCodec.quantize(it) }))
@@ -565,6 +586,8 @@ class InkInputController(
                 when (item) {
                     is StrokeItem -> item.copy(brush = brush)
                     is ShapeItem -> item.copy(brush = brush)
+                    is com.appname.notes.core.ink.model.ImageItem -> item
+                    is com.appname.notes.core.ink.model.TextItem -> item.copy(brush = item.brush.copy(colorArgb = (colorArgb and 0xFFFFFF) or (0xFF shl 24)))
                 }
             },
         )
@@ -603,6 +626,12 @@ class InkInputController(
 
         /** Touch radius of the resize handle, in dp. */
         const val HANDLE_DP = 20.0
+
+        /** How far above the selection the rotate handle sits, in dp. */
+        const val ROTATE_HANDLE_DP = 28.0
+
+        /** Angle of [p] around [c] in degrees, clockwise from pointing right (screen y grows down). */
+        private fun angle(c: Vec, p: Vec): Double = Math.toDegrees(kotlin.math.atan2(p.y - c.y, p.x - c.x))
         private const val MIN_SCALE = 0.1
 
         /** A shape-tool drag shorter than this (dp, both ways) is a tap, not a shape. */

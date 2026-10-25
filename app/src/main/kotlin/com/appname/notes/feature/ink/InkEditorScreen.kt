@@ -1,5 +1,9 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import com.appname.notes.feature.reminders.ReminderMenuButton
 import com.appname.notes.feature.reminders.rememberReminderUi
 import android.content.ClipData
@@ -180,6 +184,46 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) viewModel.exportPdf(uri)
     }
+    // Photos, camera, PDF pages, text and paste on the page (owner request 8a).
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_INSERT)) { viewModel.insertFiles(it) }
+    val pdfPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { viewModel.insertFiles(listOf(it)) } }
+    var cameraPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val path = cameraPath
+        cameraPath = null
+        if (path != null && taken) viewModel.insertFiles(listOf(android.net.Uri.fromFile(java.io.File(path))))
+    }
+    val hasCamera = remember { context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY) }
+    val paste = {
+        val clip = clipContent(context)
+        when {
+            clip.uris.isNotEmpty() -> viewModel.insertFiles(clip.uris)
+            clip.text != null -> viewModel.insertPlainText(clip.text)
+            else -> viewModel.nothingToPaste()
+        }
+    }
+    val insertActions = InsertActions(
+        photo = { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        camera = if (hasCamera) {
+            {
+                val dir = java.io.File(context.cacheDir, "camera").apply { mkdirs() }
+                val file = java.io.File(dir, "Photo ${System.currentTimeMillis()}.jpg")
+                runCatching {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+                    cameraPath = file.path
+                    camera.launch(uri)
+                }
+            }
+        } else {
+            null
+        },
+        text = { viewModel.selectTool(EditorTool.TEXT); viewModel.showTextHint() },
+        pdf = { pdfPicker.launch(arrayOf("application/pdf")) },
+        paste = paste,
+    )
+    val textEdit by viewModel.textEdit.collectAsStateWithLifecycle()
+    textEdit?.let { req -> TextBoxDialog(req, onSave = viewModel::saveText, onDismiss = viewModel::dismissTextEdit) }
+    val inserting by viewModel.inserting.collectAsStateWithLifecycle()
     // Reminders (FR-010).
     val reminders by viewModel.reminders.reminders.collectAsStateWithLifecycle()
     val reminderUi = rememberReminderUi(viewModel.reminders, editable = load is InkLoad.Ready && ui.readOnly == null)
@@ -206,6 +250,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 onFit = viewModel::fit,
                 onAddReminder = { reminderUi.add() },
                 reminderButton = { ReminderMenuButton(reminders.orEmpty(), reminderUi, editable = load is InkLoad.Ready && ui.readOnly == null) },
+                insert = insertActions,
             )
         },
         bottomBar = {
@@ -229,8 +274,8 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                     modifier = Modifier.align(Alignment.Center),
                 )
                 is InkLoad.Ready -> {
-                    InkCanvas(l.session, l.controller, l.pdf, ui, viewModel)
-                    if (ui.exporting) {
+                    InkCanvas(l.session, l.controller, l.pdf, ui, viewModel, onPaste = paste)
+                    if (ui.exporting || inserting) {
                         LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter).testTag(InkTestTags.EXPORT_PROGRESS))
                     }
                     if (ui.pdfFailed) {
@@ -366,14 +411,35 @@ private fun InkCanvas(
     pdf: PdfPageRenderer?,
     ui: InkEditorUi,
     viewModel: InkEditorViewModel,
+    onPaste: () -> Unit = {},
 ) {
     val background = MaterialTheme.colorScheme.surfaceContainerHigh.toArgb()
     // Dark paper only in dark theme, and only if the user wants it (Settings / page settings).
     val darkPaper = ui.darkPaper && com.appname.notes.core.designsystem.theme.LocalDarkTheme.current
     val description = stringResource(R.string.ink_canvas_description, ui.currentPage + 1, ui.pageCount.coerceAtLeast(1))
+    // Drag and drop from other apps (gallery, browser, files — side by side or on a tablet): photos, PDFs, text.
+    var canvasView by remember { mutableStateOf<InkCanvasView?>(null) }
+    var canvasOrigin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val activity = androidx.activity.compose.LocalActivity.current
+    val dropTarget = remember(viewModel) {
+        object : androidx.compose.ui.draganddrop.DragAndDropTarget {
+            override fun onDrop(event: androidx.compose.ui.draganddrop.DragAndDropEvent): Boolean {
+                val e = event.toAndroidDragEvent()
+                activity?.requestDragAndDropPermissions(e)
+                val clip = clipContent(activity ?: return false, e.clipData)
+                val at = canvasView?.pagePointAt(e.x - canvasOrigin.x, e.y - canvasOrigin.y)
+                when {
+                    clip.uris.isNotEmpty() -> viewModel.insertFiles(clip.uris, at?.first, at?.second)
+                    clip.text != null -> viewModel.insertPlainText(clip.text, at?.first, at?.second)
+                    else -> return false
+                }
+                return true
+            }
+        }
+    }
     AndroidView(
         factory = { context ->
-            InkCanvasView(context).apply {
+            InkCanvasView(context).also { canvasView = it }.apply {
                 viewState = viewModel.viewState
                 listener = object : InkCanvasView.Listener {
                     override fun onInteraction() = viewModel.refresh()
@@ -381,6 +447,9 @@ private fun InkCanvas(
                     override fun onPageChanged(index: Int) = viewModel.onPageChanged(index)
                     override fun onUndoRequested() = viewModel.undo()
                     override fun onRedoRequested() = viewModel.redo()
+                    override fun onTextTap(pageId: String, x: Double, y: Double, existing: com.appname.notes.core.ink.model.TextItem?) =
+                        viewModel.onTextTap(pageId, x, y, existing)
+                    override fun onPasteRequested() = onPaste()
                 }
             }
         },
@@ -403,7 +472,14 @@ private fun InkCanvas(
                 viewModel.consumeFitRequest()
             }
         },
-        modifier = Modifier.fillMaxSize().testTag(InkTestTags.CANVAS),
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { canvasOrigin = it.positionInRoot() }
+            .dragAndDropTarget(
+                shouldStartDragAndDrop = { ev -> ui.readOnly == null && !ui.isPdf && acceptsDrop(ev.toAndroidDragEvent().clipDescription) },
+                target = dropTarget,
+            )
+            .testTag(InkTestTags.CANVAS),
     )
 }
 
@@ -426,6 +502,7 @@ private fun InkTopBar(
     onFit: (FitMode) -> Unit,
     onAddReminder: () -> Unit = {},
     reminderButton: @Composable () -> Unit = {},
+    insert: InsertActions? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     val editable = ready && ui.readOnly == null
@@ -448,6 +525,7 @@ private fun InkTopBar(
                 IconButton(onClick = onUndo, enabled = ui.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo)) }
                 IconButton(onClick = onRedo, enabled = ui.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo)) }
             }
+            if (editable && !ui.isPdf && insert != null) InsertButton(insert)
             reminderButton()
             if (ready) {
                 Box {
@@ -595,3 +673,5 @@ private fun PagesDialog(pages: List<InkSession.Page>, current: Int, onPick: (Int
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
+
+private const val MAX_INSERT = 10
