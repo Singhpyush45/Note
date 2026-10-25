@@ -45,8 +45,19 @@ widths and colours; floating rounded bottom bar with a font/colour panel; "Sketc
 - **Shapes tool**: Line, Arrow, Rectangle, Square, Ellipse, Circle, Triangle — drag from corner to corner.
   Outline colour (quick colours + full picker), three widths, **Fill** on/off (same colour, see-through).
   Filled shapes are stored with their fill (ink format 2 flag, written only for filled shapes).
-- **Lasso selection**: Rotate 90°, Bring to front, Send to back (plus move, resize, duplicate, recolour, delete).
-- Still to do in 7d: ruler, free rotation handle, flip, more selection modes, gradient colours.
+- **Lasso selection**: Rotate 90°, Flip left-right / upside down, Bring to front, Send to back (plus move,
+  resize, duplicate, recolour, delete).
+- Still to do in 7d: ruler, free rotation handle, more selection modes, gradient colours.
+
+### Tool bar redesign (owner feedback, 25 Oct)
+- Minimal floating pill: one row of tools, one short row of options — Options button (variants, size, opacity,
+  pressure), 3 sizes, 3 colours (recent first) and the full palette. Fits a 411 dp phone without scrolling.
+- Tools are drawn like the real thing (pen with nib, marker, pencil with wood and lead, brush with bristles,
+  highlighter, eraser, lasso, laser, shapes); the tool's colour is its tip, so the separate line under each icon is
+  gone. On dark paper the tip shows the ink as it will look.
+- Responsiveness: tool bar and panel are solid Material surfaces (no live blur behind them), stroke previews
+  are drawn once into a bitmap, and the settings flow no longer echoes an older value over a newer tap (which
+  could undo a quick second tap or reset a slider).
 
 ### Fixes and requests (25 Oct)
 - **Scan note without Google Play services**: if Google's scanner can't start (no Play services, or its module
