@@ -1,6 +1,6 @@
 # Phase 7 — Pens, pencils, brushes, colours, laser pointer: report
 
-Status: **done on CI** — build 109 (run 40203180378): 451 JVM/Robolectric tests, 38 emulator tests, 0 failures, lint 0 errors, test APK published. Device checks by a person:
+Status: **done on CI** — build 114 (run 40208068325): 454 JVM/Robolectric tests, 38 emulator tests, 0 failures, lint 0 errors, test APK published. Device checks by a person:
 `phase-7-device-checklist.md` (pending, like the Phase 3–6 checklists).
 
 Source: the owner's master prompt §12–14 and §17, and the four reference pictures (dark tool bar with tools,
@@ -40,6 +40,24 @@ widths and colours; floating rounded bottom bar with a font/colour panel; "Sketc
   entry, nothing changes in the note. The stylus eraser end still erases.
 - Looks: Solid, Neon (white core), Dot; **RGB** rainbow mode (colours flow along the trail) or one colour;
   three widths. Kept for next time.
+
+### 7d — Shapes and arranging (§15, §16) — first part
+- **Shapes tool**: Line, Arrow, Rectangle, Square, Ellipse, Circle, Triangle — drag from corner to corner.
+  Outline colour (quick colours + full picker), three widths, **Fill** on/off (same colour, see-through).
+  Filled shapes are stored with their fill (ink format 2 flag, written only for filled shapes).
+- **Lasso selection**: Rotate 90°, Bring to front, Send to back (plus move, resize, duplicate, recolour, delete).
+- Still to do in 7d: ruler, free rotation handle, flip, more selection modes, gradient colours.
+
+### Fixes and requests (25 Oct)
+- **Scan note without Google Play services**: if Google's scanner can't start (no Play services, or its module
+  isn't installed), the phone's camera app opens instead and the photo becomes a one-page PDF note (no edge
+  detection or clean-up — those need Google's scanner). The "needs Google Play services" error is gone.
+- **Folders inside folders** (database v10, `notebooks.parentId`): new folder inside the open folder (⋮ › New
+  folder, or the "New folder" card), folders shown above the notes, Back / "Back to …" goes up a level, folder
+  ⋮: rename, move (never into itself), delete (subfolders too; notes are kept and move to No notebook). Folder
+  pickers show the tree indented.
+- **Folder icon**: a two-tone folder in the accent colour (chips, folder cards, pickers, Manage notebooks).
+- **App icon**: the owner's folded-paper "N" (adaptive icon, beige background, themed-icon "N" for Android 13+).
 
 ## Verification (CI)
 - JVM: variant names and unique recipes, format 1/2 round trip for every variant, unknown variant → read-only,
