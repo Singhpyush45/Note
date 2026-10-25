@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
@@ -111,6 +112,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 object LibraryTestTags {
+    fun view(size: com.appname.notes.core.settings.CardSize) = "home_view_${size.name.lowercase()}"
     const val SCREEN = "screen_home"
     const val HEADER = "home_header"
     const val CREATE = "fab_create"
@@ -194,6 +196,7 @@ fun LibraryRoute(
         onOpenSearch = onOpenSearch,
         onSelectCollection = viewModel::selectCollection,
         onSort = viewModel::setSort,
+        onCardSize = viewModel::setCardSize,
         importingPdf = importingPdf,
         folders = FolderActions(
             create = viewModel::createFolder,
@@ -275,6 +278,7 @@ fun LibraryScreen(
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
     actions: NoteActions,
+    onCardSize: (com.appname.notes.core.settings.CardSize) -> Unit = {},
     onMessageShown: () -> Unit,
     bulk: BulkActions? = null,
     importingPdf: Boolean = false,
@@ -423,6 +427,8 @@ fun LibraryScreen(
                         HomeTopRow(
                             title = title,
                             sort = state.sort,
+                            cardSize = state.cardSize,
+                            onCardSize = onCardSize,
                             inTrash = inTrash,
                             onCollections = { showCollections = true },
                             onOpenSearch = onOpenSearch,
@@ -577,6 +583,8 @@ private fun HomeTopRow(
     sort: NoteSort,
     inTrash: Boolean,
     onCollections: () -> Unit,
+    cardSize: com.appname.notes.core.settings.CardSize = com.appname.notes.core.settings.CardSize.BIG,
+    onCardSize: (com.appname.notes.core.settings.CardSize) -> Unit = {},
     onOpenSearch: () -> Unit,
     onSort: (NoteSort) -> Unit,
     onEmptyTrash: () -> Unit,
@@ -613,7 +621,7 @@ private fun HomeTopRow(
         IconButton(onClick = onOpenSearch, modifier = Modifier.testTag(LibraryTestTags.SEARCH)) {
             Icon(Icons.Outlined.Search, stringResource(R.string.library_search))
         }
-        SortMenu(sort, onSort)
+        SortMenu(sort, onSort, cardSize, onCardSize)
         OverflowMenu(inTrash, onEmptyTrash, onManageNotebooks, onManageTags, onNewFolder)
     }
 }
@@ -673,13 +681,21 @@ private fun NotesGrid(
             cover = cover,
             onMore = onMore?.let { { it(note) } },
             checked = note.id.value in selected,
+            size = state.cardSize,
         )
     }
     LazyVerticalStaggeredGrid(
-        columns = StaggeredGridCells.Adaptive(minSize = 260.dp),
+        columns = StaggeredGridCells.Adaptive(
+            minSize = when (state.cardSize) {
+                com.appname.notes.core.settings.CardSize.SMALL -> 150.dp
+                com.appname.notes.core.settings.CardSize.BIG -> 260.dp
+                com.appname.notes.core.settings.CardSize.EXTRA_BIG -> 420.dp
+                com.appname.notes.core.settings.CardSize.LIST -> 480.dp
+            },
+        ),
         contentPadding = PaddingValues(start = spacing.lg, end = spacing.lg, top = topPadding + spacing.xs, bottom = 112.dp),
-        horizontalArrangement = Arrangement.spacedBy(spacing.md),
-        verticalItemSpacing = spacing.md,
+        horizontalArrangement = Arrangement.spacedBy(if (state.cardSize == com.appname.notes.core.settings.CardSize.SMALL) spacing.sm else spacing.md),
+        verticalItemSpacing = if (state.cardSize == com.appname.notes.core.settings.CardSize.LIST) spacing.xs else if (state.cardSize == com.appname.notes.core.settings.CardSize.SMALL) spacing.sm else spacing.md,
         modifier = Modifier.fillMaxSize().testTag(LibraryTestTags.GRID),
     ) {
         // Folders inside this folder come first, like a file manager.
@@ -771,7 +787,12 @@ private fun EmptyCollection(collection: NoteCollection, modifier: Modifier) {
 }
 
 @Composable
-private fun SortMenu(current: NoteSort, onSort: (NoteSort) -> Unit) {
+private fun SortMenu(
+    current: NoteSort,
+    onSort: (NoteSort) -> Unit,
+    cardSize: com.appname.notes.core.settings.CardSize = com.appname.notes.core.settings.CardSize.BIG,
+    onCardSize: (com.appname.notes.core.settings.CardSize) -> Unit = {},
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.AutoMirrored.Outlined.Sort, stringResource(R.string.library_sort)) }
@@ -791,6 +812,32 @@ private fun SortMenu(current: NoteSort, onSort: (NoteSort) -> Unit) {
                     },
                     leadingIcon = { RadioButton(selected = sort == current, onClick = null) },
                     onClick = { open = false; onSort(sort) },
+                )
+            }
+            HorizontalDivider()
+            Text(
+                stringResource(R.string.library_view),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            com.appname.notes.core.settings.CardSize.entries.forEach { size ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(
+                                when (size) {
+                                    com.appname.notes.core.settings.CardSize.SMALL -> R.string.library_view_small
+                                    com.appname.notes.core.settings.CardSize.BIG -> R.string.library_view_big
+                                    com.appname.notes.core.settings.CardSize.EXTRA_BIG -> R.string.library_view_extra_big
+                                    com.appname.notes.core.settings.CardSize.LIST -> R.string.library_view_list
+                                },
+                            ),
+                        )
+                    },
+                    leadingIcon = { RadioButton(selected = size == cardSize, onClick = null) },
+                    onClick = { open = false; onCardSize(size) },
+                    modifier = Modifier.testTag(LibraryTestTags.view(size)),
                 )
             }
         }

@@ -74,4 +74,9 @@ data class AppearanceSettings(
 /** Library preferences remembered across launches. */
 data class LibrarySettings(
     val sort: NoteSort = NoteSort.MODIFIED,
+    /** How big the notes are shown on the home screen (owner request: small, big, extra big, list). */
+    val cardSize: CardSize = CardSize.BIG,
 )
+
+/** Note card sizes on the home screen. */
+enum class CardSize { SMALL, BIG, EXTRA_BIG, LIST }

@@ -2,6 +2,11 @@ package com.appname.notes.feature.ink
 
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.outlined.Straighten
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
+import androidx.compose.material.icons.outlined.CopyAll
+import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.outlined.Flip
@@ -124,6 +129,14 @@ object InkToolTags {
     const val LASSO_FREE = "ink_lasso_free"
     const val FLIP_V = "ink_selection_flip_v"
     const val BACK = "ink_selection_back"
+    const val COPY = "ink_selection_copy"
+    const val UNDO = "ink_undo"
+    const val REDO = "ink_redo"
+    const val FULL_SCREEN = "ink_full_screen"
+    const val EXIT_FULL_SCREEN = "ink_full_screen_exit"
+    const val FLOATING_BAR = "ink_floating_bar"
+    const val BAR_ORIENTATION = "ink_bar_orientation"
+    const val BAR_HANDLE = "ink_bar_handle"
     fun shape(k: com.appname.notes.core.ink.model.ShapeKind) = "ink_shape_${k.name.lowercase()}"
     fun laserStyle(s: LaserStyle) = "ink_laser_${s.name.lowercase()}"
 }
@@ -152,6 +165,8 @@ data class InkToolActions(
     val onFlip: (Boolean) -> Unit = {},
     val onRuler: () -> Unit = {},
     val onLassoBox: (Boolean) -> Unit = {},
+    /** Copies the selection (to paste with Paste or press-and-hold › Paste). */
+    val onCopySelection: () -> Unit = {},
 )
 
 /** The tools in the bar, in order (owner brief §13). Only tools that work are shown. */
@@ -175,9 +190,9 @@ private val EraserSizes = listOf(10.0, 16.0, 28.0)
 private val SizeNames = listOf(R.string.ink_size_fine, R.string.ink_size_medium, R.string.ink_size_bold)
 
 /**
- * The drawing tool bar (owner brief §13): tool buttons, each drawing tool marked with its current colour; the
- * chosen tool's variant, sizes and colours. Tapping the chosen tool again (or its variant) opens its
- * variation panel ([VariationPanel]), shown above this bar.
+ * The drawing tool bar (owner brief §13): undo/redo pinned on the left, full screen on the right, the tools in
+ * between (each drawing tool marked with its current colour) and below them the chosen tool's options. Tapping the
+ * chosen tool again (or its options button) opens its variation panel ([VariationPanel]), shown above this bar.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -187,8 +202,10 @@ fun InkToolbar(
     panelOpen: Boolean,
     onPanel: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {},
+    onFullScreen: (() -> Unit)? = null,
 ) {
-    val tools = ui.tools
     // A floating, solid pill (no live blur here: drawing must stay smooth).
     Surface(
         shape = RoundedCornerShape(28.dp),
@@ -198,125 +215,175 @@ fun InkToolbar(
         modifier = modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag(InkTestTags.TOOLBAR),
     ) {
         Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
-            ) {
-                // On dark paper ink is shown mapped (black reads as light), so the tool tips match the page.
-                val darkPaper = LocalDarkPaper.current && com.appname.notes.core.designsystem.theme.LocalDarkTheme.current
-                BarTools.filter { it !in ui.hiddenTools || it == tools.tool }.forEach { tool ->
-                    val raw = when (tool) {
-                        EditorTool.LASER -> ui.laser.colorArgb
-                        EditorTool.SHAPE -> tools.shapeColor
-                        EditorTool.TEXT -> 0xFF1F1F1F.toInt()
-                        else -> tools.brushFor(tool)?.colorArgb ?: 0
-                    }
-                    val ink = if (darkPaper) DarkPaper.map(raw or OPAQUE) else raw
-                    ToolButton(
-                        tool = tool,
-                        selected = tools.tool == tool,
-                        ink = Color(ink or OPAQUE),
-                        rainbow = tool == EditorTool.LASER && ui.laser.rainbow,
-                        onClick = { if (tools.tool == tool && tool.inkTool != null) onPanel(!panelOpen) else actions.onTool(tool) },
-                    )
-                }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                UndoRedoButtons(ui, onUndo, onRedo)
                 OptionDivider()
-                // The ruler: on or off, whatever the tool.
-                val rulerLabel = stringResource(R.string.ink_ruler)
-                Box(
-                    Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .then(if (ui.ruler) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
-                        .toggleable(value = ui.ruler, role = Role.Switch, onValueChange = { actions.onRuler() })
-                        .semantics { contentDescription = rulerLabel }
-                        .testTag(InkToolTags.RULER),
-                    contentAlignment = Alignment.Center,
+                Row(
+                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Outlined.Straighten, null, tint = if (ui.ruler) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                    ToolButtons(ui, actions) { tool -> if (tool.inkTool != null) onPanel(!panelOpen) }
+                    OptionDivider()
+                    RulerButton(ui, actions)
+                }
+                if (onFullScreen != null) {
+                    OptionDivider()
+                    FullScreenButton(entering = true, onClick = onFullScreen)
                 }
             }
             HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            // Each tool's options start scrolled to the beginning.
-            val optionsScroll = key(tools.tool) { rememberScrollState() }
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(optionsScroll).padding(horizontal = 6.dp).height(52.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
-            ) {
-                val inkTool = tools.tool.inkTool
-                when {
-                    inkTool != null -> {
-                        // Minimal: three sizes, a few colours, the full palette, and "more options".
-                        val brush = tools.brushes[inkTool] ?: tools.brushFor(tools.tool)!!
-                        // Options first, so it's always on screen.
-                        PanelButton(brush.effectiveStyle, panelOpen, onClick = { onPanel(!panelOpen) })
-                        OptionDivider()
-                        val base = brush.effectiveStyle.defaultSize
-                        listOf(0.6f, 1f, 1.8f).forEachIndexed { i, f ->
-                            val size = (base * f * 10).toInt() / 10f
-                            SizeDot(f / 1.8f, SizeNames[i], selected = kotlin.math.abs(brush.size - size) < 0.05f, onClick = { actions.onSize(size) })
+            ToolOptionsRow(ui, actions, panelOpen, onPanel)
+        }
+    }
+}
+
+/** The tool buttons, in bar order; tapping the chosen tool again calls [onSelectedAgain]. Works in a row or a column. */
+@Composable
+internal fun ToolButtons(ui: InkEditorUi, actions: InkToolActions, onSelectedAgain: (EditorTool) -> Unit) {
+    val tools = ui.tools
+    // On dark paper ink is shown mapped (black reads as light), so the tool tips match the page.
+    val darkPaper = LocalDarkPaper.current && com.appname.notes.core.designsystem.theme.LocalDarkTheme.current
+    BarTools.filter { it !in ui.hiddenTools || it == tools.tool }.forEach { tool ->
+        val raw = when (tool) {
+            EditorTool.LASER -> ui.laser.colorArgb
+            EditorTool.SHAPE -> tools.shapeColor
+            EditorTool.TEXT -> 0xFF1F1F1F.toInt()
+            else -> tools.brushFor(tool)?.colorArgb ?: 0
+        }
+        val ink = if (darkPaper) DarkPaper.map(raw or OPAQUE) else raw
+        ToolButton(
+            tool = tool,
+            selected = tools.tool == tool,
+            ink = Color(ink or OPAQUE),
+            rainbow = tool == EditorTool.LASER && ui.laser.rainbow,
+            onClick = { if (tools.tool == tool) onSelectedAgain(tool) else actions.onTool(tool) },
+        )
+    }
+}
+
+/** The ruler: on or off, whatever the tool. */
+@Composable
+internal fun RulerButton(ui: InkEditorUi, actions: InkToolActions) {
+    val rulerLabel = stringResource(R.string.ink_ruler)
+    Box(
+        Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .then(if (ui.ruler) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
+            .toggleable(value = ui.ruler, role = Role.Switch, onValueChange = { actions.onRuler() })
+            .semantics { contentDescription = rulerLabel }
+            .testTag(InkToolTags.RULER),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Outlined.Straighten, null, tint = if (ui.ruler) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+internal fun UndoRedoButtons(ui: InkEditorUi, onUndo: () -> Unit, onRedo: () -> Unit) {
+    IconButton(onClick = onUndo, enabled = ui.canUndo, modifier = Modifier.testTag(InkToolTags.UNDO)) {
+        Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo))
+    }
+    IconButton(onClick = onRedo, enabled = ui.canRedo, modifier = Modifier.testTag(InkToolTags.REDO)) {
+        Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo))
+    }
+}
+
+@Composable
+internal fun FullScreenButton(entering: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.testTag(if (entering) InkToolTags.FULL_SCREEN else InkToolTags.EXIT_FULL_SCREEN)) {
+        Icon(
+            if (entering) Icons.Outlined.Fullscreen else Icons.Outlined.FullscreenExit,
+            stringResource(if (entering) R.string.ink_full_screen else R.string.ink_full_screen_exit),
+        )
+    }
+}
+
+/** The chosen tool's options: sizes, colours, eraser mode, shape, laser, lasso actions … */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ToolOptionsRow(ui: InkEditorUi, actions: InkToolActions, panelOpen: Boolean, onPanel: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val tools = ui.tools
+    // Each tool's options start scrolled to the beginning.
+    val optionsScroll = key(tools.tool) { rememberScrollState() }
+    Row(
+        modifier.fillMaxWidth().horizontalScroll(optionsScroll).padding(horizontal = 6.dp).height(52.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+    ) {
+        val inkTool = tools.tool.inkTool
+        when {
+            inkTool != null -> {
+                // Minimal: three sizes, a few colours, the full palette, and "more options".
+                val brush = tools.brushes[inkTool] ?: tools.brushFor(tools.tool)!!
+                // Options first, so it's always on screen.
+                PanelButton(brush.effectiveStyle, panelOpen, onClick = { onPanel(!panelOpen) })
+                OptionDivider()
+                val base = brush.effectiveStyle.defaultSize
+                listOf(0.6f, 1f, 1.8f).forEachIndexed { i, f ->
+                    val size = (base * f * 10).toInt() / 10f
+                    SizeDot(f / 1.8f, SizeNames[i], selected = kotlin.math.abs(brush.size - size) < 0.05f, onClick = { actions.onSize(size) })
+                }
+                OptionDivider()
+                val palette = (ui.recentColors + if (inkTool == InkTool.HIGHLIGHTER) HighlighterQuickColors else QuickColors)
+                    .map { it or OPAQUE }.distinct().take(BAR_COLOURS)
+                palette.forEach { c ->
+                    ColorDot(c, selected = (brush.colorArgb and 0xFFFFFF) == (c and 0xFFFFFF), onClick = { actions.onColor(c) })
+                }
+                MoreColorsButton(actions.onMoreColors)
+            }
+            tools.tool == EditorTool.ERASER -> {
+                SingleChoiceSegmentedButtonRow {
+                    EraserMode.entries.forEachIndexed { i, mode ->
+                        val description = stringResource(
+                            if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke_description else R.string.ink_eraser_area_description,
+                        )
+                        SegmentedButton(
+                            selected = tools.eraserMode == mode,
+                            onClick = { actions.onEraserMode(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(i, EraserMode.entries.size),
+                            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = description },
+                        ) {
+                            Text(stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area), maxLines = 1)
                         }
-                        OptionDivider()
-                        val palette = (ui.recentColors + if (inkTool == InkTool.HIGHLIGHTER) HighlighterQuickColors else QuickColors)
-                            .map { it or OPAQUE }.distinct().take(BAR_COLOURS)
-                        palette.forEach { c ->
-                            ColorDot(c, selected = (brush.colorArgb and 0xFFFFFF) == (c and 0xFFFFFF), onClick = { actions.onColor(c) })
-                        }
-                        MoreColorsButton(actions.onMoreColors)
-                    }
-                    tools.tool == EditorTool.ERASER -> {
-                        SingleChoiceSegmentedButtonRow {
-                            EraserMode.entries.forEachIndexed { i, mode ->
-                                val description = stringResource(
-                                    if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke_description else R.string.ink_eraser_area_description,
-                                )
-                                SegmentedButton(
-                                    selected = tools.eraserMode == mode,
-                                    onClick = { actions.onEraserMode(mode) },
-                                    shape = SegmentedButtonDefaults.itemShape(i, EraserMode.entries.size),
-                                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = description },
-                                ) {
-                                    Text(stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area), maxLines = 1)
-                                }
-                            }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        EraserSizes.forEachIndexed { i, size ->
-                            SizeDot((size / EraserSizes.last()).toFloat(), SizeNames[i], selected = tools.eraserSizeDp == size, onClick = { actions.onEraserSize(size) })
-                        }
-                    }
-                    tools.tool == EditorTool.LASER -> LaserControls(ui.laser, actions)
-                    tools.tool == EditorTool.SHAPE -> ShapeControls(ui.shapeSettings, ui.recentColors, actions)
-                    tools.tool == EditorTool.TEXT -> Text(
-                        stringResource(R.string.text_tool_hint),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                    tools.tool == EditorTool.LASSO && !ui.hasSelection -> SingleChoiceSegmentedButtonRow {
-                        listOf(false, true).forEachIndexed { i, box ->
-                            SegmentedButton(
-                                selected = tools.lassoBox == box,
-                                onClick = { actions.onLassoBox(box) },
-                                shape = SegmentedButtonDefaults.itemShape(i, 2),
-                                modifier = Modifier.heightIn(min = 48.dp).testTag(if (box) InkToolTags.LASSO_BOX else InkToolTags.LASSO_FREE),
-                            ) { Text(stringResource(if (box) R.string.lasso_box else R.string.lasso_free), maxLines = 1) }
-                        }
-                    }
-                    tools.tool == EditorTool.LASSO -> if (ui.hasSelection) {
-                        IconButton(onClick = actions.onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
-                        IconButton(onClick = actions.onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
-                        IconButton(onClick = actions.onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }
-                        IconButton(onClick = actions.onRotate, modifier = Modifier.testTag(InkToolTags.ROTATE)) { Icon(Icons.Outlined.Rotate90DegreesCw, stringResource(R.string.ink_selection_rotate)) }
-                        IconButton(onClick = { actions.onFlip(true) }, modifier = Modifier.testTag(InkToolTags.FLIP_H)) { Icon(Icons.Outlined.Flip, stringResource(R.string.ink_selection_flip_h)) }
-                        IconButton(onClick = { actions.onFlip(false) }, modifier = Modifier.testTag(InkToolTags.FLIP_V)) { Icon(Icons.Outlined.Flip, stringResource(R.string.ink_selection_flip_v), Modifier.rotate(90f)) }
-                        IconButton(onClick = actions.onFront, modifier = Modifier.testTag(InkToolTags.FRONT)) { Icon(Icons.Outlined.FlipToFront, stringResource(R.string.ink_selection_front)) }
-                        IconButton(onClick = actions.onBack, modifier = Modifier.testTag(InkToolTags.BACK)) { Icon(Icons.Outlined.FlipToBack, stringResource(R.string.ink_selection_back)) }
-                        Spacer(Modifier.width(8.dp))
-                        QuickColors.forEach { c -> ColorDot(c, selected = false, onClick = { actions.onRecolorSelection(c) }) }
                     }
                 }
+                Spacer(Modifier.width(8.dp))
+                EraserSizes.forEachIndexed { i, size ->
+                    SizeDot((size / EraserSizes.last()).toFloat(), SizeNames[i], selected = tools.eraserSizeDp == size, onClick = { actions.onEraserSize(size) })
+                }
+            }
+            tools.tool == EditorTool.LASER -> LaserControls(ui.laser, actions)
+            tools.tool == EditorTool.SHAPE -> ShapeControls(ui.shapeSettings, ui.recentColors, actions)
+            tools.tool == EditorTool.TEXT -> Text(
+                stringResource(R.string.text_tool_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            tools.tool == EditorTool.LASSO && !ui.hasSelection -> SingleChoiceSegmentedButtonRow {
+                listOf(false, true).forEachIndexed { i, box ->
+                    SegmentedButton(
+                        selected = tools.lassoBox == box,
+                        onClick = { actions.onLassoBox(box) },
+                        shape = SegmentedButtonDefaults.itemShape(i, 2),
+                        modifier = Modifier.heightIn(min = 48.dp).testTag(if (box) InkToolTags.LASSO_BOX else InkToolTags.LASSO_FREE),
+                    ) { Text(stringResource(if (box) R.string.lasso_box else R.string.lasso_free), maxLines = 1) }
+                }
+            }
+            tools.tool == EditorTool.LASSO -> if (ui.hasSelection) {
+                IconButton(onClick = actions.onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
+                IconButton(onClick = actions.onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
+                IconButton(onClick = actions.onCopySelection, modifier = Modifier.testTag(InkToolTags.COPY)) { Icon(Icons.Outlined.CopyAll, stringResource(R.string.ink_selection_copy)) }
+                IconButton(onClick = actions.onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }
+                IconButton(onClick = actions.onRotate, modifier = Modifier.testTag(InkToolTags.ROTATE)) { Icon(Icons.Outlined.Rotate90DegreesCw, stringResource(R.string.ink_selection_rotate)) }
+                IconButton(onClick = { actions.onFlip(true) }, modifier = Modifier.testTag(InkToolTags.FLIP_H)) { Icon(Icons.Outlined.Flip, stringResource(R.string.ink_selection_flip_h)) }
+                IconButton(onClick = { actions.onFlip(false) }, modifier = Modifier.testTag(InkToolTags.FLIP_V)) { Icon(Icons.Outlined.Flip, stringResource(R.string.ink_selection_flip_v), Modifier.rotate(90f)) }
+                IconButton(onClick = actions.onFront, modifier = Modifier.testTag(InkToolTags.FRONT)) { Icon(Icons.Outlined.FlipToFront, stringResource(R.string.ink_selection_front)) }
+                IconButton(onClick = actions.onBack, modifier = Modifier.testTag(InkToolTags.BACK)) { Icon(Icons.Outlined.FlipToBack, stringResource(R.string.ink_selection_back)) }
+                Spacer(Modifier.width(8.dp))
+                QuickColors.forEach { c -> ColorDot(c, selected = false, onClick = { actions.onRecolorSelection(c) }) }
             }
         }
     }

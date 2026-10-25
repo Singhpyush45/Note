@@ -86,6 +86,8 @@ object InsertTags {
     const val TABLE_INSERT = "ink_table_insert"
     fun sticker(i: Int) = "ink_sticker_$i"
     fun math(s: String) = "ink_math_$s"
+    const val TEXT_MOVE = "ink_text_move"
+    const val TEXT_BAR = "ink_text_bar"
     const val TEXT_DIALOG = "ink_text_dialog"
     const val TEXT_FIELD = "ink_text_field"
     const val TEXT_SAVE = "ink_text_save"
@@ -175,7 +177,7 @@ fun InsertButton(actions: InsertActions) {
 }
 
 /** What's on the clipboard that can go on a page: picture/PDF links, or text. */
-data class ClipContent(val uris: List<Uri>, val text: String?)
+data class ClipContent(val uris: List<Uri>, val text: String?, val label: String? = null)
 
 /** Reads pictures (content links) and text from the clipboard, or from a dropped [clip]. */
 fun clipContent(context: Context, clip: ClipData? = (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.primaryClip): ClipContent {
@@ -195,7 +197,7 @@ fun clipContent(context: Context, clip: ClipData? = (context.getSystemService(Co
             }
         }
     }
-    return ClipContent(uris, text.toString().ifBlank { null })
+    return ClipContent(uris, text.toString().ifBlank { null }, clip.description?.label?.toString())
 }
 
 /** Whether a drag carries something a page can take. */
@@ -207,120 +209,7 @@ fun acceptsDrop(description: ClipDescription?): Boolean {
     }
 }
 
-/**
- * Writing or editing a text box (owner request: text with fonts on handwritten pages): the text, font (the phone's
- * own families), size, colour, bold, italic, alignment, with a live preview. Saving empty text removes the box.
- */
-@Composable
-fun TextBoxDialog(request: TextEditRequest, onSave: (String, TextStyle) -> Unit, onDismiss: () -> Unit) {
-    var text by rememberSaveable { mutableStateOf(request.text) }
-    var font by rememberSaveable { mutableStateOf(request.style.font) }
-    var size by rememberSaveable { mutableStateOf(request.style.size) }
-    var color by rememberSaveable { mutableStateOf(request.style.colorArgb) }
-    var bold by rememberSaveable { mutableStateOf(request.style.bold) }
-    var italic by rememberSaveable { mutableStateOf(request.style.italic) }
-    var align by rememberSaveable { mutableStateOf(request.style.align) }
-    val style = TextStyle(font, size, color, bold, italic, align)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag(InsertTags.TEXT_DIALOG),
-        title = { Text(stringResource(if (request.existing == null) R.string.text_box_new else R.string.text_box_edit)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    textStyle = ComposeTextStyle(
-                        fontFamily = font.composeFamily(),
-                        fontSize = (size * 0.8f).coerceIn(12f, 36f).sp,
-                        color = Color(color),
-                        fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else null,
-                        fontStyle = if (italic) androidx.compose.ui.text.font.FontStyle.Italic else null,
-                    ),
-                    placeholder = { Text(stringResource(R.string.text_box_hint)) },
-                    minLines = 2,
-                    modifier = Modifier.fillMaxWidth().testTag(InsertTags.TEXT_FIELD),
-                )
-                // Equations: maths symbols, Greek letters, powers and indices, typed into the text at the end.
-                Text(stringResource(R.string.text_box_math), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
-                Row(Modifier.horizontalScroll(rememberScrollState())) {
-                    MathSymbols.forEach { sym ->
-                        TextButton(onClick = { text += sym }, modifier = Modifier.testTag(InsertTags.math(sym))) { Text(sym, fontSize = 18.sp) }
-                    }
-                }
-                Text(stringResource(R.string.text_box_font), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TextFont.entries.forEach { f ->
-                        FilterChip(
-                            selected = font == f,
-                            onClick = { font = f },
-                            label = { Text(stringResource(f.label()), fontFamily = f.composeFamily()) },
-                            modifier = Modifier.testTag(InsertTags.font(f)),
-                        )
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text(stringResource(R.string.text_box_size, size.roundToInt()), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                    IconToggleButton(checked = bold, onCheckedChange = { bold = it }) { Icon(Icons.Outlined.FormatBold, stringResource(R.string.text_box_bold)) }
-                    IconToggleButton(checked = italic, onCheckedChange = { italic = it }) { Icon(Icons.Outlined.FormatItalic, stringResource(R.string.text_box_italic)) }
-                }
-                Slider(value = size, onValueChange = { size = it }, valueRange = 10f..72f)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextAlign.entries.forEach { a ->
-                        IconToggleButton(checked = align == a, onCheckedChange = { align = a }) {
-                            Icon(
-                                when (a) {
-                                    TextAlign.START -> Icons.AutoMirrored.Outlined.FormatAlignLeft
-                                    TextAlign.CENTER -> Icons.Outlined.FormatAlignCenter
-                                    TextAlign.END -> Icons.AutoMirrored.Outlined.FormatAlignRight
-                                },
-                                stringResource(
-                                    when (a) {
-                                        TextAlign.START -> R.string.text_box_align_start
-                                        TextAlign.CENTER -> R.string.text_box_align_center
-                                        TextAlign.END -> R.string.text_box_align_end
-                                    },
-                                ),
-                            )
-                        }
-                    }
-                }
-                Row(Modifier.horizontalScroll(rememberScrollState())) {
-                    (listOf(0xFF1F1F1F.toInt()) + QuickColors).distinct().forEach { c ->
-                        val selected = (c and 0xFFFFFF) == (color and 0xFFFFFF)
-                        val label = stringResource(R.string.ink_color_hex, "#" + Integer.toHexString(c and 0xFFFFFF).padStart(6, '0').uppercase())
-                        Box(
-                            Modifier
-                                .size(44.dp)
-                                .clickable(role = Role.RadioButton) { color = c or (0xFF shl 24) }
-                                .semantics { contentDescription = label; this.selected = selected },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                Modifier
-                                    .size(26.dp)
-                                    .border(if (selected) 2.5.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else Color(0x33000000), CircleShape)
-                                    .padding(if (selected) 4.dp else 1.dp)
-                                    .background(Color(c), CircleShape),
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(text, style) }, modifier = Modifier.testTag(InsertTags.TEXT_SAVE)) { Text(stringResource(R.string.action_save)) }
-        },
-        dismissButton = {
-            Row {
-                if (request.existing != null) TextButton(onClick = { onSave("", style) }) { Text(stringResource(R.string.action_delete)) }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-            }
-        },
-    )
-}
-
-private fun TextFont.composeFamily(): FontFamily = when (this) {
+internal fun TextFont.composeFamily(): FontFamily = when (this) {
     TextFont.SANS -> FontFamily.SansSerif
     TextFont.SERIF -> FontFamily.Serif
     TextFont.MONO -> FontFamily.Monospace
@@ -330,7 +219,7 @@ private fun TextFont.composeFamily(): FontFamily = when (this) {
     TextFont.ROUNDED -> FontFamily(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL))
 }
 
-private fun TextFont.label(): Int = when (this) {
+internal fun TextFont.label(): Int = when (this) {
     TextFont.SANS -> R.string.font_sans
     TextFont.SERIF -> R.string.font_serif
     TextFont.MONO -> R.string.font_mono

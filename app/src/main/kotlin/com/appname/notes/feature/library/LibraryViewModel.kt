@@ -58,6 +58,7 @@ data class LibraryUiState(
     /** Title of the current notebook/tag collection, or null for the built-in ones. */
     val collectionName: String? = null,
     val sort: NoteSort = NoteSort.MODIFIED,
+    val cardSize: com.appname.notes.core.settings.CardSize = com.appname.notes.core.settings.CardSize.BIG,
     val pinned: List<NoteSummary> = emptyList(),
     val others: List<NoteSummary> = emptyList(),
     val notebooks: List<Notebook> = emptyList(),
@@ -102,15 +103,15 @@ class LibraryViewModel @Inject constructor(
     private val collection = MutableStateFlow(decode(savedState.get<String>(KEY_COLLECTION)))
     private val message = MutableStateFlow<UserMessage?>(null)
 
-    private val noteList = combine(collection, settings.library) { c, lib -> c to lib.sort }
-        .flatMapLatest { (c, sort) -> notes.observeNotes(c, sort).map { Triple(c, sort, it) } }
+    private val noteList = combine(collection, settings.library) { c, lib -> Triple(c, lib.sort, lib.cardSize) }
+        .flatMapLatest { (c, sort, size) -> notes.observeNotes(c, sort).map { NoteListData(c, sort, size, it) } }
 
     val uiState: StateFlow<LibraryUiState> = combine(
         noteList,
         folders.observeNotebooks(),
         tags.observeTags(),
         message,
-    ) { (c, sort, list), books, tagList, msg ->
+    ) { (c, sort, size, list), books, tagList, msg ->
         val showPinnedSection = c != NoteCollection.Trash
         LibraryUiState(
             collection = c,
@@ -120,6 +121,7 @@ class LibraryViewModel @Inject constructor(
                 else -> null
             },
             sort = sort,
+            cardSize = size,
             pinned = if (showPinnedSection) list.filter { it.isPinned } else emptyList(),
             others = if (showPinnedSection) list.filterNot { it.isPinned } else list,
             notebooks = books,
@@ -160,6 +162,10 @@ class LibraryViewModel @Inject constructor(
 
     fun setSort(sort: NoteSort) {
         viewModelScope.launch { settings.setLibrarySort(sort).reportFailure() }
+    }
+
+    fun setCardSize(size: com.appname.notes.core.settings.CardSize) {
+        viewModelScope.launch { settings.setLibraryCardSize(size).reportFailure() }
     }
 
     /** New handwritten note with [template] pages in the shown notebook/tag, like [createNote]. */
@@ -435,3 +441,10 @@ class LibraryViewModel @Inject constructor(
         }
     }
 }
+
+private data class NoteListData(
+    val collection: NoteCollection,
+    val sort: NoteSort,
+    val size: com.appname.notes.core.settings.CardSize,
+    val notes: List<NoteSummary>,
+)

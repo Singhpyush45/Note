@@ -50,6 +50,9 @@ class FakeSettingsRepository(initial: AppearanceSettings = AppearanceSettings())
     override suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit> =
         write { librarySettings.value = librarySettings.value.copy(sort = sort) }
 
+    override suspend fun setLibraryCardSize(size: com.appname.notes.core.settings.CardSize): AppResult<Unit> =
+        write { librarySettings.value = librarySettings.value.copy(cardSize = size) }
+
     override suspend fun setThemeMode(mode: ThemeMode): AppResult<Unit> =
         write { state.value = state.value.copy(themeMode = mode) }
 

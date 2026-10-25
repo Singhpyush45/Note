@@ -36,6 +36,8 @@ interface SettingsRepository {
 
     suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit>
 
+    suspend fun setLibraryCardSize(size: CardSize): AppResult<Unit>
+
     /** Reads the current ink settings, applies [change] and saves the result in one transaction. */
     suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit>
 

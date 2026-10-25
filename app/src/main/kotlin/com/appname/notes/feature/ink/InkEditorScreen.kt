@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -125,6 +126,12 @@ object InkTestTags {
     const val SCREEN = "ink_screen"
     const val CANVAS = "ink_canvas"
     const val TOOLBAR = "ink_toolbar"
+    const val PRESS_MENU = "ink_press_menu"
+    const val PRESS_PASTE = "ink_press_paste"
+    const val PRESS_WRITE = "ink_press_write"
+    const val PRESS_SELECT = "ink_press_select"
+    const val PRESS_COPY = "ink_press_copy"
+    const val PRESS_DELETE = "ink_press_delete"
     const val PAGE_INDICATOR = "ink_page_indicator"
     const val EXPORT_PDF = "ink_export_pdf"
     const val SHARE_PDF = "ink_share_pdf"
@@ -155,6 +162,8 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     // Tool variation panel and colour picker (owner brief §13–14).
     var panelOpen by rememberSaveable { mutableStateOf(false) }
     var colorPicker by rememberSaveable { mutableStateOf(false) }
+    // Full screen (owner request): no title bar or system bars, a small floating tool bar.
+    var fullScreen by rememberSaveable { mutableStateOf(false) }
     val toolActions = remember(viewModel) {
         InkToolActions(
             onTool = { tool -> viewModel.selectTool(tool); panelOpen = false },
@@ -179,6 +188,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onFlip = viewModel::flipSelection,
             onRuler = viewModel::toggleRuler,
             onLassoBox = viewModel::setLassoBox,
+            onCopySelection = viewModel::copySelection,
         )
     }
     val context = LocalContext.current
@@ -207,14 +217,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         if (path != null && taken) viewModel.insertFiles(listOf(android.net.Uri.fromFile(java.io.File(path))))
     }
     val hasCamera = remember { context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY) }
-    val paste = {
-        val clip = clipContent(context)
-        when {
-            clip.uris.isNotEmpty() -> viewModel.insertFiles(clip.uris)
-            clip.text != null -> viewModel.insertPlainText(clip.text)
-            else -> viewModel.nothingToPaste()
-        }
-    }
+    val paste = { viewModel.pasteFrom(clipContent(context)) }
     // Settings › Handwriting › Ask before leaving with Back.
     var confirmLeave by rememberSaveable { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = ui.backGuard && load is InkLoad.Ready && !confirmLeave) { confirmLeave = true }
@@ -226,6 +229,17 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onConfirm = { confirmLeave = false; onClose() },
             onDismiss = { confirmLeave = false },
         )
+    }
+    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
+    LaunchedEffect(ui.readOnly) { if (ui.readOnly != null) fullScreen = false }
+    val window = androidx.activity.compose.LocalActivity.current?.window
+    androidx.compose.runtime.DisposableEffect(fullScreen, window) {
+        val bars = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
+        if (fullScreen && bars != null) {
+            bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose { if (fullScreen) bars?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars()) }
     }
     var stickerPicker by rememberSaveable { mutableStateOf(false) }
     var tablePicker by rememberSaveable { mutableStateOf(false) }
@@ -271,7 +285,15 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     val recordingState by viewModel.recording.collectAsStateWithLifecycle()
     val playbackState by viewModel.playback.state.collectAsStateWithLifecycle()
     val textEdit by viewModel.textEdit.collectAsStateWithLifecycle()
-    textEdit?.let { req -> TextBoxDialog(req, onSave = viewModel::saveText, onDismiss = viewModel::dismissTextEdit) }
+    // Typing on the page: Back finishes the text box (declared last, so it goes first).
+    androidx.activity.compose.BackHandler(enabled = textEdit != null) { viewModel.commitText() }
+    val pressMenu by viewModel.pressMenu.collectAsStateWithLifecycle()
+    var canvasView by remember { mutableStateOf<InkCanvasView?>(null) }
+    var transformTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.SideEffect {
+        canvasView?.hiddenItemId = textEdit?.existing?.id
+        canvasView?.onTransform = if (textEdit != null) { { transformTick++ } } else null
+    }
     val inserting by viewModel.inserting.collectAsStateWithLifecycle()
     // Reminders (FR-010).
     val reminders by viewModel.reminders.reminders.collectAsStateWithLifecycle()
@@ -282,7 +304,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            InkTopBar(
+            if (!fullScreen) InkTopBar(
                 ui = ui,
                 ready = load is InkLoad.Ready,
                 onBack = onClose,
@@ -303,13 +325,16 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             )
         },
         bottomBar = {
-            if (load is InkLoad.Ready && ui.readOnly == null) {
+            if (load is InkLoad.Ready && ui.readOnly == null && !fullScreen) {
                 InkToolbar(
                     ui = ui,
                     actions = toolActions,
                     panelOpen = panelOpen,
                     onPanel = { panelOpen = it },
                     modifier = Modifier.navigationBarsPadding(),
+                    onUndo = viewModel::undo,
+                    onRedo = viewModel::redo,
+                    onFullScreen = { panelOpen = false; fullScreen = true },
                 )
             }
         },
@@ -323,7 +348,31 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                     modifier = Modifier.align(Alignment.Center),
                 )
                 is InkLoad.Ready -> {
-                    InkCanvas(l.session, l.controller, l.pdf, ui, viewModel, onPaste = paste)
+                    InkCanvas(l.session, l.controller, l.pdf, ui, viewModel, onPaste = paste, onView = { canvasView = it })
+                    val editing = textEdit
+                    val view = canvasView
+                    if (editing != null && view != null) {
+                        InlineTextEditor(
+                            request = editing,
+                            view = view,
+                            transformTick = transformTick,
+                            onChange = viewModel::updateTextDraft,
+                            onMove = viewModel::moveTextDraft,
+                            onDone = viewModel::commitText,
+                            onDelete = viewModel::deleteTextDraft,
+                        )
+                    }
+                    pressMenu?.let { m ->
+                        PressAndHoldMenu(
+                            menu = m,
+                            onPaste = { viewModel.pasteFrom(clipContent(context), m.pageId, com.appname.notes.core.ink.geometry.Vec(m.x.toDouble(), m.y.toDouble())) },
+                            onWriteText = viewModel::menuWriteText,
+                            onSelect = viewModel::menuSelect,
+                            onCopy = viewModel::menuCopy,
+                            onDelete = viewModel::menuDelete,
+                            onDismiss = viewModel::dismissPressMenu,
+                        )
+                    }
                     // Recording into this note, and the player for a chip that was tapped.
                     Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp)) {
                         com.appname.notes.feature.audio.RecordingBar(recordingState, viewModel.noteId, onAddMarker = {}, onStop = viewModel::stopRecording)
@@ -379,13 +428,25 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                             )
                         }
                     }
+                    if (fullScreen && ui.readOnly == null) {
+                        FloatingInkToolbar(
+                            ui = ui,
+                            actions = toolActions,
+                            panelOpen = panelOpen,
+                            onPanel = { panelOpen = it },
+                            onUndo = viewModel::undo,
+                            onRedo = viewModel::redo,
+                            onExit = { fullScreen = false },
+                            insert = insertActions,
+                        )
+                    }
                     if (panelOpen && ui.readOnly == null && ui.tools.tool.inkTool != null) {
                         // Over the page, just above the tool bar, so opening it never moves the page.
                         VariationPanel(
                             ui = ui,
                             actions = toolActions,
                             onClose = { panelOpen = false },
-                            modifier = Modifier.align(Alignment.BottomCenter).widthIn(max = 560.dp),
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (fullScreen) 76.dp else 0.dp).widthIn(max = 560.dp),
                         )
                     }
                     if (ui.scrollBar && ui.pageCount > 2) {
@@ -494,6 +555,7 @@ private fun InkCanvas(
     ui: InkEditorUi,
     viewModel: InkEditorViewModel,
     onPaste: () -> Unit = {},
+    onView: (InkCanvasView) -> Unit = {},
 ) {
     val background = MaterialTheme.colorScheme.surfaceContainerHigh.toArgb()
     // Dark paper only in dark theme, and only if the user wants it (Settings / page settings).
@@ -521,7 +583,7 @@ private fun InkCanvas(
     }
     AndroidView(
         factory = { context ->
-            InkCanvasView(context).also { canvasView = it }.apply {
+            InkCanvasView(context).also { canvasView = it; onView(it) }.apply {
                 viewState = viewModel.viewState
                 listener = object : InkCanvasView.Listener {
                     override fun onInteraction() = viewModel.refresh()
@@ -533,6 +595,9 @@ private fun InkCanvas(
                         viewModel.onTextTap(pageId, x, y, existing)
                     override fun onPasteRequested() = onPaste()
                     override fun onAudioTap(item: com.appname.notes.core.ink.model.AudioItem) = viewModel.onAudioTap(item)
+                    override fun onLongPress(pageId: String, p: com.appname.notes.core.ink.geometry.Vec, x: Float, y: Float, unitsPerDp: Double) =
+                        viewModel.onLongPress(pageId, p, x, y, unitsPerDp)
+                    override fun onDrawStart() = viewModel.onDrawStart()
                 }
             }
         },
@@ -605,10 +670,6 @@ private fun InkTopBar(
             }
         },
         actions = {
-            if (editable) {
-                IconButton(onClick = onUndo, enabled = ui.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo)) }
-                IconButton(onClick = onRedo, enabled = ui.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo)) }
-            }
             if (editable && insert != null) InsertButton(insert)
             reminderButton()
             if (ready) {
@@ -805,3 +866,45 @@ private fun PageScrollBar(current: Int, count: Int, onPage: (Int) -> Unit, modif
 }
 
 private fun Modifier.androidx_onSize(onHeight: (Int) -> Unit) = this.then(Modifier.onSizeChanged { onHeight(it.height) })
+
+/** Press and hold on the page (owner request): paste, write text, select, copy, delete — what fits the spot. */
+@Composable
+private fun PressAndHoldMenu(
+    menu: PressMenu,
+    onPaste: () -> Unit,
+    onWriteText: () -> Unit,
+    onSelect: () -> Unit,
+    onCopy: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val isText = menu.item is com.appname.notes.core.ink.model.TextItem
+    val onSomething = menu.item != null || menu.inSelection
+    Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(menu.screenX.toInt(), menu.screenY.toInt()) }.size(1.dp)) {
+        DropdownMenu(expanded = true, onDismissRequest = onDismiss, modifier = Modifier.testTag(InkTestTags.PRESS_MENU)) {
+            if (menu.editable) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.ink_menu_paste)) }, onClick = onPaste, modifier = Modifier.testTag(InkTestTags.PRESS_PASTE))
+                if (isText || !onSomething) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(if (isText) R.string.ink_menu_edit_text else R.string.ink_menu_write_text)) },
+                        onClick = onWriteText,
+                        modifier = Modifier.testTag(InkTestTags.PRESS_WRITE),
+                    )
+                }
+            }
+            if (!menu.inSelection) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.ink_menu_select)) }, onClick = onSelect, modifier = Modifier.testTag(InkTestTags.PRESS_SELECT))
+            }
+            if (onSomething) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(if (isText) R.string.ink_menu_copy_text else R.string.ink_menu_copy)) },
+                    onClick = onCopy,
+                    modifier = Modifier.testTag(InkTestTags.PRESS_COPY),
+                )
+                if (menu.editable) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.ink_menu_delete)) }, onClick = onDelete, modifier = Modifier.testTag(InkTestTags.PRESS_DELETE))
+                }
+            }
+        }
+    }
+}

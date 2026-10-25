@@ -55,7 +55,7 @@ class DataStoreSettingsRepository @Inject constructor(
         .distinctUntilChanged()
 
     override val library: Flow<LibrarySettings> = prefs
-        .map { prefs -> LibrarySettings(sort = prefs[Keys.LIBRARY_SORT].toNoteSort()) }
+        .map { prefs -> LibrarySettings(sort = prefs[Keys.LIBRARY_SORT].toNoteSort(), cardSize = CardSize.entries.firstOrNull { it.name == prefs[Keys.LIBRARY_CARD_SIZE] } ?: CardSize.BIG) }
         .distinctUntilChanged()
 
     override val ink: Flow<InkSettings> = prefs.map { it.toInk() }.distinctUntilChanged()
@@ -172,6 +172,9 @@ class DataStoreSettingsRepository @Inject constructor(
     override suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit> =
         write { it[Keys.LIBRARY_SORT] = sort.name }
 
+    override suspend fun setLibraryCardSize(size: CardSize): AppResult<Unit> =
+        write { it[Keys.LIBRARY_CARD_SIZE] = size.name }
+
     override suspend fun setThemeMode(mode: ThemeMode): AppResult<Unit> =
         write { it[Keys.THEME_MODE] = mode.name }
 
@@ -226,6 +229,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val LIBRARY_SORT = stringPreferencesKey("library_sort")
+        val LIBRARY_CARD_SIZE = stringPreferencesKey("library_card_size")
         val INK_SHAPES = booleanPreferencesKey("ink_shape_correction")
         val INK_HOLD_MS = longPreferencesKey("ink_hold_ms")
         val INK_FINGER = stringPreferencesKey("ink_finger_mode")

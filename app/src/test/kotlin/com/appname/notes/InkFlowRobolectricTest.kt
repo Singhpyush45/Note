@@ -55,6 +55,7 @@ import com.appname.notes.feature.ink.InkEngine
 import com.appname.notes.feature.ink.InkTestTags
 import com.appname.notes.feature.library.LibraryTestTags
 import com.google.common.truth.Truth.assertThat
+import androidx.compose.ui.test.performTextInput
 import dagger.hilt.android.EntryPointAccessors
 import java.time.Duration
 import kotlinx.coroutines.flow.first
@@ -519,5 +520,26 @@ class InkFlowRobolectricTest {
         assertThat(photo.place.width / photo.place.height).isWithin(0.01f).of(2f)
         val attachments = runBlocking { (data.attachments().list(inkNote()) as AppResult.Success).value }
         assertThat(attachments.map { it.fileName }).contains(photo.fileName)
+    }
+
+    @Test
+    fun fullScreenBarAndTypingStraightOnThePage() {
+        openNewInkNote()
+        // Full screen: the title bar and the tool bar go, a floating bar comes.
+        tap(com.appname.notes.feature.ink.InkToolTags.FULL_SCREEN)
+        waitFor(com.appname.notes.feature.ink.InkToolTags.FLOATING_BAR)
+        assertThat(exists(hasTestTag(InkTestTags.TOOLBAR))).isFalse()
+        // Text tool, tap the page: a text box opens right there; type into it and finish.
+        tap(InkTestTags.tool(com.appname.notes.core.ink.input.EditorTool.TEXT))
+        val c = canvas()
+        stroke(listOf(c.width * 0.4f to c.height * 0.4f), tool = MotionEvent.TOOL_TYPE_FINGER)
+        waitFor(com.appname.notes.feature.ink.InsertTags.TEXT_FIELD)
+        composeRule.onNodeWithTag(com.appname.notes.feature.ink.InsertTags.TEXT_FIELD).performTextInput("Typed on the page")
+        tap(com.appname.notes.feature.ink.InsertTags.TEXT_SAVE)
+        waitAdvancing { items().any { it is com.appname.notes.core.ink.model.TextItem } }
+        assertThat(items().filterIsInstance<com.appname.notes.core.ink.model.TextItem>().single().text).isEqualTo("Typed on the page")
+        // Back out of full screen.
+        tap(com.appname.notes.feature.ink.InkToolTags.EXIT_FULL_SCREEN)
+        waitFor(InkTestTags.TOOLBAR)
     }
 }

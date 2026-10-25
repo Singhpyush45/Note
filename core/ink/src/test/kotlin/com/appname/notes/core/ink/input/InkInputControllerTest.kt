@@ -331,4 +331,18 @@ class InkInputControllerTest {
         assertEquals(1, c.selectedItems().size)
         assertEquals(100.0, c.selectedItems().single().bounds().center.y, 2.0)
     }
+
+    @Test
+    fun `press and hold finds the item under the finger and select picks it`() {
+        draw(line(Vec(100.0, 100.0), Vec(300.0, 100.0), n = 20))
+        val stroke = items().single()
+        val photo = com.appname.notes.core.ink.model.ImageItem("img", 50, "a.jpg", com.appname.notes.core.ink.model.Placement(500f, 500f, 200f, 100f))
+        session.apply("p1", com.appname.notes.core.ink.edit.InkEdit.add(photo))
+        assertEquals(stroke.id, c.itemAt("p1", Vec(200.0, 103.0), 8.0)?.id)
+        assertEquals("img", c.itemAt("p1", Vec(560.0, 520.0), 8.0)?.id)
+        assertEquals(null, c.itemAt("p1", Vec(200.0, 300.0), 8.0))
+        c.tools = c.tools.copy(tool = EditorTool.LASSO)
+        assertTrue(c.select("p1", setOf("img")))
+        assertEquals(setOf("img"), c.selection?.ids)
+    }
 }

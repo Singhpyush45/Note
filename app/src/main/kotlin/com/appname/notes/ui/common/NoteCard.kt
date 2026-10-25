@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -80,6 +82,8 @@ fun NoteCard(
     onMore: (() -> Unit)? = null,
     /** Shown as selected in multi-select. */
     checked: Boolean = false,
+    /** Home screen › view: small, big, extra big or a list row. */
+    size: com.appname.notes.core.settings.CardSize = com.appname.notes.core.settings.CardSize.BIG,
 ) {
     val spacing = AppTheme.spacing
     val context = LocalContext.current
@@ -111,11 +115,54 @@ fun NoteCard(
         shape = shape,
         elevation = 2.dp,
     ) {
+        if (size == com.appname.notes.core.settings.CardSize.LIST) {
+            // One compact row: a small page preview, title, date and the first line.
+            Row(
+                modifier = Modifier
+                    .clip(shape)
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick, onClickLabel = stringResource(R.string.note_open))
+                    .padding(start = spacing.md, end = if (onMore != null) 0.dp else spacing.md, top = spacing.sm, bottom = spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (checked) {
+                    Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = spacing.sm).size(22.dp))
+                }
+                if (isInk && inkThumbnail != null) {
+                    Box(Modifier.width(56.dp).padding(end = spacing.md)) { InkThumbnailView(note, inkThumbnail) }
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(heading, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val line = body.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+                    Text(
+                        if (line.isBlank()) changed else "$changed · $line",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (note.isFavourite) Icon(Icons.Filled.Star, stringResource(R.string.collection_favourites), Modifier.padding(start = spacing.xs).size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
+                if (note.isPinned) Icon(Icons.Filled.PushPin, stringResource(R.string.library_pinned), Modifier.padding(start = spacing.xs).size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                if (onMore != null) {
+                    IconButton(onClick = onMore, modifier = Modifier.testTag("note_more_${note.id.value}")) {
+                        Icon(Icons.Filled.MoreVert, stringResource(R.string.note_more_for, heading), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            return@GlassSurface
+        }
+        val small = size == com.appname.notes.core.settings.CardSize.SMALL
+        val extraBig = size == com.appname.notes.core.settings.CardSize.EXTRA_BIG
         Column(
             modifier = Modifier
                 .clip(shape) // ripple inside the card; the soft shadow stays outside
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick, onClickLabel = stringResource(R.string.note_open))
-                .padding(start = spacing.lg, end = if (onMore != null) spacing.xs else spacing.lg, top = spacing.md, bottom = spacing.lg),
+                .padding(
+                    start = if (small) spacing.md else spacing.lg,
+                    end = if (onMore != null) spacing.xs else if (small) spacing.md else spacing.lg,
+                    top = spacing.md,
+                    bottom = if (small) spacing.md else spacing.lg,
+                ),
             verticalArrangement = Arrangement.spacedBy(spacing.sm),
         ) {
             Row(verticalAlignment = Alignment.Top) {
@@ -130,7 +177,11 @@ fun NoteCard(
                 Column(Modifier.weight(1f).padding(top = spacing.xs)) {
                     Text(
                         text = heading,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = when {
+                            small -> MaterialTheme.typography.titleSmall
+                            extraBig -> MaterialTheme.typography.titleLarge
+                            else -> MaterialTheme.typography.titleMedium
+                        },
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -165,11 +216,15 @@ fun NoteCard(
                         text = body,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 8,
+                        maxLines = when {
+                            small -> 3
+                            extraBig -> 16
+                            else -> 8
+                        },
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                val hasMeta = note.notebookTitle != null || note.tags.isNotEmpty() || note.attachmentCount > 0 || note.nextReminderAt != null
+                val hasMeta = !small && (note.notebookTitle != null || note.tags.isNotEmpty() || note.attachmentCount > 0 || note.nextReminderAt != null)
                 if (hasMeta) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(spacing.xs),

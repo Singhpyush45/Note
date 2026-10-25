@@ -530,6 +530,31 @@ class InkInputController(
         selection = null
     }
 
+    /** Selects [ids] on [pageId] (e.g. a photo just placed, or "Select" in the press-and-hold menu). */
+    fun select(pageId: String, ids: Set<String>): Boolean {
+        cancel()
+        selection = selectionOf(pageId, session.items(pageId).filter { it.id in ids })
+        return selection != null
+    }
+
+    /**
+     * The topmost item at [p] on [pageId]: a photo, text box, recording or sticker containing it, else ink within
+     * [tolerance] page units of it. Null on empty paper.
+     */
+    fun itemAt(pageId: String, p: Vec, tolerance: Double): InkItem? {
+        val items = session.items(pageId)
+        val placed = items.filter {
+            when (it) {
+                is com.appname.notes.core.ink.model.ImageItem -> it.place.contains(p)
+                is com.appname.notes.core.ink.model.TextItem -> it.place.contains(p)
+                is com.appname.notes.core.ink.model.AudioItem -> it.place.contains(p)
+                else -> false
+            }
+        }
+        val ink = com.appname.notes.core.ink.edit.Eraser.touched(items, listOf(p), tolerance)
+        return (placed + ink).maxByOrNull { it.z }
+    }
+
     /** Only closed shapes can be filled. */
     private fun fillFor(kind: ShapeKind): Int? = tools.shapeFill.takeIf { kind != ShapeKind.LINE && kind != ShapeKind.ARROW }
 

@@ -325,6 +325,14 @@ class InkEditorViewModel @AssistedInject constructor(
     fun refresh() {
         val s = session() ?: return
         val c = controller() ?: return
+        // A photo/text placed by Insert or Paste came selected (lasso) so it can be resized; once that selection is
+        // done, the tool used before comes back.
+        autoSelectFrom?.let { back ->
+            if (c.selection == null && !c.gestureActive) {
+                autoSelectFrom = null
+                if (c.tools.tool == EditorTool.LASSO) c.tools = c.tools.copy(tool = back)
+            }
+        }
         _ui.update { ui ->
             val page = ui.currentPage.coerceIn(0, (s.pages.size - 1).coerceAtLeast(0))
             val shown = s.pages.getOrNull(page)
@@ -584,6 +592,8 @@ class InkEditorViewModel @AssistedInject constructor(
 
     fun selectTool(tool: EditorTool) {
         val c = controller() ?: return
+        commitText()
+        autoSelectFrom = null
         toolPickedHere = true
         c.tools = c.tools.copy(tool = tool)
         refresh()
@@ -848,7 +858,7 @@ class InkEditorViewModel @AssistedInject constructor(
             com.appname.notes.core.ink.model.ImageItem(ids.newId(), z++, a.fileName, com.appname.notes.core.ink.model.Placement(cx, cy, w, h))
         }
         s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit(emptyList(), items))
-        refresh()
+        selectInserted(page.id, items.map { it.id }.toSet())
     }
 
     /** Pixel size of a stored picture, turned upright; null if it isn't a picture. */
@@ -932,8 +942,9 @@ class InkEditorViewModel @AssistedInject constructor(
         val style = TextStyle(size = size, colorArgb = 0xFF000000.toInt(), align = com.appname.notes.core.ink.model.TextAlign.CENTER)
         val width = size * 1.6f
         val place = TextLayouts.place(emoji, style.font, false, false, style.align, size, width, page.width / 2 - width / 2, page.height / 3)
-        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(style.item(ids.newId(), page.items.nextZ, emoji, place)))
-        refresh()
+        val item = style.item(ids.newId(), page.items.nextZ, emoji, place)
+        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(item))
+        selectInserted(page.id, setOf(item.id))
     }
 
     /**
@@ -976,8 +987,9 @@ class InkEditorViewModel @AssistedInject constructor(
         val left = ((at?.x?.toFloat() ?: (page.width / 2 - width / 2))).coerceIn(0f, (page.width - width).coerceAtLeast(0f))
         val top = (at?.y?.toFloat() ?: (page.height / 3)).coerceIn(0f, page.height)
         val place = TextLayouts.place(text, style.font, style.bold, style.italic, style.align, style.size, width, left, top)
-        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(style.item(ids.newId(), page.items.nextZ, text, place)))
-        refresh()
+        val item = style.item(ids.newId(), page.items.nextZ, text, place)
+        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(item))
+        selectInserted(page.id, setOf(item.id))
     }
 
     // ------------------------------------------------------------ recordings on the page (8a)
@@ -1052,14 +1064,37 @@ class InkEditorViewModel @AssistedInject constructor(
     /** The last used text style (font, size, colour …), for the next text box. */
     private var textStyle = TextStyle()
 
-    /** A tap with the text tool: edit the text box there, or start a new one at the tap. */
+    /**
+     * A tap with the text tool: edit the text box there, or start a new one at the tap (typed straight onto the
+     * page). While a box is being written, a tap elsewhere finishes it.
+     */
     fun onTextTap(pageId: String, x: Double, y: Double, existing: com.appname.notes.core.ink.model.TextItem?) {
         if (!canInsert()) return
-        _textEdit.value = if (existing != null) {
-            TextEditRequest(pageId, existing.place.cx - existing.place.width / 2, existing.place.cy - existing.place.height / 2, existing.text, TextStyle.of(existing), existing)
-        } else {
-            TextEditRequest(pageId, x.toFloat(), y.toFloat(), "", textStyle, null)
+        if (_textEdit.value != null) {
+            commitText()
+            return
         }
+        openTextEdit(pageId, x.toFloat(), y.toFloat(), existing)
+    }
+
+    private fun openTextEdit(pageId: String, x: Float, y: Float, existing: com.appname.notes.core.ink.model.TextItem?) {
+        val page = session()?.page(pageId) ?: return
+        _textEdit.value = if (existing != null) {
+            val p = existing.place
+            TextEditRequest(pageId, p.cx - p.width / 2, p.cy - p.height / 2, existing.text, TextStyle.of(existing), existing, p.width, p.rotationDeg)
+        } else {
+            val width = minOf(TEXT_WIDTH, (page.width - x).coerceAtLeast(TEXT_MIN_WIDTH))
+            val left = x.coerceIn(0f, (page.width - width).coerceAtLeast(0f))
+            // The tap is where the first line sits, so the cursor appears right under the pen.
+            val top = (y - textStyle.size * 0.6f).coerceIn(0f, page.height)
+            TextEditRequest(pageId, left, top, "", textStyle, null, width, 0f)
+        }
+        refresh()
+    }
+
+    /** Pen or finger started drawing while a text box was open: finish the box first. */
+    fun onDrawStart() {
+        commitText()
     }
 
     fun nothingToPaste() {
@@ -1070,27 +1105,192 @@ class InkEditorViewModel @AssistedInject constructor(
         _message.value = UserMessage(R.string.text_tool_hint)
     }
 
-    fun dismissTextEdit() {
-        _textEdit.value = null
+    /** What is typed (and its look) while writing on the page; saved when the box is finished. */
+    fun updateTextDraft(text: String, style: TextStyle) {
+        _textEdit.update { it?.copy(text = text, style = style) }
+    }
+
+    /** Dragging the box's move handle (page units). */
+    fun moveTextDraft(dx: Float, dy: Float) {
+        val page = _textEdit.value?.let { session()?.page(it.pageId) } ?: return
+        _textEdit.update { r ->
+            r?.copy(
+                left = (r.left + dx).coerceIn(-r.width / 2, page.width - r.width / 2),
+                top = (r.top + dy).coerceIn(0f, page.height - 8f),
+            )
+        }
+    }
+
+    /** Finishes the text box being written (empty text removes it). */
+    fun commitText() {
+        val req = _textEdit.value ?: return
+        saveText(req.text, req.style)
+    }
+
+    fun deleteTextDraft() {
+        val req = _textEdit.value ?: return
+        saveText("", req.style)
     }
 
     /** Saves the text box being edited (empty text removes an existing one). */
-    fun saveText(text: String, style: TextStyle) {
+    private fun saveText(text: String, style: TextStyle) {
         val req = _textEdit.value ?: return
         _textEdit.value = null
         textStyle = style
         val s = session() ?: return
         val page = s.page(req.pageId) ?: return
-        val old = req.existing
+        val old = req.existing?.let { e -> page.items.items.firstOrNull { it.id == e.id } as? com.appname.notes.core.ink.model.TextItem }
         if (text.isBlank()) {
             if (old != null) s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.remove(listOf(old)))
             refresh()
             return
         }
-        val width = old?.place?.width ?: minOf(TEXT_WIDTH, (page.width - req.left).coerceAtLeast(TEXT_MIN_WIDTH))
-        val place = TextLayouts.place(text, style.font, style.bold, style.italic, style.align, style.size, width, req.left, req.top, old?.place?.rotationDeg ?: 0f)
+        val place = TextLayouts.place(text, style.font, style.bold, style.italic, style.align, style.size, req.width, req.left, req.top, req.rotationDeg)
         val item = style.item(old?.id ?: ids.newId(), old?.z ?: page.items.nextZ, text, place)
+        if (old != null && old == item) {
+            refresh()
+            return
+        }
         s.apply(page.id, if (old != null) com.appname.notes.core.ink.edit.InkEdit(listOf(old), listOf(item)) else com.appname.notes.core.ink.edit.InkEdit.add(item))
+        refresh()
+    }
+
+    // ------------------------------------------------------------ press and hold, copy and paste (owner request)
+
+    private val _pressMenu = MutableStateFlow<PressMenu?>(null)
+
+    /** The press-and-hold menu, when open. */
+    val pressMenu: StateFlow<PressMenu?> = _pressMenu.asStateFlow()
+
+    /** The tool to go back to once an automatically selected photo/text is done with. */
+    private var autoSelectFrom: EditorTool? = null
+
+    fun onLongPress(pageId: String, p: Vec, x: Float, y: Float, unitsPerDp: Double) {
+        val c = controller() ?: return
+        commitText()
+        val sel = c.selection
+        val inSelection = sel != null && sel.pageId == pageId && sel.bounds.inflate(8 * unitsPerDp).contains(p)
+        val item = if (inSelection) null else c.itemAt(pageId, p, HOLD_TOLERANCE_DP * unitsPerDp)
+        _pressMenu.value = PressMenu(pageId, p.x.toFloat(), p.y.toFloat(), x, y, item, inSelection, editable = canInsert())
+    }
+
+    fun dismissPressMenu() {
+        _pressMenu.value = null
+    }
+
+    /** Press-and-hold › Write text: a text box right there. */
+    fun menuWriteText() {
+        val m = _pressMenu.value ?: return
+        _pressMenu.value = null
+        if (!canInsert()) return
+        openTextEdit(m.pageId, m.x, m.y, m.item as? com.appname.notes.core.ink.model.TextItem)
+    }
+
+    /** Press-and-hold › Select: the item there (to move, resize, turn …), or the lasso on empty paper. */
+    fun menuSelect() {
+        val m = _pressMenu.value ?: return
+        _pressMenu.value = null
+        val item = m.item
+        if (item == null) {
+            if (!m.inSelection) selectTool(EditorTool.LASSO)
+            return
+        }
+        selectInserted(m.pageId, setOf(item.id))
+    }
+
+    /** Press-and-hold › Copy: the item there or the selection. Text also goes to the phone's clipboard. */
+    fun menuCopy() {
+        val m = _pressMenu.value ?: return
+        _pressMenu.value = null
+        val items = if (m.inSelection) controller()?.selectedItems().orEmpty() else listOfNotNull(m.item)
+        copyItems(items)
+    }
+
+    fun menuDelete() {
+        val m = _pressMenu.value ?: return
+        _pressMenu.value = null
+        if (!canInsert()) return
+        if (m.inSelection) {
+            deleteSelection()
+            return
+        }
+        val item = m.item ?: return
+        session()?.apply(m.pageId, com.appname.notes.core.ink.edit.InkEdit.remove(listOf(item)))
+        controller()?.refreshSelection()
+        refresh()
+    }
+
+    /** Lasso › Copy. */
+    fun copySelection() {
+        copyItems(controller()?.selectedItems().orEmpty())
+    }
+
+    private fun copyItems(items: List<InkItem>) {
+        if (items.isEmpty()) return
+        InkClipboard.set(noteId, items)
+        val text = items.filterIsInstance<com.appname.notes.core.ink.model.TextItem>().sortedBy { it.place.cy }.joinToString("\n") { it.text }
+        val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+        runCatching { cm?.setPrimaryClip(android.content.ClipData.newPlainText(InkClipboard.LABEL, text)) }
+        _message.value = UserMessage(R.string.ink_copied)
+    }
+
+    /**
+     * Paste (Insert › Paste, Ctrl+V, press-and-hold › Paste): ink copied in this app comes back as ink (selected, to
+     * move it into place); otherwise a copied picture, PDF or text is placed like an insert.
+     */
+    fun pasteFrom(clip: ClipContent, pageId: String? = null, at: Vec? = null) {
+        _pressMenu.value = null
+        when {
+            clip.label == InkClipboard.LABEL && InkClipboard.items.isNotEmpty() -> pasteItems(pageId, at)
+            clip.uris.isNotEmpty() -> insertFiles(clip.uris, pageId, at)
+            clip.text != null -> insertPlainText(clip.text, pageId, at)
+            else -> nothingToPaste()
+        }
+    }
+
+    private fun pasteItems(pageId: String?, at: Vec?) {
+        if (!canInsert()) return
+        val source = InkClipboard.items
+        val fromOtherNote = InkClipboard.noteId != noteId
+        viewModelScope.launch {
+            // Photos copied from another note get their own copy of the file in this note.
+            val items = if (!fromOtherNote) {
+                source
+            } else {
+                source.mapNotNull { item ->
+                    when (item) {
+                        is com.appname.notes.core.ink.model.AudioItem -> null
+                        is com.appname.notes.core.ink.model.ImageItem -> {
+                            val file = java.io.File(java.io.File(appContext.filesDir, com.appname.notes.feature.attachments.AttachmentFileStore.DIR), item.fileName)
+                            val added = attacher.attach(noteId, listOf(Uri.fromFile(file))).added.firstOrNull() ?: return@mapNotNull null
+                            item.copy(fileName = added.fileName)
+                        }
+                        else -> item
+                    }
+                }
+            }
+            val s = session() ?: return@launch
+            val page = pageId?.let { s.page(it) } ?: s.pages.getOrNull(_ui.value.currentPage) ?: return@launch
+            if (items.isEmpty()) return@launch
+            val box = items.map { it.bounds() }.reduce { a, b -> a.union(b) }
+            val target = at ?: Vec(box.center.x + PASTE_OFFSET, box.center.y + PASTE_OFFSET)
+            val edit = com.appname.notes.core.ink.edit.Lasso.duplicate(items, target.x - box.center.x, target.y - box.center.y, page.items.nextZ, ids::newId)
+            val added = edit.added.map { com.appname.notes.core.ink.codec.InkCodec.quantize(it) }
+            s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit(emptyList(), added))
+            selectInserted(page.id, added.map { it.id }.toSet())
+        }
+    }
+
+    /** Selects what was just placed (lasso), so it can be resized or moved right away. */
+    private fun selectInserted(pageId: String, itemIds: Set<String>) {
+        val c = controller() ?: return refresh()
+        if (itemIds.isEmpty()) return refresh()
+        if (c.tools.tool != EditorTool.LASSO) {
+            autoSelectFrom = c.tools.tool
+            toolPickedHere = true
+            c.tools = c.tools.copy(tool = EditorTool.LASSO)
+        }
+        c.select(pageId, itemIds)
         refresh()
     }
 
@@ -1254,6 +1454,8 @@ class InkEditorViewModel @AssistedInject constructor(
         const val PDF_PAGE_PX = 1800
         const val MAX_PDF_PAGES = 100
         const val TEXT_WIDTH = 420f
+        const val HOLD_TOLERANCE_DP = 12.0
+        const val PASTE_OFFSET = 24.0
         const val AUDIO_CHIP_W = 300f
         const val STICKER_SIZE = 72f
         const val TABLE_ROW_HEIGHT = 48f
@@ -1284,7 +1486,10 @@ data class TextStyle(
     }
 }
 
-/** A text box being written ([existing] null) or edited, with its top-left corner on [pageId]. */
+/**
+ * A text box being written on the page ([existing] null) or edited: its top-left corner on [pageId], width and turn
+ * (page units, degrees), and what is typed so far.
+ */
 data class TextEditRequest(
     val pageId: String,
     val left: Float,
@@ -1292,4 +1497,36 @@ data class TextEditRequest(
     val text: String,
     val style: TextStyle,
     val existing: com.appname.notes.core.ink.model.TextItem?,
+    val width: Float = 420f,
+    val rotationDeg: Float = 0f,
+    val key: Long = System.nanoTime(),
 )
+
+/** The press-and-hold menu at page point [x], [y] ([screenX], [screenY] on screen), over [item] if any. */
+data class PressMenu(
+    val pageId: String,
+    val x: Float,
+    val y: Float,
+    val screenX: Float,
+    val screenY: Float,
+    val item: InkItem?,
+    val inSelection: Boolean,
+    val editable: Boolean = true,
+)
+
+/**
+ * Ink copied in this app (handwriting, shapes, photos, text boxes), kept while the app runs. The phone's clipboard
+ * gets the copied text under [LABEL], so Paste knows the ink is still the latest thing copied.
+ */
+object InkClipboard {
+    const val LABEL = "APP_NAME ink"
+    var noteId: String? = null
+        private set
+    var items: List<InkItem> = emptyList()
+        private set
+
+    fun set(note: String, copied: List<InkItem>) {
+        noteId = note
+        items = copied
+    }
+}

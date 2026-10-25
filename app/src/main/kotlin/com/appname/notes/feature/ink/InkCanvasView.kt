@@ -82,6 +82,45 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
         /** A tap on a recording's chip on the page. */
         fun onAudioTap(item: com.appname.notes.core.ink.model.AudioItem) {}
+
+        /** Press and hold (a finger that scrolls, or the text tool) at page point [p]; [x], [y] on screen. */
+        fun onLongPress(pageId: String, p: Vec, x: Float, y: Float, unitsPerDp: Double) {}
+
+        /** A stroke (or the laser) started: anything typed on the page is finished first. */
+        fun onDrawStart() {}
+    }
+
+    /** An item not drawn because it is being edited on top of the page (text typed in place). */
+    var hiddenItemId: String? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            surface.invalidate()
+        }
+
+    /** Called after a frame where the zoom or scroll changed (things placed over the page follow it). */
+    var onTransform: (() -> Unit)? = null
+    private var lastDrawn: Viewport? = null
+
+    /** Screen pixels per page unit at the current zoom. */
+    val pxPerUnit: Float get() = viewport?.scale?.toFloat() ?: 1f
+
+    /** Where page point [x], [y] of [pageId] is on screen (view pixels), or null. */
+    fun screenPoint(pageId: String, x: Float, y: Float): android.graphics.PointF? {
+        val s = session ?: return null
+        val v = viewport ?: return null
+        val i = s.pages.indexOfFirst { it.id == pageId }
+        if (i < 0) return null
+        val q = toScreen(i, v, Vec(x.toDouble(), y.toDouble()))
+        return android.graphics.PointF(q.x.toFloat(), q.y.toFloat())
+    }
+
+    /** Scrolls the pages by [dx], [dy] screen pixels (e.g. to keep a text box above the keyboard). */
+    fun panBy(dx: Float, dy: Float) {
+        val v = viewport ?: return
+        viewport = rules.pan(v, dx.toDouble(), dy.toDouble(), width.toDouble(), height.toDouble(), stack)
+        surface.invalidate()
+        reportPage()
     }
 
     var listener: Listener? = null
@@ -431,6 +470,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             textTapX = e.getX(index)
             textTapY = e.getY(index)
             startPan(e, index)
+            armLongPress(e, index)
             return
         }
         textTapX = Float.NaN
@@ -452,6 +492,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         }
         if ((source == PointerSource.FINGER && !fingerDraws) || mouseScroll) {
             startPan(e, index)
+            if (!mouseScroll) armLongPress(e, index)
         } else {
             startDrawing(e, index, source)
         }
@@ -459,6 +500,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     /** Ink, or the laser pointer / text tool when chosen (the pen's eraser end still erases). */
     private fun startDrawing(e: MotionEvent, index: Int, source: PointerSource) {
+        listener?.onDrawStart()
         val tool = controller?.tools?.tool
         when {
             source == PointerSource.STYLUS_ERASER -> startInk(e, index, source)
@@ -509,7 +551,37 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         InkImages.addListener(imagesReady)
     }
 
+    // ---------------------------------------------------------------- press and hold
+
+    private var longPressX = 0f
+    private var longPressY = 0f
+    private var longPressArmed = false
+    private val longPressRunnable = Runnable {
+        if (!longPressArmed || mode != Mode.PAN) return@Runnable
+        longPressArmed = false
+        val at = pagePointAt(longPressX, longPressY) ?: return@Runnable
+        mode = Mode.IGNORE
+        textTapX = Float.NaN
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        listener?.onLongPress(at.first, at.second, longPressX, longPressY, viewport?.let { unitsPerDp(it) } ?: 1.0)
+    }
+
+    private fun armLongPress(e: MotionEvent, index: Int) {
+        if (e.pointerCount > 1) return
+        longPressX = e.getX(index)
+        longPressY = e.getY(index)
+        longPressArmed = true
+        removeCallbacks(longPressRunnable)
+        postDelayed(longPressRunnable, android.view.ViewConfiguration.getLongPressTimeout().toLong())
+    }
+
+    private fun disarmLongPress() {
+        longPressArmed = false
+        removeCallbacks(longPressRunnable)
+    }
+
     private fun onExtraPointer(e: MotionEvent, index: Int) {
+        disarmLongPress()
         val source = sourceOf(e, index)
         when (mode) {
             Mode.INK -> when {
@@ -591,6 +663,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     }
 
     private fun endTouch() {
+        disarmLongPress()
         rulerEdge = null
         mode = Mode.IDLE
         inkPointer = -1
@@ -700,6 +773,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     }
 
     private fun cancelGesture(e: MotionEvent?) {
+        disarmLongPress()
         removeCallbacks(holdRunnable)
         laserTrail.end()
         val response = controller?.cancel() ?: Response.NONE
@@ -779,6 +853,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         if (index < 0) return
         val x = e.getX(index)
         val y = e.getY(index)
+        if (longPressArmed && hypot((x - longPressX).toDouble(), (y - longPressY).toDouble()) > android.view.ViewConfiguration.get(context).scaledTouchSlop) {
+            disarmLongPress()
+        }
         viewport = rules.pan(v, (x - lastX).toDouble(), (y - lastY).toDouble(), width.toDouble(), height.toDouble(), stack)
         lastX = x
         lastY = y
@@ -953,9 +1030,10 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 renderer.drawPaper(canvas, page.width, page.height, page.template, m, edge, page.layout)
                 drawPdfPage(canvas, page, m, v.scale.toFloat())
                 val editing = selection != null && selection.pageId == page.id && liveMatrix != null
+                val hidden = hiddenItemId
                 renderer.drawInk(
                     canvas,
-                    page.items.items,
+                    if (hidden == null) page.items.items else page.items.items.filter { it.id != hidden },
                     page.width,
                     page.height,
                     m,
@@ -989,6 +1067,10 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 }
             }
             activeRuler()?.let { rulerPainter.draw(canvas, it) }
+            if (v != lastDrawn) {
+                lastDrawn = v
+                onTransform?.invoke()
+            }
             // The laser pointer: on top of everything, fading; keeps animating until it has gone.
             val now = SystemClock.uptimeMillis()
             if (laserTrail.active(now)) {
