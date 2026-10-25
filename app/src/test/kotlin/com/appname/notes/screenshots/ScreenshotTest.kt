@@ -223,7 +223,7 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithText("Physics — waves").performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
         snap("ink_light")
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.ERASER)).performClick()
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.ERASER)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         snap("ink_eraser_tools_light")
         // Page settings (owner brief §5).
         composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
@@ -271,12 +271,12 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithText("All brushes").performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
         snap("brushes_light")
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PENCIL)).performClick()
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PENCIL)).performClick()
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PENCIL)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PENCIL)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
         snap("tool_panel_pencil_light")
         composeRule.onNodeWithTag(InkToolTags.PANEL_CLOSE).performClick()
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.BRUSH)).performClick()
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.BRUSH)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
         snap("tool_panel_brush_light")
@@ -301,7 +301,7 @@ abstract class ScreenshotTestBase(private val device: String) {
         setTheme(R.string.settings_theme_dark)
         composeRule.onNodeWithText("All brushes").performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PEN)).performClick()
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PEN)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).performClick()
         waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
         snap("tool_panel_pen_dark")

@@ -268,7 +268,7 @@ class InkFlowRobolectricTest {
         stroke(line(60f, 200f, 340f, 200f))
         stroke(line(60f, 300f, 340f, 300f))
         waitAdvancing { items().size == 2 }
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.ERASER)).performClick()
+        tap(InkTestTags.tool(EditorTool.ERASER))
         stroke(line(200f, 150f, 200f, 350f))
         waitAdvancing { items().isEmpty() }
         composeRule.onNodeWithContentDescription(string(R.string.editor_undo)).performClick()
@@ -281,7 +281,7 @@ class InkFlowRobolectricTest {
         stroke(line(100f, 220f, 200f, 220f))
         waitAdvancing { items().size == 1 }
         val before = (items().single() as StrokeItem).points.y[0]
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.LASSO)).performClick()
+        tap(InkTestTags.tool(EditorTool.LASSO))
         stroke(listOf(80f to 190f, 230f to 190f, 230f to 250f, 80f to 250f, 80f to 192f))
         waitAdvancing { exists(hasContentDescription(string(R.string.ink_selection_delete))) }
         stroke(line(150f, 220f, 150f, 320f))
@@ -308,11 +308,11 @@ class InkFlowRobolectricTest {
         openNewInkNote()
         val density = composeRule.activity.resources.displayMetrics.density
         for (tool in EditorTool.entries) {
-            composeRule.onNodeWithTag(InkTestTags.tool(tool)).performClick()
+            tap(InkTestTags.tool(tool))
             if (tool == EditorTool.LASSO) { // selection actions appear only with a selection: write, then lasso it
-                composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PEN)).performClick()
+                tap(InkTestTags.tool(EditorTool.PEN))
                 stroke(line(100f, 220f, 200f, 220f), tool = MotionEvent.TOOL_TYPE_STYLUS)
-                composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.LASSO)).performClick()
+                tap(InkTestTags.tool(EditorTool.LASSO))
                 stroke(listOf(80f to 190f, 230f to 190f, 230f to 250f, 80f to 250f, 80f to 192f))
                 waitAdvancing { exists(hasContentDescription(string(R.string.ink_selection_delete))) }
             }

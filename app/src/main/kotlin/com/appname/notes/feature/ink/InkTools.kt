@@ -227,13 +227,15 @@ fun InkToolbar(
                     OptionDivider()
                     RulerButton(ui, actions)
                 }
-                if (onFullScreen != null) {
-                    OptionDivider()
-                    FullScreenButton(entering = true, onClick = onFullScreen)
-                }
             }
             HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            ToolOptionsRow(ui, actions, panelOpen, onPanel)
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (onFullScreen != null) {
+                    FullScreenButton(entering = true, onClick = onFullScreen)
+                    OptionDivider()
+                }
+                ToolOptionsRow(ui, actions, panelOpen, onPanel, Modifier.weight(1f))
+            }
         }
     }
 }

@@ -349,30 +349,6 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 )
                 is InkLoad.Ready -> {
                     InkCanvas(l.session, l.controller, l.pdf, ui, viewModel, onPaste = paste, onView = { canvasView = it })
-                    val editing = textEdit
-                    val view = canvasView
-                    if (editing != null && view != null) {
-                        InlineTextEditor(
-                            request = editing,
-                            view = view,
-                            transformTick = transformTick,
-                            onChange = viewModel::updateTextDraft,
-                            onMove = viewModel::moveTextDraft,
-                            onDone = viewModel::commitText,
-                            onDelete = viewModel::deleteTextDraft,
-                        )
-                    }
-                    pressMenu?.let { m ->
-                        PressAndHoldMenu(
-                            menu = m,
-                            onPaste = { viewModel.pasteFrom(clipContent(context), m.pageId, com.appname.notes.core.ink.geometry.Vec(m.x.toDouble(), m.y.toDouble())) },
-                            onWriteText = viewModel::menuWriteText,
-                            onSelect = viewModel::menuSelect,
-                            onCopy = viewModel::menuCopy,
-                            onDelete = viewModel::menuDelete,
-                            onDismiss = viewModel::dismissPressMenu,
-                        )
-                    }
                     // Recording into this note, and the player for a chip that was tapped.
                     Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp)) {
                         com.appname.notes.feature.audio.RecordingBar(recordingState, viewModel.noteId, onAddMarker = {}, onStop = viewModel::stopRecording)
@@ -447,6 +423,30 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                             actions = toolActions,
                             onClose = { panelOpen = false },
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (fullScreen) 76.dp else 0.dp).widthIn(max = 560.dp),
+                        )
+                    }
+                    val editing = textEdit
+                    val view = canvasView
+                    if (editing != null && view != null) {
+                        InlineTextEditor(
+                            request = editing,
+                            view = view,
+                            transformTick = transformTick,
+                            onChange = viewModel::updateTextDraft,
+                            onMove = viewModel::moveTextDraft,
+                            onDone = viewModel::commitText,
+                            onDelete = viewModel::deleteTextDraft,
+                        )
+                    }
+                    pressMenu?.let { m ->
+                        PressAndHoldMenu(
+                            menu = m,
+                            onPaste = { viewModel.pasteFrom(clipContent(context), m.pageId, com.appname.notes.core.ink.geometry.Vec(m.x.toDouble(), m.y.toDouble())) },
+                            onWriteText = viewModel::menuWriteText,
+                            onSelect = viewModel::menuSelect,
+                            onCopy = viewModel::menuCopy,
+                            onDelete = viewModel::menuDelete,
+                            onDismiss = viewModel::dismissPressMenu,
                         )
                     }
                     if (ui.scrollBar && ui.pageCount > 2) {
