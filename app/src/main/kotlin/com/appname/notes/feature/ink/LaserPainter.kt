@@ -57,14 +57,28 @@ internal class LaserPainter {
                         val a = points[i - 1]
                         val b = points[i]
                         if (a.stroke != b.stroke) continue
-                        val alpha = b.alpha * when (pass) {
+                        val k = when (pass) {
                             0 -> GLOW_ALPHA
                             1 -> 1f
                             else -> CORE_ALPHA
                         }
-                        if (alpha <= 0.01f) continue
-                        line.color = if (pass == 2) (((alpha * 255).toInt()) shl 24) or RGB else colorAt(b.hue, alpha)
-                        canvas.drawLine(a.x, a.y, b.x, b.y, line)
+                        if (maxOf(a.alpha, b.alpha) * k <= 0.01f) continue
+                        // Long segments are split so colour and fade change smoothly instead of in bands.
+                        val len = kotlin.math.hypot(b.x - a.x, b.y - a.y)
+                        val pieces = (len / (w * PIECE)).toInt().coerceIn(1, MAX_PIECES)
+                        // Hue the short way round (350° → 10° goes through red, not back through the rainbow).
+                        var dh = b.hue - a.hue
+                        if (dh > 180f) dh -= 360f
+                        if (dh < -180f) dh += 360f
+                        for (j in 0 until pieces) {
+                            val f0 = j / pieces.toFloat()
+                            val f1 = (j + 1) / pieces.toFloat()
+                            val fm = (f0 + f1) / 2
+                            val alpha = (a.alpha + (b.alpha - a.alpha) * fm) * k
+                            val hue = ((a.hue + dh * fm) % 360f + 360f) % 360f
+                            line.color = if (pass == 2) (((alpha * 255).toInt()) shl 24) or RGB else colorAt(hue, alpha)
+                            canvas.drawLine(a.x + (b.x - a.x) * f0, a.y + (b.y - a.y) * f0, a.x + (b.x - a.x) * f1, a.y + (b.y - a.y) * f1, line)
+                        }
                     }
                 }
                 line.maskFilter = null
@@ -119,5 +133,7 @@ internal class LaserPainter {
         const val HEAD = 0.85f
         const val HEAD_GLOW = 2.2f
         const val GLOW_HEAD_ALPHA = 0x80
+        const val PIECE = 0.75f
+        const val MAX_PIECES = 24
     }
 }
