@@ -537,6 +537,9 @@ class InkEditorViewModel @AssistedInject constructor(
         if (inkSettings.stylusSeen || stylusNoticeShown) return
         stylusNoticeShown = true
         val auto = inkSettings.fingerMode == FingerMode.AUTO
+        // Take effect now (the saved setting arrives a moment later): from here on a finger scrolls.
+        inkSettings = inkSettings.copy(stylusSeen = true)
+        refresh()
         viewModelScope.launch { settings.updateInk { it.copy(stylusSeen = true) } }
         if (auto) _message.value = UserMessage(R.string.ink_stylus_detected)
     }
