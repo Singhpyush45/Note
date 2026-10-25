@@ -46,6 +46,8 @@ internal class LaserPainter {
                 val passes = if (settings.style == LaserStyle.OUTLINE) 3 else 2
                 for (pass in 0 until passes) {
                     line.maskFilter = if (pass == 0) glow else null
+                    // Butt ends: round ends of fading segments would overlap at every joint and show as beads.
+                    line.strokeCap = if (pass == 0) Paint.Cap.ROUND else Paint.Cap.BUTT
                     line.strokeWidth = when (pass) {
                         0 -> w * GLOW_WIDTH
                         1 -> w
@@ -66,6 +68,7 @@ internal class LaserPainter {
                     }
                 }
                 line.maskFilter = null
+                line.strokeCap = Paint.Cap.ROUND
             }
             LaserStyle.DOT -> {
                 // A tail of shrinking dots, about one dot width apart.

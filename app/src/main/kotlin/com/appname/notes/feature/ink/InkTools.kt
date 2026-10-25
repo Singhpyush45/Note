@@ -490,9 +490,11 @@ private fun ToolButton(tool: EditorTool, selected: Boolean, mark: Brush?, onClic
             Box(
                 Modifier
                     .padding(bottom = 2.dp)
-                    .size(width = 14.dp, height = 3.dp)
+                    .size(width = 16.dp, height = 4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(mark),
+                    .background(mark)
+                    // Black ink on a dark bar (or white on a light one) still shows as a bar.
+                    .border(0.5.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
             )
         }
     }
