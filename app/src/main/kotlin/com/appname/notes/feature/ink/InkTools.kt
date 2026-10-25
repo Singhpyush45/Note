@@ -45,6 +45,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -172,8 +173,10 @@ fun InkToolbar(
                     )
                 }
             }
+            // Each tool's options start scrolled to the beginning.
+            val optionsScroll = key(tools.tool) { rememberScrollState() }
             Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp).height(52.dp),
+                Modifier.fillMaxWidth().horizontalScroll(optionsScroll).padding(horizontal = 8.dp).height(52.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
@@ -248,7 +251,14 @@ fun VariationPanel(ui: InkEditorUi, actions: InkToolActions, onClose: () -> Unit
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
             .testTag(InkToolTags.PANEL),
     ) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        // Nearly opaque: the page under the panel (a separate view) can't be blurred, and strokes showing through
+        // would make the previews hard to read.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = PANEL_ALPHA), RoundedCornerShape(24.dp))
+                .padding(vertical = 10.dp),
+        ) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(tool.label()), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
@@ -259,7 +269,13 @@ fun VariationPanel(ui: InkEditorUi, actions: InkToolActions, onClose: () -> Unit
                 }
             }
             // The current set-up, live.
-            StrokePreview(brush, Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(InkPaints.PAPER)),
+            ) { StrokePreview(brush, Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp, vertical = 4.dp)) }
 
             // Variants of this tool (and the pen's markers, the brush's calligraphy …): one tile each.
             val styles = BrushStyle.of(tool)
@@ -355,6 +371,7 @@ private fun VariantTile(style: BrushStyle, current: InkBrush, selected: Boolean,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(84.dp)
+            .height(TILE_HEIGHT)
             .clip(shape)
             .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, shape)
             .clickable(role = Role.RadioButton, onClick = onClick)
@@ -631,3 +648,5 @@ private const val QUICK_COLOURS = 10
 private const val PREVIEW_W = 180f
 private const val PREVIEW_H = 44f
 internal const val HIGHLIGHTER_MAX_OPACITY = 0.7f
+private const val PANEL_ALPHA = 0.97f
+private val TILE_HEIGHT = 96.dp

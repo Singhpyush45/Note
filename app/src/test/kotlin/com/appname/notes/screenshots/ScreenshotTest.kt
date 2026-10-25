@@ -276,6 +276,12 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.LASER)).performClick()
         composeRule.waitForIdle()
         snap("laser_tools_light")
+        // A rainbow trail, mid-gesture (the pointer is still down).
+        composeRule.onNodeWithTag(InkToolTags.LASER_RAINBOW).performClick()
+        composeRule.waitForIdle()
+        laserGesture()
+        snap("laser_rainbow_light")
+        laserGesture(up = true)
         pressBack()
         setTheme(R.string.settings_theme_dark)
         composeRule.onNodeWithText("All brushes").performClick()
@@ -284,6 +290,36 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).performClick()
         waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
         snap("tool_panel_pen_dark")
+    }
+
+    private fun laserGesture(up: Boolean = false) {
+        composeRule.runOnUiThread {
+            fun find(v: android.view.View): com.appname.notes.feature.ink.InkCanvasView? =
+                v as? com.appname.notes.feature.ink.InkCanvasView
+                    ?: (v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { find(g.getChildAt(it)) } }
+            val view = find(composeRule.activity.window.decorView)!!
+            val now = android.os.SystemClock.uptimeMillis()
+            fun send(action: Int, x: Float, y: Float, t: Long) {
+                val props = android.view.MotionEvent.PointerProperties().apply { id = 0; toolType = android.view.MotionEvent.TOOL_TYPE_STYLUS }
+                val coords = android.view.MotionEvent.PointerCoords().apply { this.x = x; this.y = y; pressure = 0.6f }
+                val e = android.view.MotionEvent.obtain(now - 300, t, action, 1, arrayOf(props), arrayOf(coords), 0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_STYLUS, 0)
+                view.dispatchTouchEvent(e)
+                e.recycle()
+            }
+            val n = 40
+            if (up) {
+                send(android.view.MotionEvent.ACTION_UP, view.width * 0.85f, view.height * 0.45f, now)
+                return@runOnUiThread
+            }
+            for (i in 0..n) {
+                val f = i / n.toFloat()
+                val x = view.width * (0.15f + 0.7f * f)
+                val y = view.height * 0.45f + kotlin.math.sin(f * 2 * Math.PI).toFloat() * view.height * 0.12f
+                send(if (i == 0) android.view.MotionEvent.ACTION_DOWN else android.view.MotionEvent.ACTION_MOVE, x, y, now - 300 + i * 300L / n)
+            }
+            view.invalidate()
+        }
+        composeRule.waitForIdle()
     }
 
     private fun pressBackInDialog() {

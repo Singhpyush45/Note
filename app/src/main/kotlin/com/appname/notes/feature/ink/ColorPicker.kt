@@ -194,7 +194,7 @@ fun ColorPickerDialog(
                 .semantics { testTagsAsResourceId = true }
                 .testTag(ColorPickerTags.DIALOG),
         ) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 16.dp)) {
+            Column(Modifier.padding(vertical = 16.dp)) {
                 Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.color_picker_title), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                     Box(
@@ -222,12 +222,15 @@ fun ColorPickerDialog(
                     ) { Text(stringResource(R.string.color_tab_custom)) }
                 }
 
-                if (custom) {
-                    CustomColor(color, onColor = { color = it })
-                } else {
-                    if (recent.isNotEmpty()) Swatches(stringResource(R.string.color_recent), recent, color, onPick = { color = it })
-                    SavedSwatches(saved, color, onPick = { color = it }, onRemove = onRemoveSaved)
-                    ColorPalettes.ALL.forEach { p -> Swatches(stringResource(p.name), p.colors, color, onPick = { color = it }) }
+                // Only the colours scroll; the title, tabs and buttons stay in view.
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                    if (custom) {
+                        CustomColor(color, onColor = { color = it })
+                    } else {
+                        if (recent.isNotEmpty()) Swatches(stringResource(R.string.color_recent), recent, color, onPick = { color = it })
+                        SavedSwatches(saved, color, onPick = { color = it }, onRemove = onRemoveSaved)
+                        ColorPalettes.ALL.forEach { p -> Swatches(stringResource(p.name), p.colors, color, onPick = { color = it }) }
+                    }
                 }
 
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
