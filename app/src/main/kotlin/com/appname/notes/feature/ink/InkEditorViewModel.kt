@@ -1227,7 +1227,7 @@ class InkEditorViewModel @AssistedInject constructor(
 
     private fun copyItems(items: List<InkItem>) {
         if (items.isEmpty()) return
-        InkClipboard.set(noteId, items)
+        InkClipboard.set(noteId.value, items)
         val text = items.filterIsInstance<com.appname.notes.core.ink.model.TextItem>().sortedBy { it.place.cy }.joinToString("\n") { it.text }
         val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
         runCatching { cm?.setPrimaryClip(android.content.ClipData.newPlainText(InkClipboard.LABEL, text)) }
@@ -1251,7 +1251,7 @@ class InkEditorViewModel @AssistedInject constructor(
     private fun pasteItems(pageId: String?, at: Vec?) {
         if (!canInsert()) return
         val source = InkClipboard.items
-        val fromOtherNote = InkClipboard.noteId != noteId
+        val fromOtherNote = InkClipboard.noteId != noteId.value
         viewModelScope.launch {
             // Photos copied from another note get their own copy of the file in this note.
             val items = if (!fromOtherNote) {
