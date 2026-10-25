@@ -248,6 +248,7 @@ class InkEditorViewModel @AssistedInject constructor(
                 InkSession.Page(it.info.id, it.info.template, it.info.width, it.info.height, PageItems.of(it.items), it.info.pdfPageIndex, it.info.layout)
             },
         )
+        val arrangement = (ink.arrangement(noteId) as? AppResult.Success)?.value ?: PageArrangement.DEFAULT
         val pdfDocument = if (note.type == NoteType.PDF) (pdfRepository.document(noteId) as? AppResult.Success)?.value else null
         val pdfRenderer = pdfDocument?.let { doc ->
             PdfPageRenderer(appContext, pdfFiles.file(doc.fileName), logger).also { r ->
@@ -264,7 +265,6 @@ class InkEditorViewModel @AssistedInject constructor(
             it.readOnly = readOnly != null
             it.tools = toolsFrom(inkSettings)
         }
-        val arrangement = (ink.arrangement(noteId) as? AppResult.Success)?.value ?: PageArrangement.DEFAULT
         session.onEdit = { edit ->
             enqueue(Op.Commit(edit))
             extendIfInfinite(edit.pageId)
@@ -275,7 +275,8 @@ class InkEditorViewModel @AssistedInject constructor(
                 title = note.title,
                 readOnly = readOnly,
                 isPdf = note.type == NoteType.PDF,
-                pdfFailed = note.type == NoteType.PDF && pdfRenderer == null,
+                // The renderer may already have reported a missing/damaged file: never undo that.
+                pdfFailed = it.pdfFailed || (note.type == NoteType.PDF && pdfRenderer == null),
                 arrangement = arrangement,
             )
         }
