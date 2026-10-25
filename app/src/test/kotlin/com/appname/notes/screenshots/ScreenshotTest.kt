@@ -262,11 +262,11 @@ abstract class ScreenshotTestBase(private val device: String) {
         snap("tool_panel_pencil_light")
         composeRule.onNodeWithTag(InkToolTags.PANEL_CLOSE).performClick()
         composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.BRUSH)).performClick()
-        composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).performClick()
+        composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
         snap("tool_panel_brush_light")
         composeRule.onNodeWithTag(InkToolTags.PANEL_CLOSE).performClick()
-        composeRule.onNodeWithTag(InkToolTags.MORE_COLORS).performScrollTo().performClick()
+        composeRule.onNodeWithTag(InkToolTags.MORE_COLORS).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         waitAdvancing { exists(hasTestTag(ColorPickerTags.DIALOG)) }
         snap("color_palettes_light")
         composeRule.onNodeWithTag(ColorPickerTags.TAB_CUSTOM).performClick()

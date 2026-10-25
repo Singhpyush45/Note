@@ -217,6 +217,9 @@ fun InkToolbar(
                     inkTool != null -> {
                         // Minimal: three sizes, a few colours, the full palette, and "more options".
                         val brush = tools.brushes[inkTool] ?: tools.brushFor(tools.tool)!!
+                        // Options first, so it's always on screen.
+                        PanelButton(brush.effectiveStyle, panelOpen, onClick = { onPanel(!panelOpen) })
+                        OptionDivider()
                         val base = brush.effectiveStyle.defaultSize
                         listOf(0.6f, 1f, 1.8f).forEachIndexed { i, f ->
                             val size = (base * f * 10).toInt() / 10f
@@ -229,8 +232,6 @@ fun InkToolbar(
                             ColorDot(c, selected = (brush.colorArgb and 0xFFFFFF) == (c and 0xFFFFFF), onClick = { actions.onColor(c) })
                         }
                         MoreColorsButton(actions.onMoreColors)
-                        OptionDivider()
-                        PanelButton(brush.effectiveStyle, panelOpen, onClick = { onPanel(!panelOpen) })
                     }
                     tools.tool == EditorTool.ERASER -> {
                         SingleChoiceSegmentedButtonRow {
@@ -583,7 +584,7 @@ private fun ToolButton(tool: EditorTool, selected: Boolean, ink: Color, rainbow:
 
 @Composable
 private fun OptionDivider() {
-    Box(Modifier.padding(horizontal = 6.dp).size(width = 1.dp, height = 24.dp).background(MaterialTheme.colorScheme.outlineVariant))
+    Box(Modifier.padding(horizontal = 3.dp).size(width = 1.dp, height = 24.dp).background(MaterialTheme.colorScheme.outlineVariant))
 }
 
 /** Opens the tool's options panel (variants, size, opacity, pressure). */
@@ -644,7 +645,7 @@ private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, on
     val colors = MaterialTheme.colorScheme
     Box(
         Modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick)
             .then(if (selected) Modifier.background(colors.secondaryContainer, CircleShape) else Modifier)
@@ -763,7 +764,7 @@ internal fun BrushStyle.label(): Int = when (this) {
 
 private const val OPAQUE = 0xFF shl 24
 private const val QUICK_COLOURS = 10
-private const val BAR_COLOURS = 6
+private const val BAR_COLOURS = 3
 private const val PREVIEW_W = 180f
 private const val PREVIEW_H = 44f
 internal const val HIGHLIGHTER_MAX_OPACITY = 0.7f
