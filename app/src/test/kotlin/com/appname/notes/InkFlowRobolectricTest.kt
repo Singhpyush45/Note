@@ -454,7 +454,7 @@ class InkFlowRobolectricTest {
         tap(InkTestTags.tool(EditorTool.BRUSH))
         tap(InkToolTags.MORE_COLORS)
         waitFor(ColorPickerTags.DIALOG)
-        val neon = ColorPalettes.NEON.colors[3]
+        val neon = ColorPalettes.BASIC.colors[2] // fully on screen without scrolling
         tap(ColorPickerTags.swatch(neon))
         tap(ColorPickerTags.SAVE)
         tap(ColorPickerTags.USE)
