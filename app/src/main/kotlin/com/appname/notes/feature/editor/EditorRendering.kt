@@ -33,6 +33,8 @@ data class EditorStyles(
     val checkedLine: SpanStyle,
     val link: SpanStyle,
     val code: SpanStyle,
+    val table: SpanStyle = SpanStyle(fontFamily = FontFamily.Monospace),
+    val tableBorder: SpanStyle = SpanStyle(),
 ) {
     companion object {
         @Composable
@@ -46,6 +48,8 @@ data class EditorStyles(
             checkedLine = SpanStyle(color = colors.onSurfaceVariant, textDecoration = TextDecoration.LineThrough),
             link = SpanStyle(color = colors.primary, textDecoration = TextDecoration.Underline),
             code = SpanStyle(fontFamily = FontFamily.Monospace, background = colors.surfaceContainerHigh),
+            table = SpanStyle(fontFamily = FontFamily.Monospace, background = colors.surfaceContainerLow),
+            tableBorder = SpanStyle(color = colors.outline),
         )
     }
 }
@@ -102,6 +106,17 @@ internal fun buildDisplayText(state: EditorState, decorations: LineDecorations, 
             val start = state.lineStart(line)
             val end = state.lineEnd(line)
             val contentStart = length
+            val drawn = decorations.drawnContent(line)
+            if (drawn != null) {
+                // A table row: aligned cells in a fixed-width font; the bars in the outline colour; the first row bold.
+                append(drawn)
+                addStyle(styles.table, contentStart - prefix.length, length)
+                if (decorations.isHeaderRow(line)) addStyle(SpanStyle(fontWeight = FontWeight.Bold), contentStart, length)
+                drawn.forEachIndexed { k, ch -> if (ch == '│') addStyle(styles.tableBorder, contentStart + k, contentStart + k + 1) }
+                prefix.forEachIndexed { k, ch -> if (ch == '│') addStyle(styles.tableBorder, contentStart - prefix.length + k, contentStart - prefix.length + k + 1) }
+                addInlineStyles(state, start, end, contentStart, styles, baseDecoration = null) { decorations.drawnColumn(line, it) }
+                continue
+            }
             append(state.text, start, end)
             if (lineStyle != null && end > start) addStyle(lineStyle, contentStart, length)
             addInlineStyles(state, start, end, contentStart, styles, baseDecoration = lineStyle?.textDecoration)
@@ -119,6 +134,8 @@ private fun AnnotatedString.Builder.addInlineStyles(
     outputStart: Int,
     styles: EditorStyles,
     baseDecoration: TextDecoration?,
+    /** Where a stored column of the line is drawn (table rows are padded). */
+    column: (Int) -> Int = { it },
 ) {
     val lineSpans = state.spans.filter { it.start < lineEnd && it.end > lineStart }
     if (lineSpans.isEmpty()) return
@@ -146,6 +163,6 @@ private fun AnnotatedString.Builder.addInlineStyles(
             color = if (SpanType.LINK in active) styles.link.color else Color.Unspecified,
             textDecoration = if (decorations.isEmpty()) null else TextDecoration.combine(decorations),
         )
-        addStyle(style, outputStart + (from - lineStart), outputStart + (to - lineStart))
+        addStyle(style, outputStart + column(from - lineStart), outputStart + column(to - lineStart))
     }
 }

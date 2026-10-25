@@ -32,8 +32,17 @@ object Markdown {
         for (block in document.textBlocks) {
             if (block.text.spans.any { it.style == SpanType.UNDERLINE }) lost += LostFeature.UNDERLINE
             number = if (block.kind == BlockKind.NUMBERED) number + 1 else 0
-            // Lists stay tight; everything else is separated by a blank line so other apps keep paragraphs apart.
-            if (previousKind != null && !(previousKind.isList && block.kind.isList)) out.append('\n')
+            // Lists and tables stay tight; everything else is separated by a blank line so other apps keep paragraphs apart.
+            val tight = (previousKind?.isList == true && block.kind.isList) || (previousKind == BlockKind.TABLE_ROW && block.kind == BlockKind.TABLE_ROW)
+            if (previousKind != null && !tight) out.append('\n')
+            if (block.kind == BlockKind.TABLE_ROW) {
+                // A GitHub-style table row; after the first row of a table, the line that marks it as a table.
+                val cells = cells(block.text)
+                out.append("| ").append(cells.joinToString(" | ") { inline(it).replace("|", "\\|") }).append(" |\n")
+                if (previousKind != BlockKind.TABLE_ROW) out.append("|").append(cells.joinToString("|") { " --- " }).append("|\n")
+                previousKind = block.kind
+                continue
+            }
             val body = inline(block.text)
             when (block.kind) {
                 BlockKind.PARAGRAPH -> out.append(escapeLineStart(body))
@@ -44,6 +53,7 @@ object Markdown {
                 BlockKind.NUMBERED -> out.append(number).append(". ").append(body)
                 BlockKind.CHECKLIST -> out.append(if (block.checked) "- [x] " else "- [ ] ").append(body)
                 BlockKind.QUOTE -> out.append("> ").append(body)
+                BlockKind.TABLE_ROW -> Unit
             }
             out.append('\n')
             previousKind = block.kind
@@ -66,11 +76,31 @@ object Markdown {
                     else -> ""
                 },
             )
-            append(block.text.text)
+            append(if (block.kind == BlockKind.TABLE_ROW) block.text.text.split('\t').joinToString(" | ") else block.text.text)
             if (block.kind == BlockKind.QUOTE) append("”")
             append('\n')
         }
     }.trimEnd() + "\n"
+
+    /** A table row's cells, each with its own styles. */
+    private fun cells(rich: RichText): List<RichText> {
+        val out = ArrayList<RichText>()
+        var start = 0
+        val text = rich.text
+        while (true) {
+            val tab = text.indexOf('\t', start)
+            val end = if (tab < 0) text.length else tab
+            val spans = rich.spans.mapNotNull { s ->
+                val a = maxOf(s.start, start)
+                val b = minOf(s.end, end)
+                if (a < b) s.copy(start = a - start, end = b - start) else null
+            }
+            out += RichText(text.substring(start, end), spans)
+            if (tab < 0) break
+            start = tab + 1
+        }
+        return out
+    }
 
     private val markerOrder = listOf(SpanType.LINK, SpanType.BOLD, SpanType.ITALIC, SpanType.STRIKETHROUGH, SpanType.CODE)
 
@@ -142,6 +172,8 @@ object Markdown {
     private val bulletRegex = Regex("""^\s*[-*+]\s+(.*)$""")
     private val numberedRegex = Regex("""^\s*\d+[.)]\s+(.*)$""")
     private val quoteRegex = Regex("""^\s*>\s?(.*)$""")
+    private val tableRowRegex = Regex("""^\s*\|(.*)\|\s*$""")
+    private val tableRuleRegex = Regex("""^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$""")
 
     /**
      * Parses Markdown into a note. A first-line `# Title` becomes the title (matching [export]);
@@ -164,6 +196,11 @@ object Markdown {
             val raw = lines[index++]
             if (raw.isBlank()) continue
             val line = raw.trimEnd()
+            if (tableRuleRegex.matches(line)) continue
+            tableRowRegex.matchEntire(line)?.let { m ->
+                blocks += TextBlock(id = newId(), kind = BlockKind.TABLE_ROW, text = tableRow(m.groupValues[1]))
+                continue
+            }
             val (kind, content) = classify(line)
             val checked = kind == BlockKind.CHECKLIST && checklistRegex.matchEntire(line)!!.groupValues[1].isNotBlank()
             blocks += TextBlock(id = newId(), kind = kind, text = parseInline(content), checked = checked)
@@ -186,6 +223,39 @@ object Markdown {
         numberedRegex.matchEntire(line)?.let { return BlockKind.NUMBERED to it.groupValues[1] }
         quoteRegex.matchEntire(line)?.let { return BlockKind.QUOTE to it.groupValues[1] }
         return BlockKind.PARAGRAPH to line.trim()
+    }
+
+    /** "a | **b** | c" → cells joined by tabs, each cell's inline Markdown parsed. */
+    private fun tableRow(inner: String): RichText {
+        val cells = ArrayList<String>()
+        val cell = StringBuilder()
+        var i = 0
+        while (i < inner.length) {
+            val c = inner[i]
+            if (c == '\\' && i + 1 < inner.length && inner[i + 1] == '|') {
+                cell.append('|')
+                i += 2
+                continue
+            }
+            if (c == '|') {
+                cells += cell.toString()
+                cell.clear()
+            } else {
+                cell.append(c)
+            }
+            i++
+        }
+        cells += cell.toString()
+        val text = StringBuilder()
+        val spans = ArrayList<StyleSpan>()
+        cells.forEachIndexed { k, raw ->
+            if (k > 0) text.append('\t')
+            val parsed = parseInline(raw.trim().replace("\t", " "))
+            val offset = text.length
+            text.append(parsed.text)
+            parsed.spans.forEach { spans += it.copy(start = it.start + offset, end = it.end + offset) }
+        }
+        return RichText(text.toString(), normalizeSpans(spans))
     }
 
     /** Inline Markdown → text + spans. Unmatched markers are kept as literal characters. */

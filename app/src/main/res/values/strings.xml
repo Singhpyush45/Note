@@ -337,6 +337,16 @@
     <string name="laser_style_dot">Dot</string>
     <string name="ink_selection_delete">Delete selection</string>
     <string name="ink_selection_copy">Copy selection</string>
+    <string name="table_insert">Insert table</string>
+    <string name="clip_page">Clip page</string>
+    <string name="clip_working">Reading the page…</string>
+    <string name="clip_done">Page clipped under the link.</string>
+    <string name="clip_failed">Couldn\'t read that page (offline, or it isn\'t a web page).</string>
+    <string name="table_next_cell">Next cell</string>
+    <string name="table_add_row">Add row</string>
+    <string name="table_add_column">Add column</string>
+    <string name="table_delete_row">Delete row</string>
+    <string name="table_delete_column">Delete column</string>
     <string name="ink_copied">Copied</string>
     <string name="ink_menu_paste">Paste</string>
     <string name="ink_menu_write_text">Write text</string>

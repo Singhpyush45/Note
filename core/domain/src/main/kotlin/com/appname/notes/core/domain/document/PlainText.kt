@@ -18,6 +18,7 @@ fun NoteDocument.preview(maxChars: Int = 300): String {
                 BlockKind.BULLET -> "• $text"
                 BlockKind.NUMBERED -> "$number. $text"
                 BlockKind.CHECKLIST -> if (block.checked) "☑ $text" else "☐ $text"
+                BlockKind.TABLE_ROW -> block.text.text.split('\t').joinToString(" │ ") { it.trim() }
                 else -> text
             }
         }

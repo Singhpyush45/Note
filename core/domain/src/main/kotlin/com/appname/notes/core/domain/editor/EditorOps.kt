@@ -56,6 +56,13 @@ fun EditorState.applyTextChange(
     // --- 2. Special keys.
     val line = lineOf(start)
     val meta = paragraphs[line]
+    if (meta.kind == BlockKind.TABLE_ROW) tableKey(line, removed, inserted, start, oldEnd, newId)?.let { return it }
+    if (removed == "\n" && inserted.isEmpty() && selection.collapsed && selection.start == oldEnd &&
+        paragraphs.getOrNull(line + 1)?.kind == BlockKind.TABLE_ROW
+    ) {
+        // Backspace at the start of a table row: the table stays as it is (rows are removed with "Delete row").
+        return EditResult(copy(composition = null), EditKind.NONE)
+    }
     if (removed.isEmpty() && inserted == "\n" && lineText(line).isEmpty() &&
         (meta.kind.isList || meta.kind == BlockKind.QUOTE)
     ) {
@@ -171,14 +178,14 @@ internal fun shiftSpans(
 }
 
 private fun continuation(kind: BlockKind): BlockKind = when {
-    kind.isList || kind == BlockKind.QUOTE -> kind
+    kind.isList || kind == BlockKind.QUOTE || kind == BlockKind.TABLE_ROW -> kind
     else -> BlockKind.PARAGRAPH
 }
 
 private fun continuationAbove(kind: BlockKind): BlockKind =
     if (kind.isList || kind == BlockKind.QUOTE) kind else BlockKind.PARAGRAPH
 
-private fun <T> List<T>.replaceAt(index: Int, value: T): List<T> = toMutableList().also { it[index] = value }
+internal fun <T> List<T>.replaceAt(index: Int, value: T): List<T> = toMutableList().also { it[index] = value }
 
 // ---------------------------------------------------------------------------------------------
 // Inline styles

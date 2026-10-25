@@ -1,5 +1,12 @@
 package com.appname.notes.feature.editor
 
+import androidx.compose.material.icons.automirrored.outlined.KeyboardTab
+import androidx.compose.material.icons.outlined.TableRows
+import androidx.compose.material.icons.outlined.ViewColumn
+import androidx.compose.material.icons.outlined.PlaylistRemove
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material.icons.outlined.TravelExplore
 import com.appname.notes.core.domain.model.AudioMarker
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.foundation.horizontalScroll
@@ -68,6 +75,8 @@ fun FormatToolbar(
     onRemindTask: (() -> Unit)? = null,
     /** Voice typing (§11); first in the toolbar so it's always visible. */
     onVoiceTyping: (() -> Unit)? = null,
+    /** "Clip page" for a web link (8c). */
+    onClipLink: ((String) -> Unit)? = null,
 ) {
     val active = controller.activeStyles
     val kind = controller.currentKind
@@ -107,6 +116,9 @@ fun FormatToolbar(
                 ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
             } else if (linkUrl != null) {
                 ToolbarIcon(Icons.AutoMirrored.Outlined.OpenInNew, R.string.fmt_open_link) { runCatching { uriHandler.openUri(linkUrl) } }
+                if (onClipLink != null && (linkUrl.startsWith("https://") || linkUrl.startsWith("http://"))) {
+                    ToolbarIcon(Icons.Outlined.TravelExplore, R.string.clip_page, tag = EditorTestTags.CLIP) { onClipLink(linkUrl) }
+                }
                 ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
             } else {
                 ToolbarIcon(Icons.Outlined.Link, R.string.fmt_link, enabled = controller.hasSelection) { showLinkDialog = true }
@@ -125,6 +137,17 @@ fun FormatToolbar(
                 }
             }
             StyleButton(Icons.Outlined.FormatQuote, R.string.fmt_quote, kind == BlockKind.QUOTE) { controller.toggleKind(BlockKind.QUOTE) }
+            VerticalDivider(Modifier.padding(horizontal = 4.dp).height(24.dp))
+            if (controller.inTable) {
+                // In a table: next cell, add/remove rows and columns.
+                ToolbarIcon(Icons.AutoMirrored.Outlined.KeyboardTab, R.string.table_next_cell, tag = EditorTestTags.TABLE_NEXT) { controller.tableNextCell() }
+                ToolbarIcon(Icons.Outlined.TableRows, R.string.table_add_row, tag = EditorTestTags.TABLE_ADD_ROW) { controller.tableAddRow() }
+                ToolbarIcon(Icons.Outlined.ViewColumn, R.string.table_add_column, tag = EditorTestTags.TABLE_ADD_COLUMN) { controller.tableAddColumn() }
+                ToolbarIcon(Icons.Outlined.PlaylistRemove, R.string.table_delete_row) { controller.tableDeleteRow() }
+                ToolbarIcon(Icons.Outlined.DeleteSweep, R.string.table_delete_column) { controller.tableDeleteColumn() }
+            } else {
+                ToolbarIcon(Icons.Outlined.TableChart, R.string.table_insert, tag = EditorTestTags.TABLE_INSERT) { controller.insertTable(3, 3) }
+            }
         }
     }
 
@@ -143,8 +166,8 @@ private fun StyleButton(icon: ImageVector, label: Int, checked: Boolean, onClick
 }
 
 @Composable
-private fun ToolbarIcon(icon: ImageVector, label: Int, enabled: Boolean = true, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = noFocus) {
+private fun ToolbarIcon(icon: ImageVector, label: Int, enabled: Boolean = true, tag: String? = null, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = noFocus.then(if (tag != null) Modifier.testTag(tag) else Modifier)) {
         Icon(icon, contentDescription = stringResource(label))
     }
 }

@@ -137,6 +137,11 @@ object EditorTestTags {
     const val SCREEN = "screen_editor"
     const val TITLE = "editor_title"
     const val BODY = "editor_body"
+    const val TABLE_INSERT = "editor_table_insert"
+    const val CLIP = "editor_clip_page"
+    const val TABLE_NEXT = "editor_table_next"
+    const val TABLE_ADD_ROW = "editor_table_add_row"
+    const val TABLE_ADD_COLUMN = "editor_table_add_column"
     const val STATUS = "editor_status"
     const val TOOLBAR = "editor_toolbar"
     const val REMIND_TASK = "editor_remind_task"
@@ -362,6 +367,7 @@ fun NoteEditorRoute(
             )
         },
         onVoiceTyping = if (editable) viewModel::openVoiceTyping else null,
+        onClipLink = if (editable) viewModel::clipLink else null,
         voicePanel = voicePanel,
         onRemindTask = if (editable) {
             { viewModel.taskAtCursor()?.let(reminderUi::add) ?: Unit }
@@ -461,6 +467,7 @@ fun NoteEditorScreen(
     onRemindTask: (() -> Unit)? = null,
     /** Opens voice typing; null when the note can't be edited. */
     onVoiceTyping: (() -> Unit)? = null,
+    onClipLink: ((String) -> Unit)? = null,
     /** The open voice-typing panel, shown in place of the formatting toolbar. */
     voicePanel: (@Composable (Modifier) -> Unit)? = null,
 ) {
@@ -508,7 +515,7 @@ fun NoteEditorScreen(
             if (voicePanel != null) {
                 voicePanel(Modifier.navigationBarsPadding().imePadding())
             } else if (controller != null && readOnly == null) {
-                FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding(), onAudioMarker = onAudioMarker, onRemindTask = onRemindTask, onVoiceTyping = onVoiceTyping)
+                FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding(), onAudioMarker = onAudioMarker, onRemindTask = onRemindTask, onVoiceTyping = onVoiceTyping, onClipLink = onClipLink)
             }
         },
     ) { padding ->

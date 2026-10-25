@@ -323,6 +323,40 @@ class NoteEditorViewModel @AssistedInject constructor(
         }
     }
 
+    /**
+     * "Clip page" on a link (8c): the page's title and summary go under the line as a quote, its preview picture
+     * becomes an attachment. Only on the user's tap; nothing is fetched otherwise.
+     */
+    fun clipLink(url: String) {
+        if (_readOnly.value != null || controller == null) return
+        viewModelScope.launch {
+            _message.value = UserMessage(R.string.clip_working)
+            val clip = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { WebClipper.fetch(url) }.getOrNull() }
+            if (clip == null) {
+                _message.value = UserMessage(R.string.clip_failed)
+                return@launch
+            }
+            val lines = buildList {
+                add(
+                    com.appname.notes.core.domain.document.BlockKind.QUOTE to com.appname.notes.core.domain.document.RichText(
+                        clip.title,
+                        listOf(com.appname.notes.core.domain.document.StyleSpan(0, clip.title.length, com.appname.notes.core.domain.document.SpanType.BOLD)),
+                    ),
+                )
+                clip.description?.takeIf { it.isNotBlank() }?.let { add(com.appname.notes.core.domain.document.BlockKind.QUOTE to com.appname.notes.core.domain.document.RichText(it)) }
+            }
+            controller?.insertLines(lines)
+            _message.value = UserMessage(R.string.clip_done)
+            val image = clip.imageUrl ?: return@launch
+            val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { WebClipper.download(image, File(System.getProperty("java.io.tmpdir") ?: "/tmp", "clips"), clip.title) }.getOrNull()
+            } ?: return@launch
+            val outcome = attacher.attach(noteId, listOf(Uri.fromFile(file)))
+            file.delete()
+            outcome.errorMessage?.let { _message.value = UserMessage(it) }
+        }
+    }
+
     /** Removes an attachment; the snackbar offers Undo (the file stays until cleanup, so undo is instant). */
     fun renameAttachment(attachment: Attachment, name: String) {
         if (_readOnly.value != null || name.isBlank() || name == attachment.displayName) return

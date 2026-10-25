@@ -58,7 +58,9 @@ internal object BlockSerializer : KSerializer<Block> {
         val obj = jsonDecoder.decodeJsonElement().jsonObject
         val type = (obj[TYPE] as? JsonPrimitive)?.contentOrNull
         return when (type) {
-            TYPE_TEXT -> jsonDecoder.json.decodeFromJsonElement(TextBlock.serializer(), JsonObject(obj - TYPE))
+            // A text block this version can't read (e.g. a kind added later) is kept as it is, read-only.
+            TYPE_TEXT -> runCatching { jsonDecoder.json.decodeFromJsonElement(TextBlock.serializer(), JsonObject(obj - TYPE)) }
+                .getOrElse { UnknownBlock((obj["id"] as? JsonPrimitive)?.contentOrNull ?: "", type, obj) }
             else -> UnknownBlock(
                 id = (obj["id"] as? JsonPrimitive)?.contentOrNull ?: "",
                 type = type ?: "",

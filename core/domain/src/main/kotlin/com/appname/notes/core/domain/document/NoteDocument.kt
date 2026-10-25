@@ -53,6 +53,9 @@ enum class BlockKind {
     @SerialName("numbered") NUMBERED,
     @SerialName("checklist") CHECKLIST,
     @SerialName("quote") QUOTE,
+
+    /** One row of a table (8c): the cells are separated by tab characters; neighbouring rows form one table. */
+    @SerialName("table_row") TABLE_ROW,
     ;
 
     val isList: Boolean get() = this == BULLET || this == NUMBERED || this == CHECKLIST

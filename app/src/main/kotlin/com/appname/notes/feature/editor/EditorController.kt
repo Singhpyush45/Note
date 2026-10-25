@@ -23,6 +23,14 @@ import com.appname.notes.core.domain.editor.setLink
 import com.appname.notes.core.domain.editor.toggleChecked
 import com.appname.notes.core.domain.editor.toggleKind
 import com.appname.notes.core.domain.editor.toggleStyle
+import com.appname.notes.core.domain.editor.inTable
+import com.appname.notes.core.domain.editor.insertLinesAfterCursor
+import com.appname.notes.core.domain.editor.insertTable
+import com.appname.notes.core.domain.editor.tableAddColumn
+import com.appname.notes.core.domain.editor.tableAddRow
+import com.appname.notes.core.domain.editor.tableDeleteColumn
+import com.appname.notes.core.domain.editor.tableDeleteRow
+import com.appname.notes.core.domain.editor.tableNextCell
 
 /**
  * Holds what the user is editing as Compose state and applies edits **synchronously** (a text field
@@ -93,6 +101,25 @@ class EditorController(
     fun toggleKind(kind: BlockKind) = apply(state.toggleKind(kind))
 
     fun toggleChecked(line: Int) = apply(state.toggleChecked(line))
+
+    // Tables (8c)
+    val inTable: Boolean get() = state.inTable
+
+    fun insertTable(rows: Int, cols: Int) = apply(state.insertTable(rows, cols, newId))
+
+    fun tableAddRow() = apply(state.tableAddRow(newId))
+
+    fun tableAddColumn() = apply(state.tableAddColumn(newId))
+
+    fun tableDeleteRow() = apply(state.tableDeleteRow(newId))
+
+    fun tableDeleteColumn() = apply(state.tableDeleteColumn(newId))
+
+    fun tableNextCell() = apply(state.tableNextCell(newId))
+
+    /** Whole lines under the cursor's line (a clipped web page). */
+    fun insertLines(lines: List<Pair<BlockKind, com.appname.notes.core.domain.document.RichText>>) =
+        apply(state.insertLinesAfterCursor(lines, newId))
 
     fun setLink(url: String) = apply(state.setLink(url))
 
