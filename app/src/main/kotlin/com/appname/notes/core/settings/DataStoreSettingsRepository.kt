@@ -59,6 +59,33 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override val ink: Flow<InkSettings> = prefs.map { it.toInk() }.distinctUntilChanged()
 
+    override val noteDefaults: Flow<NoteDefaults> = prefs.map { it.toNoteDefaults() }.distinctUntilChanged()
+
+    override suspend fun updateNoteDefaults(change: (NoteDefaults) -> NoteDefaults): AppResult<Unit> = write { prefs ->
+        val new = change(prefs.toNoteDefaults())
+        prefs[Keys.BLANK_NOTE] = new.blankNote.name
+        prefs[Keys.PAGE_STYLE] = new.pageStyle
+        prefs[Keys.PAGE_FORMAT] = new.pageFormat.name
+        prefs[Keys.PAGE_MODE] = new.pageMode.name
+        prefs[Keys.SCROLL_AXIS] = new.scrollAxis.name
+        prefs[Keys.PAPER_COLOR] = new.paperColor
+        prefs[Keys.DARK_PAPER] = new.darkPaper
+    }
+
+    /** Unknown values (e.g. from a newer version) fall back to the defaults. */
+    private fun Preferences.toNoteDefaults(): NoteDefaults {
+        val d = NoteDefaults()
+        return NoteDefaults(
+            blankNote = BlankNoteKind.entries.firstOrNull { it.name == this[Keys.BLANK_NOTE] } ?: d.blankNote,
+            pageStyle = this[Keys.PAGE_STYLE]?.takeIf { it in NoteDefaults.STYLES } ?: d.pageStyle,
+            pageFormat = com.appname.notes.core.ink.template.PageFormat.entries.firstOrNull { it.name == this[Keys.PAGE_FORMAT] } ?: d.pageFormat,
+            pageMode = com.appname.notes.core.ink.layout.PageMode.entries.firstOrNull { it.name == this[Keys.PAGE_MODE] } ?: d.pageMode,
+            scrollAxis = com.appname.notes.core.ink.layout.ScrollAxis.entries.firstOrNull { it.name == this[Keys.SCROLL_AXIS] } ?: d.scrollAxis,
+            paperColor = this[Keys.PAPER_COLOR] ?: d.paperColor,
+            darkPaper = this[Keys.DARK_PAPER] ?: d.darkPaper,
+        )
+    }
+
     override val documentText: Flow<Boolean> = prefs.map { it[Keys.DOCUMENT_TEXT] ?: true }.distinctUntilChanged()
 
     override suspend fun setDocumentText(enabled: Boolean): AppResult<Unit> = write { it[Keys.DOCUMENT_TEXT] = enabled }
@@ -172,6 +199,13 @@ class DataStoreSettingsRepository @Inject constructor(
         val CORNER = intPreferencesKey("corner_radius")
         val WALLPAPER = stringPreferencesKey("wallpaper")
         val DENSITY = stringPreferencesKey("ui_density")
+        val BLANK_NOTE = stringPreferencesKey("default_blank_note")
+        val PAGE_STYLE = stringPreferencesKey("default_page_style")
+        val PAGE_FORMAT = stringPreferencesKey("default_page_format")
+        val PAGE_MODE = stringPreferencesKey("default_page_mode")
+        val SCROLL_AXIS = stringPreferencesKey("default_scroll_axis")
+        val PAPER_COLOR = intPreferencesKey("default_paper_color")
+        val DARK_PAPER = booleanPreferencesKey("dark_paper")
     }
 
     private companion object {

@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
             val darkTheme = shouldUseDarkTheme(uiState)
             val appearance = (uiState as? MainUiState.Ready)?.appearance ?: AppearanceSettings()
             val wallpaper by viewModel.wallpaper.collectAsStateWithLifecycle()
+            val darkPaper by viewModel.darkPaper.collectAsStateWithLifecycle()
 
             // Draw behind system bars; flip status/nav bar icon colours with the app's theme,
             // which can differ from the system theme when the user forces Light or Dark.
@@ -72,28 +73,32 @@ class MainActivity : ComponentActivity() {
                 cornerRadius = appearance.cornerRadius.dp,
                 density = appearance.density,
             ) {
-                AppBackground(wallpaper) {
-                    // Exposes test tags as resource ids so UiAutomator tests (which run in another process,
-                    // e.g. the process-death tests in :e2e) can find screens and fields.
-                    val shared by viewModel.shared.collectAsStateWithLifecycle()
-                    val context = LocalContext.current
-                    LaunchedEffect(shared) {
-                        when (val s = shared) {
-                            is SharedImport.Importing -> Toast.makeText(context, s.message, Toast.LENGTH_SHORT).show()
-                            is SharedImport.Failed -> {
-                                Toast.makeText(context, s.message, Toast.LENGTH_LONG).show()
-                                viewModel.sharedHandled()
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.appname.notes.feature.ink.LocalDarkPaper provides (darkTheme && darkPaper),
+                ) {
+                    AppBackground(wallpaper) {
+                        // Exposes test tags as resource ids so UiAutomator tests (which run in another process,
+                        // e.g. the process-death tests in :e2e) can find screens and fields.
+                        val shared by viewModel.shared.collectAsStateWithLifecycle()
+                        val context = LocalContext.current
+                        LaunchedEffect(shared) {
+                            when (val s = shared) {
+                                is SharedImport.Importing -> Toast.makeText(context, s.message, Toast.LENGTH_SHORT).show()
+                                is SharedImport.Failed -> {
+                                    Toast.makeText(context, s.message, Toast.LENGTH_LONG).show()
+                                    viewModel.sharedHandled()
+                                }
+                                is SharedImport.Opened -> s.notice?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                                null -> Unit
                             }
-                            is SharedImport.Opened -> s.notice?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
-                            null -> Unit
                         }
+                        val opened = shared as? SharedImport.Opened
+                        NotesApp(
+                            Modifier.semantics { testTagsAsResourceId = true },
+                            openNoteRequest = opened?.let { it.noteId to it.type },
+                            onOpenNoteRequestHandled = viewModel::sharedHandled,
+                        )
                     }
-                    val opened = shared as? SharedImport.Opened
-                    NotesApp(
-                        Modifier.semantics { testTagsAsResourceId = true },
-                        openNoteRequest = opened?.let { it.noteId to it.type },
-                        onOpenNoteRequestHandled = viewModel::sharedHandled,
-                    )
                 }
             }
         }

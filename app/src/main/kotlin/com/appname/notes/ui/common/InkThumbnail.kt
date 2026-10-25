@@ -62,6 +62,8 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
     val bitmapPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
     val templateRenderer = remember { TemplateRenderer() }
+    val darkPaper = com.appname.notes.feature.ink.LocalDarkPaper.current
+    val darkLayer = remember { com.appname.notes.feature.ink.DarkPaper.layerPaint() }
     val pageRect = remember { RectF() }
     Canvas(
         modifier
@@ -72,11 +74,14 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
             .testTag("ink_thumbnail_${note.id.value}"),
     ) {
         val thumbnail = t
-        drawRect(androidx.compose.ui.graphics.Color(thumbnail?.design?.paperColor ?: InkPaints.PAPER))
+        val paper = thumbnail?.design?.paperColor ?: InkPaints.PAPER
+        drawRect(androidx.compose.ui.graphics.Color(if (darkPaper) com.appname.notes.feature.ink.DarkPaper.map(paper) else paper))
         if (thumbnail == null) return@Canvas
         val scale = size.width / thumbnail.width
         drawIntoCanvas { c ->
             val canvas = c.nativeCanvas
+            // Dark paper (dark theme): the page is drawn through the same colour mapping as in the editor.
+            val layer = if (darkPaper) canvas.saveLayer(0f, 0f, size.width, size.height, darkLayer) else -1
             canvas.withScale(scale, scale) {
                 clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
                 thumbnail.design?.let { templateRenderer.drawDesign(this, it, pxPerUnit = scale) }
@@ -89,6 +94,7 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
                     }
                 }
             }
+            if (layer >= 0) canvas.restoreToCount(layer)
         }
     }
 }

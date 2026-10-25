@@ -1,5 +1,6 @@
 package com.appname.notes.screenshots
 
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performScrollToNode
 import com.appname.notes.core.ink.template.HeaderStyle
 import com.appname.notes.core.ink.template.Ruling
@@ -205,6 +206,14 @@ abstract class ScreenshotTestBase(private val device: String) {
         snap("ink_light")
         composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.ERASER)).performClick()
         snap("ink_eraser_tools_light")
+        // Page settings (owner brief §5).
+        composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
+        waitAdvancing { exists(hasTestTag(InkTestTags.PAGE_SETTINGS)) }
+        composeRule.onNodeWithTag(InkTestTags.PAGE_SETTINGS).performClick()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.ink.PageSettingsTags.DIALOG)) }
+        snap("page_settings_light")
+        composeRule.onNodeWithTag(com.appname.notes.feature.ink.PageSettingsTags.DONE).performScrollTo().performClick()
+        waitAdvancing { !exists(hasTestTag(com.appname.notes.feature.ink.PageSettingsTags.DIALOG)) }
         pressBack()
         setTheme(R.string.settings_theme_dark)
         composeRule.onNodeWithText("Physics — waves").performClick()
@@ -244,6 +253,10 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithTag(com.appname.notes.feature.settings.SettingsTestTags.accent(com.appname.notes.core.designsystem.theme.Accent.VIOLET)).performClick()
         waitAdvancing { exists(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.accent(com.appname.notes.core.designsystem.theme.Accent.VIOLET)) and isSelected()) }
         snap("settings_violet_dark")
+        // Note defaults (owner brief §5, §19).
+        composeRule.onNodeWithTag(com.appname.notes.feature.settings.SettingsTestTags.LIST)
+            .performScrollToNode(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.DARK_PAPER))
+        snap("settings_note_defaults_dark")
     }
 
     /** The Choose-template screen, a preview, a note made from a planner, and the custom template editor (§4). */

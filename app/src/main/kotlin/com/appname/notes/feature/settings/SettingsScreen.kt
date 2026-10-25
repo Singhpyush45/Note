@@ -89,6 +89,7 @@ import com.appname.notes.core.designsystem.theme.WallpaperPreset
 import com.appname.notes.core.designsystem.theme.supportsBlur
 import com.appname.notes.core.designsystem.theme.supportsDynamicColor
 import com.appname.notes.core.settings.AppearanceSettings
+import com.appname.notes.core.settings.NoteDefaults
 import com.appname.notes.core.settings.FingerMode
 import com.appname.notes.core.settings.HoldDuration
 import com.appname.notes.core.settings.InkSettings
@@ -139,6 +140,7 @@ fun SettingsRoute(onManageTemplates: () -> Unit = {}, viewModel: SettingsViewMod
         ),
         wallpaperPhoto = wallpaperPhoto,
         onManageTemplates = onManageTemplates,
+        onNoteDefaults = viewModel::onNoteDefaults,
     )
 }
 
@@ -161,6 +163,7 @@ fun SettingsScreen(
     dynamicColorSupported: Boolean = supportsDynamicColor(),
     blurSupported: Boolean = supportsBlur(),
     onManageTemplates: () -> Unit = {},
+    onNoteDefaults: ((NoteDefaults) -> NoteDefaults) -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val saveErrorMessage = stringResource(R.string.settings_save_failed)
@@ -225,6 +228,8 @@ fun SettingsScreen(
                     actions = appearanceActions,
                     wallpaperPhoto = wallpaperPhoto,
                     onManageTemplates = onManageTemplates,
+                    defaults = uiState.defaults,
+                    onNoteDefaults = onNoteDefaults,
                 )
             }
         }
@@ -251,6 +256,8 @@ private fun SettingsList(
     actions: AppearanceActions,
     wallpaperPhoto: ImageBitmap?,
     onManageTemplates: () -> Unit,
+    defaults: NoteDefaults,
+    onNoteDefaults: ((NoteDefaults) -> NoteDefaults) -> Unit,
 ) {
     var pickingWallpaper by rememberSaveable { mutableStateOf(false) }
     var pickingHue by rememberSaveable { mutableStateOf(false) }
@@ -337,6 +344,10 @@ private fun SettingsList(
                     modifier = Modifier.testTag(SettingsTestTags.RESET),
                 )
             }
+        }
+
+        item {
+            NoteDefaultsCard(defaults, onNoteDefaults)
         }
 
         item {
@@ -687,6 +698,14 @@ private fun ThemeMode.shortLabelRes(): Int = when (this) {
 
 object SettingsTestTags {
     const val TEMPLATES = "settings_templates"
+    const val DEFAULTS = "settings_note_defaults"
+    const val DEFAULT_STYLE = "settings_default_style"
+    const val DARK_PAPER = "settings_dark_paper"
+    fun blankNote(k: com.appname.notes.core.settings.BlankNoteKind) = "settings_blank_${k.name.lowercase()}"
+    fun defaultFormat(f: com.appname.notes.core.ink.template.PageFormat) = "settings_format_${f.name.lowercase()}"
+    fun defaultMode(m: com.appname.notes.core.ink.layout.PageMode) = "settings_mode_${m.name.lowercase()}"
+    fun defaultAxis(a: com.appname.notes.core.ink.layout.ScrollAxis) = "settings_axis_${a.name.lowercase()}"
+    fun defaultPaper(i: Int) = "settings_paper_$i"
     const val SCREEN = "screen_settings"
     const val LIST = "settings_list"
     const val DOCUMENT_TEXT = "settings_document_text"

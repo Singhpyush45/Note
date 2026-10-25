@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -170,6 +171,23 @@ class LibraryViewModel @Inject constructor(
         val thumb = InkThumbnail(page.info.width, page.info.height, page.info.template, page.items, pdfPage, page.info.layout)
         synchronized(thumbnails) { thumbnails[key] = thumb }
         return thumb
+    }
+
+    /**
+     * "Blank note" from the + menu: typed or handwritten, as set in Settings › Note defaults; a handwritten one
+     * starts with the default page style, size, paper and arrangement. Returns the note to open.
+     */
+    suspend fun createBlankNote(): Pair<NoteId, NoteType>? {
+        val defaults = settings.noteDefaults.first()
+        if (defaults.blankNote == com.appname.notes.core.settings.BlankNoteKind.TYPED) return createNote()?.let { it to NoteType.TEXT }
+        val notebook = (collection.value as? NoteCollection.InNotebook)?.id
+        return when (val r = ink.createInkNote(notebook, PageTemplate.BLANK, defaults.newPageLayout(), defaults.arrangement)) {
+            is AppResult.Success -> {
+                (collection.value as? NoteCollection.WithTag)?.let { notes.setTags(r.value, setOf(it.id)) }
+                r.value to NoteType.INK
+            }
+            is AppResult.Failure -> { message.value = r.error.toUserMessage(); null }
+        }
     }
 
     suspend fun createNote(): NoteId? {

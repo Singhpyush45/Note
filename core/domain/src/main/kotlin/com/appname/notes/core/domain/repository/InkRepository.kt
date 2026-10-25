@@ -5,6 +5,7 @@ import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.model.NotebookId
 import com.appname.notes.core.ink.edit.InkEdit
 import com.appname.notes.core.ink.model.InkItem
+import com.appname.notes.core.ink.layout.PageArrangement
 import com.appname.notes.core.ink.model.PageTemplate
 import com.appname.notes.core.ink.template.TemplateLayout
 
@@ -45,7 +46,26 @@ interface InkRepository {
      * New handwritten note with one empty page: a plain [template] background, or the [layout] of a chosen
      * template (its size, paper and printed parts; [template] is then ignored).
      */
-    suspend fun createInkNote(notebookId: NotebookId?, template: PageTemplate, layout: TemplateLayout? = null): AppResult<NoteId>
+    suspend fun createInkNote(
+        notebookId: NotebookId?,
+        template: PageTemplate,
+        layout: TemplateLayout? = null,
+        arrangement: PageArrangement = PageArrangement.DEFAULT,
+    ): AppResult<NoteId>
+
+    /** How the note's pages are arranged (split/infinite, vertical/horizontal; owner brief §5). */
+    suspend fun arrangement(noteId: NoteId): AppResult<PageArrangement>
+
+    suspend fun setArrangement(noteId: NoteId, arrangement: PageArrangement): AppResult<Unit>
+
+    /**
+     * Gives every handwriting page (not PDF pages) the size [width] × [height]. A page never becomes smaller
+     * than its ink, so nothing is cut off; designs move and stretch with the page. Returns the changed pages.
+     */
+    suspend fun resizePages(noteId: NoteId, width: Float, height: Float): AppResult<List<InkPageInfo>>
+
+    /** Sets the design (background, paper colour, template) of the given pages; each is fitted to its page's size. */
+    suspend fun setPageLayouts(noteId: NoteId, layouts: Map<String, TemplateLayout>): AppResult<List<InkPageInfo>>
 
     /** All pages of the note in order, each with its ink. */
     suspend fun loadPages(noteId: NoteId): AppResult<List<InkPageContent>>

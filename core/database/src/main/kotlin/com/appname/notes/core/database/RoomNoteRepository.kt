@@ -180,12 +180,14 @@ class RoomNoteRepository(
         val (pages, items) = copyInk(db, source.note.id, newId, ids, now)
         // A PDF copy shares the (never modified) file; it is deleted only when no note uses it.
         val pdf = db.inkDao().pdfDocument(source.note.id)?.copy(noteId = newId, importedAt = now)
+        val settings = db.inkDao().settings(source.note.id)?.copy(noteId = newId, updatedAt = now)
         db.inkDao().insertCopy(
             source.note.copy(id = newId, isPinned = false, createdAt = now, updatedAt = now, trashedAt = null, revision = 1),
             source.tags.map { it.id },
             pages,
             items,
             pdf,
+            settings,
         )
         return NoteId(newId)
     }

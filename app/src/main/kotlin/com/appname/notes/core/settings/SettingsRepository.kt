@@ -16,6 +16,11 @@ interface SettingsRepository {
 
     val ink: Flow<InkSettings>
 
+    /** How new notes start (Settings › Note defaults). */
+    val noteDefaults: Flow<NoteDefaults>
+
+    suspend fun updateNoteDefaults(change: (NoteDefaults) -> NoteDefaults): AppResult<Unit>
+
     /** "Find text in photos and PDFs" (FR-011): extract text on the device for search. On by default. */
     val documentText: Flow<Boolean>
 

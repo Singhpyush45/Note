@@ -19,7 +19,11 @@ import com.appname.notes.core.ink.codec.InkCodec
 import com.appname.notes.core.ink.edit.InkEdit
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.PageSizes
+import com.appname.notes.core.ink.layout.PageArrangement
+import com.appname.notes.core.ink.layout.PageMode
+import com.appname.notes.core.ink.layout.ScrollAxis
 import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.core.database.entity.InkNoteSettingsEntity
 import com.appname.notes.core.ink.template.TemplateJson
 import com.appname.notes.core.ink.template.TemplateLayout
 
@@ -32,7 +36,12 @@ class RoomInkRepository(
 
     private val dao = db.inkDao()
 
-    override suspend fun createInkNote(notebookId: NotebookId?, template: PageTemplate, layout: TemplateLayout?): AppResult<NoteId> =
+    override suspend fun createInkNote(
+        notebookId: NotebookId?,
+        template: PageTemplate,
+        layout: TemplateLayout?,
+        arrangement: PageArrangement,
+    ): AppResult<NoteId> =
         storageCall(logger, "Create handwritten note") {
             val now = clock.now().toEpochMilli()
             val noteId = ids.newId()
@@ -55,6 +64,7 @@ class RoomInkRepository(
                     revision = 1,
                 ),
                 newPage(noteId, index = 0, template, layout, now),
+                if (arrangement == PageArrangement.DEFAULT) null else settingsRow(noteId, arrangement, now),
             )
             NoteId(noteId)
         }
@@ -70,6 +80,73 @@ class RoomInkRepository(
         updatedAt = now,
         layoutJson = layout?.let { TemplateJson.encode(it) },
     )
+
+    private fun settingsRow(noteId: String, a: PageArrangement, now: Long) =
+        InkNoteSettingsEntity(noteId, a.mode.name, a.axis.name, now)
+
+    override suspend fun arrangement(noteId: NoteId): AppResult<PageArrangement> =
+        storageCall(logger, "Load page settings") {
+            dao.settings(noteId.value)?.let { row ->
+                PageArrangement(
+                    // Unknown values (from a newer version) fall back to the original layout.
+                    mode = PageMode.entries.firstOrNull { it.name == row.pageMode } ?: PageMode.SPLIT,
+                    axis = ScrollAxis.entries.firstOrNull { it.name == row.scrollAxis } ?: ScrollAxis.VERTICAL,
+                )
+            } ?: PageArrangement.DEFAULT
+        }
+
+    override suspend fun setArrangement(noteId: NoteId, arrangement: PageArrangement): AppResult<Unit> {
+        val now = clock.now().toEpochMilli()
+        return when (val r = storageCall(logger, "Save page settings") { dao.setSettings(settingsRow(noteId.value, arrangement, now)) }) {
+            is AppResult.Failure -> r
+            is AppResult.Success -> if (r.value) AppResult.Success(Unit) else AppResult.Failure(DomainError.NotFound("Note", noteId.value))
+        }
+    }
+
+    override suspend fun resizePages(noteId: NoteId, width: Float, height: Float): AppResult<List<InkPageInfo>> {
+        require(width > 0f && height > 0f) { "page size must be positive" }
+        val now = clock.now().toEpochMilli()
+        return savePages(noteId, "Resize pages", now) { page ->
+            if (page.pdfPageIndex != null) return@savePages null // a PDF page keeps the document's size
+            // Never smaller than the ink on it: changing the size must not hide anything.
+            val ink = dao.items(page.id).mapNotNull { (InkCodec.decode(it.id, it.z, it.data) as? DecodeResult.Ok)?.item?.bounds() }
+            val w = maxOf(width, ink.maxOfOrNull { it.right.toFloat() } ?: 0f)
+            val h = maxOf(height, ink.maxOfOrNull { it.bottom.toFloat() } ?: 0f)
+            val layout = TemplateJson.decodeOrNull(page.layoutJson)?.resized(w, h)
+            page.copy(width = w, height = h, layoutJson = layout?.let { TemplateJson.encode(it) })
+        }
+    }
+
+    override suspend fun setPageLayouts(noteId: NoteId, layouts: Map<String, TemplateLayout>): AppResult<List<InkPageInfo>> {
+        val now = clock.now().toEpochMilli()
+        return savePages(noteId, "Save page design", now) { page ->
+            val layout = layouts[page.id] ?: return@savePages null
+            if (page.pdfPageIndex != null) return@savePages null
+            val fitted = layout.resized(page.width, page.height)
+            page.copy(template = fitted.basicTemplate.code, layoutJson = TemplateJson.encode(fitted))
+        }
+    }
+
+    /** Applies [change] to the note's pages (null = unchanged) and saves the changed ones in one transaction. */
+    private suspend fun savePages(
+        noteId: NoteId,
+        what: String,
+        now: Long,
+        change: suspend (InkPageEntity) -> InkPageEntity?,
+    ): AppResult<List<InkPageInfo>> {
+        val r = storageCall(logger, what) {
+            val changed = dao.pages(noteId.value).mapNotNull { change(it) }
+            if (changed.isEmpty()) emptyList<InkPageEntity>() to true else changed to dao.updatePages(noteId.value, changed, now)
+        }
+        return when (r) {
+            is AppResult.Failure -> r
+            is AppResult.Success -> if (r.value.second) {
+                AppResult.Success(r.value.first.map { it.toInfo() })
+            } else {
+                AppResult.Failure(DomainError.NotFound("Note", noteId.value))
+            }
+        }
+    }
 
     override suspend fun loadPages(noteId: NoteId): AppResult<List<InkPageContent>> =
         storageCall(logger, "Load handwriting") { dao.pages(noteId.value).map { load(it) } }

@@ -110,6 +110,12 @@ class MainActivityViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, WallpaperSpec.None)
 
+    /** "Dark paper in dark theme" (Settings › Note defaults). */
+    val darkPaper: StateFlow<Boolean> = settingsRepository.noteDefaults
+        .map { it.darkPaper }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     // Eagerly: the splash screen reads `.value` before any UI subscribes.
     val uiState: StateFlow<MainUiState> = settingsRepository.appearance
         .map<AppearanceSettings, MainUiState> { MainUiState.Ready(it) }

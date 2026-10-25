@@ -43,6 +43,8 @@ sealed interface SettingsUiState {
         val showIndexRebuilt: Boolean = false,
         /** True after a picked wallpaper photo couldn't be read, until shown. */
         val showPhotoFailed: Boolean = false,
+        /** How new notes start (owner brief §5, §19). */
+        val defaults: com.appname.notes.core.settings.NoteDefaults = com.appname.notes.core.settings.NoteDefaults(),
     ) : SettingsUiState
 }
 
@@ -69,12 +71,20 @@ class SettingsViewModel @Inject constructor(
 
     val uiState: StateFlow<SettingsUiState> =
         combine(
-            combine(repository.appearance, repository.ink, repository.documentText, ::Triple),
+            combine(repository.appearance, repository.ink, repository.documentText, repository.noteDefaults, ::Inputs),
             saveFailed,
             indexRebuilt,
             photoFailed,
-        ) { (appearance, ink, docText), failed, rebuilt, photo ->
-            SettingsUiState.Ready(appearance, ink, documentText = docText, showSaveError = failed, showIndexRebuilt = rebuilt, showPhotoFailed = photo)
+        ) { inputs, failed, rebuilt, photo ->
+            SettingsUiState.Ready(
+                inputs.appearance,
+                inputs.ink,
+                documentText = inputs.documentText,
+                showSaveError = failed,
+                showIndexRebuilt = rebuilt,
+                showPhotoFailed = photo,
+                defaults = inputs.defaults,
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -149,6 +159,11 @@ class SettingsViewModel @Inject constructor(
         .mapLatest { name -> name?.let { wallpaperPhotos.load(it) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
+    /** Settings › Note defaults. */
+    fun onNoteDefaults(change: (com.appname.notes.core.settings.NoteDefaults) -> com.appname.notes.core.settings.NoteDefaults) {
+        viewModelScope.launch { handle(repository.updateNoteDefaults(change)) }
+    }
+
     fun onShapeCorrectionChanged(enabled: Boolean) {
         viewModelScope.launch { handle(repository.updateInk { it.copy(shapeCorrection = enabled) }) }
     }
@@ -196,3 +211,10 @@ class SettingsViewModel @Inject constructor(
         const val STOP_TIMEOUT_MS = 5_000L
     }
 }
+
+private data class Inputs(
+    val appearance: AppearanceSettings,
+    val ink: InkSettings,
+    val documentText: Boolean,
+    val defaults: com.appname.notes.core.settings.NoteDefaults,
+)

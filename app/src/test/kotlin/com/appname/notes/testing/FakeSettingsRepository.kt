@@ -40,6 +40,13 @@ class FakeSettingsRepository(initial: AppearanceSettings = AppearanceSettings())
     override suspend fun updateInk(change: (InkSettings) -> InkSettings): AppResult<Unit> =
         write { inkSettings.value = change(inkSettings.value) }
 
+    val defaults = MutableStateFlow(com.appname.notes.core.settings.NoteDefaults())
+    override val noteDefaults: Flow<com.appname.notes.core.settings.NoteDefaults> = defaults
+
+    override suspend fun updateNoteDefaults(
+        change: (com.appname.notes.core.settings.NoteDefaults) -> com.appname.notes.core.settings.NoteDefaults,
+    ): AppResult<Unit> = write { defaults.value = change(defaults.value) }
+
     override suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit> =
         write { librarySettings.value = librarySettings.value.copy(sort = sort) }
 

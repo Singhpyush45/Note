@@ -173,7 +173,7 @@ fun LibraryRoute(
         selectedNoteId = selectedNoteId,
         onOpenNote = onOpenNote,
         create = CreateActions(
-            blankNote = { scope.launch { viewModel.createNote()?.let { onOpenNote(it, NoteType.TEXT) } } },
+            blankNote = { scope.launch { viewModel.createBlankNote()?.let { (id, type) -> onOpenNote(id, type) } } },
             chooseTemplate = {
                 val c = state.collection
                 onChooseTemplate((c as? NoteCollection.InNotebook)?.id?.value, (c as? NoteCollection.WithTag)?.id?.value)

@@ -29,6 +29,8 @@ import com.appname.notes.core.ink.input.LiveStroke
 import com.appname.notes.core.ink.input.PointerSource
 import com.appname.notes.core.ink.input.Response
 import com.appname.notes.core.ink.input.Sample
+import com.appname.notes.core.ink.layout.PageArrangement
+import com.appname.notes.core.ink.layout.PageMode
 import com.appname.notes.core.ink.layout.PageStack
 import com.appname.notes.core.ink.layout.Viewport
 import com.appname.notes.core.ink.layout.ViewportRules
@@ -97,6 +99,24 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     private val rules = ViewportRules(actualSize = 160.0 / 96 * density, margin = (12 * density).toDouble())
     private var stack = PageStack(emptyList())
     private var pageSizesKey: List<Pair<Float, Float>> = emptyList()
+
+    /** Split or infinite, vertical or horizontal (owner brief §5). Changing it re-lays the pages out. */
+    var arrangement: PageArrangement = PageArrangement.DEFAULT
+        set(value) {
+            if (field == value) return
+            field = value
+            pageSizesKey = emptyList() // forces a new stack
+            viewport = null
+            refresh()
+        }
+
+    /** Pages shown as dark paper (dark theme, display only). */
+    var darkPaper: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            surface.invalidate()
+        }
     private var viewport: Viewport? = null
     private var pendingState: InkViewState? = null
 
@@ -172,7 +192,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         val sizes = s.pages.map { it.width to it.height }
         if (sizes != pageSizesKey) {
             pageSizesKey = sizes
-            stack = PageStack(sizes)
+            stack = PageStack(sizes, arrangement.axis, arrangement.gap)
             viewport?.let { viewport = rules.clamp(it, width.toDouble(), height.toDouble(), stack) }
         }
         renderer.retain(s.pages.flatMap { p -> p.items.items.map { it.id } }.toSet())
@@ -185,7 +205,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         get() {
             val v = viewport ?: return pendingState
             val c = v.toWorld(Vec(width / 2.0, height / 2.0))
-            return InkViewState(c.x, c.y, v.scale / rules.fitScale(width.toDouble(), stack))
+            return InkViewState(c.x, c.y, v.scale / rules.fitScale(width.toDouble(), stack, height.toDouble()))
         }
         set(value) {
             pendingState = value
@@ -202,7 +222,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         if (stack.count == 0) return
         val w = width.toDouble()
         val h = height.toDouble()
-        val page = rules.currentPage(v, h, stack)
+        val page = rules.currentPage(v, h, stack, w)
         viewport = when (mode) {
             FitMode.WIDTH -> rules.fitWidth(page, w, h, stack)
             FitMode.PAGE -> rules.fitPage(page, w, h, stack)
@@ -236,7 +256,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         viewport = if (state == null) {
             rules.initial(w, h, stack)
         } else {
-            val s = rules.fitScale(w, stack) * state.zoom
+            val s = rules.fitScale(w, stack, h) * state.zoom
             rules.clamp(Viewport(s, w / 2 - state.centerX * s, h / 2 - state.centerY * s), w, h, stack)
         }
         pendingPage?.let { page ->
@@ -248,7 +268,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     private fun reportPage() {
         val v = viewport ?: return
-        val page = rules.currentPage(v, height.toDouble(), stack)
+        val page = rules.currentPage(v, height.toDouble(), stack, width.toDouble())
         if (page != reportedPage) {
             reportedPage = page
             listener?.onPageChanged(page)
@@ -448,7 +468,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         val c = controller ?: return
         val s = session ?: return
         val v = viewport ?: return
-        val page = stack.pageAt(v.toWorld(Vec(e.getX(index).toDouble(), e.getY(index).toDouble())).y)
+        val page = stack.pageAt(v.toWorld(Vec(e.getX(index).toDouble(), e.getY(index).toDouble())))
         if (page < 0) return
         mode = Mode.INK
         inkPointer = e.getPointerId(index)
@@ -507,7 +527,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 if (ink != null && brush != null && e != null && v != null && inkPage >= 0) {
                     val toPage = Matrix().also { pageToScreen(inkPage, v).invert(it) }
                     ink.maskPath = outsidePage(inkPage, v)
-                    liveStroke = ink.startStroke(e, inkPointer, InkEngine.brush(brush), toPage)
+                    // Dark paper: the live layer can't be filtered, so its colour is mapped the same way here.
+                    val shown = if (darkPaper) brush.copy(colorArgb = DarkPaper.map(brush.colorArgb)) else brush
+                    liveStroke = ink.startStroke(e, inkPointer, InkEngine.brush(shown), toPage)
                 }
             }
             LiveStroke.CANCEL -> {
@@ -685,6 +707,8 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         private val tileRect = RectF()
         private val inverse = Matrix()
         private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+        private val darkLayer = DarkPaper.layerPaint()
+        private val layerRect = RectF()
 
         /** The PDF page under page [page]: best cached bitmap now, plus a sharp detail tile when zoomed in. */
         private fun drawPdfPage(canvas: Canvas, page: InkSession.Page, m: Matrix, scale: Float) {
@@ -721,7 +745,18 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             for (i in stack.visible(v.visibleWorld(width.toDouble(), height.toDouble()))) {
                 val page = s.pages.getOrNull(i) ?: continue
                 val m = pageToScreen(i, v)
-                renderer.drawPaper(canvas, page.width, page.height, page.template, m, shadow, page.layout)
+                // Dark paper: the page (paper, PDF, ink) is drawn through the colour filter; selection marks are not.
+                val layer = if (darkPaper) {
+                    layerRect.set(0f, 0f, page.width, page.height)
+                    m.mapRect(layerRect)
+                    layerRect.inset(-shadow * 2, -shadow * 2)
+                    canvas.saveLayer(layerRect, darkLayer)
+                } else {
+                    -1
+                }
+                // Infinite mode: no paper edge shadow, so the joined pages read as one surface.
+                val edge = if (arrangement.mode == PageMode.INFINITE) 0f else shadow
+                renderer.drawPaper(canvas, page.width, page.height, page.template, m, edge, page.layout)
                 drawPdfPage(canvas, page, m, v.scale.toFloat())
                 val editing = selection != null && selection.pageId == page.id && liveMatrix != null
                 renderer.drawInk(
@@ -736,6 +771,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 if (c.activePageId == page.id) {
                     c.shapePreview?.let { renderer.drawInk(canvas, listOf(it), page.width, page.height, m) }
                     if (inProgress == null) c.liveStroke()?.let { (brush, points) -> renderer.drawLive(canvas, brush, points, m) }
+                }
+                if (layer >= 0) canvas.restoreToCount(layer)
+                if (c.activePageId == page.id) {
                     if (c.lassoPath.isNotEmpty()) {
                         renderer.drawLasso(canvas, c.lassoPath.map { toScreen(i, v, it) }, density)
                     }

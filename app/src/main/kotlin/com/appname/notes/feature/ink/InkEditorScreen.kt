@@ -118,6 +118,8 @@ object InkTestTags {
     fun pageCell(index: Int) = "ink_page_cell_$index"
     const val EXPORT_PROGRESS = "ink_export_progress"
     const val PDF_FAILED = "ink_pdf_failed"
+    const val PAGE_SETTINGS = "ink_page_settings"
+    const val EXPORT_NOTE_PDF = "ink_export_note_pdf"
     fun tool(tool: EditorTool) = "ink_tool_${tool.name.lowercase()}"
 }
 
@@ -133,6 +135,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     var renaming by rememberSaveable { mutableStateOf(false) }
     var confirmDeletePage by remember { mutableStateOf(false) }
     var showPages by rememberSaveable { mutableStateOf(false) }
+    var pageSettings by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val shareTitle = stringResource(R.string.pdf_share_title)
     LaunchedEffect(ui.shareRequest) {
@@ -167,7 +170,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 onRename = { renaming = true },
                 onAddPage = viewModel::addPage,
                 onDeletePage = { confirmDeletePage = true },
-                onTemplate = viewModel::setTemplate,
+                onPageSettings = { pageSettings = true },
                 onTrash = { scope.launch { if (viewModel.moveToTrash()) onClose() } },
                 onExportPdf = { exportLauncher.launch(viewModel.exportFileName()) },
                 onSharePdf = viewModel::sharePdf,
@@ -281,6 +284,23 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onDismiss = { confirmDeletePage = false },
         )
     }
+    if (pageSettings && ready != null) {
+        PageSettingsDialog(
+            arrangement = ui.arrangement,
+            format = ui.pageFormat,
+            design = ui.pageDesign,
+            darkPaper = ui.darkPaper,
+            isPdf = ui.isPdf,
+            actions = PageSettingsActions(
+                onArrangement = viewModel::setArrangement,
+                onFormat = viewModel::setPageFormat,
+                onBackground = viewModel::setBackground,
+                onPaperColor = viewModel::setPaperColor,
+                onDarkPaper = viewModel::setDarkPaper,
+            ),
+            onDismiss = { pageSettings = false },
+        )
+    }
 }
 
 @Composable
@@ -292,6 +312,8 @@ private fun InkCanvas(
     viewModel: InkEditorViewModel,
 ) {
     val background = MaterialTheme.colorScheme.surfaceContainerHigh.toArgb()
+    // Dark paper only in dark theme, and only if the user wants it (Settings / page settings).
+    val darkPaper = ui.darkPaper && com.appname.notes.core.designsystem.theme.LocalDarkTheme.current
     val description = stringResource(R.string.ink_canvas_description, ui.currentPage + 1, ui.pageCount.coerceAtLeast(1))
     AndroidView(
         factory = { context ->
@@ -312,6 +334,8 @@ private fun InkCanvas(
             view.backgroundArgb = background
             view.contentDescription = description
             view.pdf = pdf
+            view.arrangement = ui.arrangement
+            view.darkPaper = darkPaper
             view.bind(session, controller)
             ui.scrollRequest?.let {
                 view.scrollToPage(it.page)
@@ -337,7 +361,7 @@ private fun InkTopBar(
     onRename: () -> Unit,
     onAddPage: () -> Unit,
     onDeletePage: () -> Unit,
-    onTemplate: (PageTemplate) -> Unit,
+    onPageSettings: () -> Unit,
     onTrash: () -> Unit,
     onExportPdf: () -> Unit,
     onSharePdf: () -> Unit,
@@ -347,7 +371,6 @@ private fun InkTopBar(
     reminderButton: @Composable () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
-    var templates by remember { mutableStateOf(false) }
     val editable = ready && ui.readOnly == null
     TopAppBar(
         navigationIcon = {
@@ -388,16 +411,17 @@ private fun InkTopBar(
                         DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_width)) }, onClick = { menu = false; onFit(FitMode.WIDTH) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_page)) }, onClick = { menu = false; onFit(FitMode.PAGE) })
                         HorizontalDivider()
-                        if (ui.isPdf) {
-                            // Exporting only reads the note, so it works for read-only notes too.
+                        // Exporting only reads the note, so it works for read-only notes too. A PDF note exports an
+                        // annotated copy of the document; a handwritten note becomes a PDF with its pages as set.
+                        run {
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.pdf_export)) },
+                                text = { Text(stringResource(if (ui.isPdf) R.string.pdf_export else R.string.ink_export_pdf)) },
                                 enabled = !ui.exporting && !ui.pdfFailed,
                                 onClick = { menu = false; onExportPdf() },
                                 modifier = Modifier.testTag(InkTestTags.EXPORT_PDF),
                             )
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.pdf_share)) },
+                                text = { Text(stringResource(if (ui.isPdf) R.string.pdf_share else R.string.ink_share_pdf)) },
                                 enabled = !ui.exporting && !ui.pdfFailed,
                                 onClick = { menu = false; onSharePdf() },
                                 modifier = Modifier.testTag(InkTestTags.SHARE_PDF),
@@ -406,10 +430,17 @@ private fun InkTopBar(
                         if (editable && !ui.isPdf) {
                             // A PDF's pages come from the document, so they can't be added, deleted or re-templated.
                             DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_add)) }, onClick = { menu = false; onAddPage() })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_template)) }, onClick = { menu = false; templates = true })
                             if (ui.pageCount > 1) {
                                 DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_delete)) }, onClick = { menu = false; onDeletePage() })
                             }
+                        }
+                        if (editable) {
+                            // Layout and scroll direction apply to PDF notes too; size and paper only to handwriting.
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.page_settings_title)) },
+                                onClick = { menu = false; onPageSettings() },
+                                modifier = Modifier.testTag(InkTestTags.PAGE_SETTINGS),
+                            )
                         }
                         if (editable || ui.isPdf) HorizontalDivider()
                         if (ui.readOnly != ReadOnlyReason.IN_TRASH) {
@@ -420,9 +451,6 @@ private fun InkTopBar(
             }
         },
     )
-    if (templates) {
-        TemplateDialog(ui.currentTemplate, onPick = { onTemplate(it); templates = false }, onDismiss = { templates = false })
-    }
 }
 
 // ---------------------------------------------------------------- toolbar
@@ -616,28 +644,6 @@ private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss
         },
         confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text(stringResource(R.string.action_rename)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
-    )
-}
-
-@Composable
-private fun TemplateDialog(current: PageTemplate, onPick: (PageTemplate) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.ink_page_template)) },
-        text = {
-            Column {
-                PageTemplate.entries.forEach { t ->
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onPick(t) }.padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = t == current, onClick = { onPick(t) })
-                        Text(stringResource(t.label()))
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 

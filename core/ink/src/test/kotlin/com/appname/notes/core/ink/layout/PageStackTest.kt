@@ -88,4 +88,46 @@ class PageStackTest {
         assertEquals(h - 16, bottom, 1e-6)
         assertEquals(1, rules.currentPage(v, h, stack))
     }
+
+    // ------------------------------------------------------------ horizontal scrolling and infinite mode (§5)
+
+    private val across = PageStack(listOf(794f to 1123f, 1123f to 794f, 794f to 1123f), axis = ScrollAxis.HORIZONTAL, gap = 24.0)
+
+    @Test
+    fun `side by side pages go left to right and are centred top to bottom`() {
+        assertEquals(0.0, across.left(0), 0.0)
+        assertEquals(818.0, across.left(1), 0.0)
+        assertEquals(1965.0, across.left(2), 0.0)
+        assertEquals(1965.0 + 794, across.width, 0.0)
+        assertEquals(1123.0, across.height, 0.0)
+        assertEquals((1123.0 - 794) / 2, across.top(1), 0.0) // the landscape page sits in the middle
+        assertEquals(1, across.pageAt(Vec(1000.0, 0.0)))
+        assertEquals(0, across.pageAt(Vec(800.0, 500.0))) // gap, closer to page 0
+        assertEquals(2, across.pageAt(Vec(99999.0, 0.0)))
+        assertEquals(1..2, across.visible(Rect(900.0, 0.0, 2000.0, 100.0)))
+    }
+
+    @Test
+    fun `side by side a whole page fits the screen and the first page starts at the left`() {
+        val v = rules.initial(1080.0, 2000.0, across)
+        assertEquals(minOf((1080.0 - 32) / 1123, (2000.0 - 32) / 1123), v.scale, 1e-9)
+        assertEquals(16.0, v.dx, 1e-9)
+        // Centred vertically: the stack is shorter than the screen.
+        assertEquals((2000.0 - 1123 * v.scale) / 2, v.dy, 1e-6)
+        val second = rules.scrollTo(v, 1, 1080.0, 2000.0, across)
+        assertEquals(16.0, second.toScreen(Vec(across.left(1), 0.0)).x, 1e-6)
+        assertEquals(1, rules.currentPage(second, 2000.0, across, 1080.0))
+        // Scrolled to the very end, the last page is current.
+        val end = rules.pan(v, -1e6, 0.0, 1080.0, 2000.0, across)
+        assertEquals(2, rules.currentPage(end, 2000.0, across, 1080.0))
+    }
+
+    @Test
+    fun `infinite mode joins the pages without gaps`() {
+        val arrangement = PageArrangement(PageMode.INFINITE, ScrollAxis.VERTICAL)
+        val joined = PageStack(listOf(794f to 1123f, 794f to 1123f), arrangement.axis, arrangement.gap)
+        assertEquals(1123.0, joined.top(1), 0.0)
+        assertEquals(2246.0, joined.height, 0.0)
+        assertEquals(PageStack.GAP, PageArrangement.DEFAULT.gap, 0.0)
+    }
 }

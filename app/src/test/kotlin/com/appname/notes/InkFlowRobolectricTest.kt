@@ -1,5 +1,13 @@
 package com.appname.notes
 
+import androidx.compose.ui.test.performScrollTo
+import com.appname.notes.core.ink.template.PageDesign
+import com.appname.notes.core.ink.template.SpacingPreset
+import com.appname.notes.core.ink.template.Ruling
+import com.appname.notes.core.ink.template.PageFormat
+import com.appname.notes.core.ink.layout.PageMode
+import com.appname.notes.core.ink.layout.ScrollAxis
+import com.appname.notes.feature.ink.PageSettingsTags
 import com.appname.notes.feature.templates.TemplatesTestTags
 import android.os.Looper
 import android.os.SystemClock
@@ -349,5 +357,57 @@ class InkFlowRobolectricTest {
         composeRule.onNodeWithText(string(R.string.ink_page_delete)).performClick()
         composeRule.onNodeWithText(string(R.string.action_delete)).performClick()
         waitAdvancing { pages().size == 1 }
+    }
+
+    // ------------------------------------------------------------ page settings (owner brief §5)
+
+    private fun openPageSettings() {
+        composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
+        composeRule.onNodeWithTag(InkTestTags.PAGE_SETTINGS).performClick()
+        waitFor(PageSettingsTags.DIALOG)
+    }
+
+    private fun tapOption(tag: String) {
+        waitFor(tag)
+        composeRule.onNodeWithTag(tag).performScrollTo().performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Test
+    fun pageSettingsChangeTheNote() {
+        openNewInkNote()
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+        openPageSettings()
+        tapOption(PageSettingsTags.axis(ScrollAxis.HORIZONTAL))
+        tapOption(PageSettingsTags.format(PageFormat.A4_LANDSCAPE))
+        tapOption(PageSettingsTags.ruling(Ruling.GRID))
+        tapOption(PageSettingsTags.spacing(SpacingPreset.WIDE))
+        tapOption(PageSettingsTags.paper(1, 0))
+        tapOption(PageSettingsTags.DONE)
+
+        waitAdvancing { runBlocking { data.ink().arrangement(inkNote()) }.let { it is AppResult.Success && it.value.axis == ScrollAxis.HORIZONTAL } }
+        waitAdvancing { pages().single().info.width == 1123f }
+        waitAdvancing { pages().single().info.layout?.paperColor == PageDesign.PALETTES[1].colors[0] }
+        val page = pages().single()
+        assertThat(page.info.layout!!.paper).isEqualTo(PageDesign.paperFor(Ruling.GRID, SpacingPreset.WIDE))
+        assertThat(page.info.template).isEqualTo(PageTemplate.GRID)
+        assertThat(page.items).hasSize(1) // the writing is untouched
+    }
+
+    @Test
+    fun infiniteScrollAddsAPageWhenTheLastOneIsWrittenOn() {
+        openNewInkNote()
+        openPageSettings()
+        tapOption(PageSettingsTags.mode(PageMode.INFINITE))
+        tapOption(PageSettingsTags.DONE)
+        waitAdvancing { runBlocking { data.ink().arrangement(inkNote()) }.let { it is AppResult.Success && it.value.mode == PageMode.INFINITE } }
+        assertThat(pages()).hasSize(1) // an empty note stays one page
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { pages().size == 2 }
+        // The new page continues the design and size of the one before.
+        assertThat(pages()[1].info.width).isEqualTo(pages()[0].info.width)
+        assertThat(pages()[1].info.template).isEqualTo(pages()[0].info.template)
+        assertThat(pages()[1].items).isEmpty()
     }
 }

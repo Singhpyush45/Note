@@ -77,3 +77,23 @@ class InkItemEntity(
     /** InkCodec bytes (starts with its own format version). */
     @ColumnInfo(typeAffinity = ColumnInfo.BLOB) val data: ByteArray,
 )
+
+/**
+ * How a handwritten note's pages are arranged (schema v9, owner brief §5): split or infinite, vertical or
+ * horizontal. A separate table (one row per note) so the notes table and its search index stay untouched.
+ * No row = the original layout (split, vertical).
+ */
+@Entity(
+    tableName = "ink_note_settings",
+    foreignKeys = [
+        ForeignKey(entity = NoteEntity::class, parentColumns = ["id"], childColumns = ["noteId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class InkNoteSettingsEntity(
+    @PrimaryKey val noteId: String,
+    /** PageMode name. */
+    val pageMode: String,
+    /** ScrollAxis name. */
+    val scrollAxis: String,
+    val updatedAt: Long,
+)

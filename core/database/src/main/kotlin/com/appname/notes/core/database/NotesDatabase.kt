@@ -14,6 +14,7 @@ import com.appname.notes.core.database.dao.TextIndexDao
 import com.appname.notes.core.database.dao.ReminderDao
 import com.appname.notes.core.database.dao.TemplateDao
 import com.appname.notes.core.database.entity.CustomTemplateEntity
+import com.appname.notes.core.database.entity.InkNoteSettingsEntity
 import com.appname.notes.core.database.entity.ReminderEntity
 import com.appname.notes.core.database.entity.AttachmentEntity
 import com.appname.notes.core.database.entity.InkItemEntity
@@ -38,16 +39,18 @@ import com.appname.notes.core.database.entity.TextIndexJobEntity
  * - v6 (Phase 5): attachments.durationMs (nullable) for recordings. Generated migration.
  * - v7 (Phase 5): reminders. New table only; generated migration.
  * - v8 (Phase 6): custom_templates; ink_pages.layoutJson (nullable). Generated migration.
+ * - v9 (Phase 6): ink_note_settings (page arrangement per note). New table only; generated migration.
  */
 @Database(
     entities = [
         NotebookEntity::class, NoteEntity::class, NoteFtsEntity::class, TagEntity::class, NoteTagCrossRef::class,
         InkPageEntity::class, InkItemEntity::class, PdfDocumentEntity::class, AttachmentEntity::class,
         ExtractedTextEntity::class, ExtractedTextFtsEntity::class, TextIndexJobEntity::class, ReminderEntity::class, CustomTemplateEntity::class,
+        InkNoteSettingsEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9)],
 )
 abstract class NotesDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao

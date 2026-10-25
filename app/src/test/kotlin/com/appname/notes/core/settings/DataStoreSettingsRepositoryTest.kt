@@ -129,4 +129,38 @@ class DataStoreSettingsRepositoryTest {
         assertThat((null as String?).toThemeMode()).isEqualTo(ThemeMode.SYSTEM)
         ThemeMode.entries.forEach { assertThat(it.name.toThemeMode()).isEqualTo(it) }
     }
+
+    @Test
+    fun `note defaults are saved, read back, and unknown values fall back`() = testScope.runTest {
+        val job = Job()
+        val store = openStore(job)
+        val repo = DataStoreSettingsRepository(store, NoOpLogger)
+        assertThat(repo.noteDefaults.first()).isEqualTo(NoteDefaults())
+        val mine = NoteDefaults(
+            blankNote = BlankNoteKind.HANDWRITING,
+            pageStyle = "basic.grid_narrow",
+            pageFormat = com.appname.notes.core.ink.template.PageFormat.LONG_20_9,
+            pageMode = com.appname.notes.core.ink.layout.PageMode.INFINITE,
+            scrollAxis = com.appname.notes.core.ink.layout.ScrollAxis.HORIZONTAL,
+            paperColor = 0xFFFFF8E7.toInt(),
+            darkPaper = false,
+        )
+        assertThat(repo.updateNoteDefaults { mine }).isEqualTo(AppResult.Success(Unit))
+        assertThat(repo.noteDefaults.first()).isEqualTo(mine)
+        // A style that isn't a Basic template (or a value from a newer version) falls back to the default.
+        store.edit {
+            it[stringPreferencesKey("default_page_style")] = "planners.weekly"
+            it[stringPreferencesKey("default_page_mode")] = "SPIRAL"
+        }
+        val read = repo.noteDefaults.first()
+        assertThat(read.pageStyle).isEqualTo(NoteDefaults.DEFAULT_STYLE)
+        assertThat(read.pageMode).isEqualTo(com.appname.notes.core.ink.layout.PageMode.SPLIT)
+        // The first page of a new blank note uses the style, size and paper.
+        val page = mine.newPageLayout()
+        assertThat(page.width).isEqualTo(794f)
+        assertThat(page.height).isEqualTo(com.appname.notes.core.ink.template.PageFormat.LONG_20_9.height)
+        assertThat(page.paperColor).isEqualTo(0xFFFFF8E7.toInt())
+        assertThat(page.paper.spacing).isEqualTo(16f)
+        job.cancelAndJoin()
+    }
 }

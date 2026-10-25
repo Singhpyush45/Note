@@ -150,6 +150,13 @@ class InkSession(pages: List<Page>, historyLimit: Int = UndoHistory.DEFAULT_LIMI
         notifyChanged()
     }
 
+    /** Changes pages' size or design (page settings); their ink is untouched. */
+    fun updatePages(change: (Page) -> Page) {
+        pages = pages.map { p -> change(p).copy(id = p.id, items = p.items) }
+        version++
+        notifyChanged()
+    }
+
     fun setTemplate(pageId: String, template: PageTemplate) {
         pages = pages.map { if (it.id == pageId) it.copy(template = template, layout = null) else it }
         version++

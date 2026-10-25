@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -51,6 +52,7 @@ class TemplatesViewModel @AssistedInject constructor(
     private val templates: TemplateRepository,
     private val ink: InkRepository,
     private val notes: NoteRepository,
+    private val settings: com.appname.notes.core.settings.SettingsRepository,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -81,7 +83,9 @@ class TemplatesViewModel @AssistedInject constructor(
     /** Makes a handwritten note from [template] and returns it to open; null (with a message) if that failed. */
     suspend fun use(template: TemplateDefinition): NoteId? {
         val notebook = notebookId.ifEmpty { null }?.let(::NotebookId)
-        return when (val r = ink.createInkNote(notebook, PageTemplate.BLANK, template.layout)) {
+        // The template sets the page size and design; the arrangement (split/infinite, direction) is the default.
+        val arrangement = settings.noteDefaults.first().arrangement
+        return when (val r = ink.createInkNote(notebook, PageTemplate.BLANK, template.layout, arrangement)) {
             is AppResult.Success -> {
                 tagId.ifEmpty { null }?.let { notes.setTags(r.value, setOf(TagId(it))) }
                 r.value

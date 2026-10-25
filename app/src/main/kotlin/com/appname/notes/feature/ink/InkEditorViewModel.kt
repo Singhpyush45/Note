@@ -36,7 +36,14 @@ import com.appname.notes.core.ink.input.InkInputController
 import com.appname.notes.core.ink.input.InkToolState
 import com.appname.notes.core.ink.model.InkBrush
 import com.appname.notes.core.ink.model.InkTool
+import com.appname.notes.core.ink.layout.PageArrangement
+import com.appname.notes.core.ink.layout.PageMode
 import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.core.ink.template.PageDesign
+import com.appname.notes.core.ink.template.PageFormat
+import com.appname.notes.core.ink.template.Ruling
+import com.appname.notes.core.ink.template.SpacingPreset
+import com.appname.notes.core.ink.template.TemplateLayout
 import com.appname.notes.core.settings.FingerMode
 import com.appname.notes.core.settings.InkSettings
 import com.appname.notes.core.settings.SettingsRepository
@@ -87,6 +94,13 @@ data class InkEditorUi(
     /** The PDF file can't be displayed (missing or damaged). The ink is still there. */
     val pdfFailed: Boolean = false,
     val exporting: Boolean = false,
+    /** Page settings (owner brief §5): how pages are arranged, their size, and the shown page's design. */
+    val arrangement: PageArrangement = PageArrangement.DEFAULT,
+    /** The note's page size; null for PDF notes (their pages keep the document's size). */
+    val pageFormat: PageFormat? = null,
+    val pageDesign: TemplateLayout? = null,
+    /** Dark paper in dark theme (a global setting, shown in page settings too). */
+    val darkPaper: Boolean = true,
 )
 
 data class ScrollRequest(val page: Int, val id: Long = System.nanoTime())
@@ -174,6 +188,10 @@ class InkEditorViewModel @AssistedInject constructor(
         ) : Op
         data class DeletePage(val pageId: String, val result: CompletableDeferred<AppResult<Unit>>) : Op
         data class SetTemplate(val pageId: String, val template: PageTemplate) : Op
+
+        /** A page-settings change; failures are reported like any other save. */
+        data class Run(val what: suspend () -> AppResult<*>) : Op
+        data class Resize(val width: Float, val height: Float, val result: CompletableDeferred<AppResult<List<InkPageInfo>>>) : Op
     }
 
     private val queue = Channel<Op>(Channel.UNLIMITED)
@@ -212,6 +230,9 @@ class InkEditorViewModel @AssistedInject constructor(
                 refresh()
             }
         }
+        viewModelScope.launch {
+            settings.noteDefaults.collect { d -> _ui.update { it.copy(darkPaper = d.darkPaper) } }
+        }
         appScope.launch { drainQueue() }
     }
 
@@ -243,9 +264,21 @@ class InkEditorViewModel @AssistedInject constructor(
             it.readOnly = readOnly != null
             it.tools = toolsFrom(inkSettings)
         }
-        session.onEdit = { edit -> enqueue(Op.Commit(edit)) }
+        val arrangement = (ink.arrangement(noteId) as? AppResult.Success)?.value ?: PageArrangement.DEFAULT
+        session.onEdit = { edit ->
+            enqueue(Op.Commit(edit))
+            extendIfInfinite(edit.pageId)
+        }
         session.onChanged = { refresh() }
-        _ui.update { it.copy(title = note.title, readOnly = readOnly, isPdf = note.type == NoteType.PDF, pdfFailed = note.type == NoteType.PDF && pdfRenderer == null) }
+        _ui.update {
+            it.copy(
+                title = note.title,
+                readOnly = readOnly,
+                isPdf = note.type == NoteType.PDF,
+                pdfFailed = note.type == NoteType.PDF && pdfRenderer == null,
+                arrangement = arrangement,
+            )
+        }
         _load.value = InkLoad.Ready(session, controller, pdfRenderer)
         // Opened from a search hit: show that PDF page first.
         if (initialPdfPage >= 0) {
@@ -264,10 +297,14 @@ class InkEditorViewModel @AssistedInject constructor(
         val c = controller() ?: return
         _ui.update { ui ->
             val page = ui.currentPage.coerceIn(0, (s.pages.size - 1).coerceAtLeast(0))
+            val shown = s.pages.getOrNull(page)
+            val firstInk = s.pages.firstOrNull { it.pdfPageIndex == null }
             ui.copy(
                 pageCount = s.pages.size,
                 currentPage = page,
-                currentTemplate = s.pages.getOrNull(page)?.template ?: PageTemplate.BLANK,
+                currentTemplate = shown?.template ?: PageTemplate.BLANK,
+                pageDesign = shown?.takeIf { it.pdfPageIndex == null }?.let { PageDesign.current(it.layout, it.template, it.width, it.height) },
+                pageFormat = if (ui.isPdf) null else firstInk?.let { PageFormat.closest(it.width, it.height) },
                 canUndo = s.canUndo && ui.readOnly == null,
                 canRedo = s.canRedo && ui.readOnly == null,
                 tools = c.tools,
@@ -302,6 +339,8 @@ class InkEditorViewModel @AssistedInject constructor(
             is Op.AddPage -> op.result.complete(retrying { ink.addPage(noteId, op.index, op.template, op.layout) })
             is Op.DeletePage -> op.result.complete(retrying { ink.deletePage(op.pageId) })
             is Op.SetTemplate -> retrying { ink.setTemplate(op.pageId, op.template) }
+            is Op.Run -> retrying { op.what() }
+            is Op.Resize -> op.result.complete(retrying { ink.resizePages(noteId, op.width, op.height) })
         }
     }
 
@@ -338,8 +377,44 @@ class InkEditorViewModel @AssistedInject constructor(
 
     private var pdfDocument: PdfDocumentInfo? = null
 
-    /** Suggested file name for "Export annotated PDF". */
-    fun exportFileName(): String = "${_ui.value.title.ifBlank { pdfDocument?.displayName?.removeSuffix(".pdf") ?: "PDF" }} (annotated).pdf"
+    /** Suggested file name: "… (annotated).pdf" for a PDF note, the note's title for a handwritten one. */
+    fun exportFileName(): String =
+        if (pdfDocument == null) {
+            "${_ui.value.title.ifBlank { appContext.getString(R.string.ink_untitled) }}.pdf"
+        } else {
+            "${_ui.value.title.ifBlank { pdfDocument?.displayName?.removeSuffix(".pdf") ?: "PDF" }} (annotated).pdf"
+        }
+
+    /** Every page of a handwritten note as exported, snapshotted on the main thread. */
+    private fun exportPages(s: InkSession): List<ExportPage> =
+        s.pages.map { ExportPage(it.width, it.height, it.template, it.layout, it.items.items) }
+
+    /** What an export writes, taken on the main thread (page lists are immutable, so this is cheap and safe). */
+    private sealed interface ExportData {
+        data class Annotated(val doc: PdfDocumentInfo, val ink: Map<Int, List<InkItem>>) : ExportData
+        data class Handwriting(val pages: List<ExportPage>) : ExportData
+    }
+
+    private fun exportData(s: InkSession): ExportData =
+        pdfDocument?.let { ExportData.Annotated(it, inkByPdfPage(s)) } ?: ExportData.Handwriting(exportPages(s))
+
+    /** Writes the export for this note: an annotated copy of the PDF, or the handwriting as a new PDF. */
+    private suspend fun writeExport(data: ExportData, open: () -> OutputStream?): Boolean = when (data) {
+        is ExportData.Annotated -> writeAnnotated(data.doc, data.ink, open)
+        is ExportData.Handwriting -> withContext(dispatchers.io) {
+            try {
+                val out = open() ?: return@withContext false
+                out.use { InkPdfWriter.write(data.pages, it) }
+                true
+            } catch (e: IOException) {
+                logger.warn(TAG, "Note PDF export failed", e)
+                false
+            } catch (e: SecurityException) {
+                logger.warn(TAG, "Note PDF export not permitted", e)
+                false
+            }
+        }
+    }
 
     /** Ink per PDF page, snapshotted on the main thread (page lists are immutable, so this is cheap and safe). */
     private fun inkByPdfPage(s: InkSession): Map<Int, List<InkItem>> =
@@ -369,13 +444,13 @@ class InkEditorViewModel @AssistedInject constructor(
 
     /** "Export annotated PDF": [target] comes from the system "save as" screen. */
     fun exportPdf(target: Uri) {
-        val doc = pdfDocument ?: return
-        val ink = inkByPdfPage(session() ?: return)
+        val data = exportData(session() ?: return)
         _ui.update { it.copy(exporting = true) }
         appScope.launch {
-            val ok = writeAnnotated(doc, ink) { appContext.contentResolver.openOutputStream(target, "wt") }
+            val ok = writeExport(data) { appContext.contentResolver.openOutputStream(target, "wt") }
             _ui.update { it.copy(exporting = false) }
-            _message.value = UserMessage(if (ok) R.string.pdf_exported else R.string.pdf_export_failed)
+            val done = if (data is ExportData.Annotated) R.string.pdf_exported else R.string.ink_pdf_exported
+            _message.value = UserMessage(if (ok) done else R.string.pdf_export_failed)
         }
     }
 
@@ -384,14 +459,13 @@ class InkEditorViewModel @AssistedInject constructor(
      * FileProvider, so only the app the user picks can read it, and only that file.
      */
     fun sharePdf() {
-        val doc = pdfDocument ?: return
-        val ink = inkByPdfPage(session() ?: return)
+        val data = exportData(session() ?: return)
         val name = exportFileName().replace(UNSAFE_FILE_CHARS, "_").take(MAX_FILE_NAME)
         _ui.update { it.copy(exporting = true) }
         appScope.launch {
             val dir = File(appContext.cacheDir, SHARE_DIR)
             val file = File(dir, name)
-            val ok = writeAnnotated(doc, ink) {
+            val ok = writeExport(data) {
                 dir.mkdirs()
                 // Earlier shares are removed once the receiving app has had plenty of time to read them.
                 val old = System.currentTimeMillis() - SHARE_KEEP_MS
@@ -412,8 +486,12 @@ class InkEditorViewModel @AssistedInject constructor(
 
     fun onPageChanged(index: Int) {
         _ui.update { ui ->
-            val template = session()?.pages?.getOrNull(index)?.template ?: ui.currentTemplate
-            ui.copy(currentPage = index, currentTemplate = template)
+            val p = session()?.pages?.getOrNull(index)
+            ui.copy(
+                currentPage = index,
+                currentTemplate = p?.template ?: ui.currentTemplate,
+                pageDesign = p?.takeIf { it.pdfPageIndex == null }?.let { PageDesign.current(it.layout, it.template, it.width, it.height) },
+            )
         }
     }
 
@@ -528,17 +606,23 @@ class InkEditorViewModel @AssistedInject constructor(
         val s = session() ?: return
         if (_ui.value.readOnly != null || _ui.value.isPdf) return
         val index = (_ui.value.currentPage + 1).coerceAtMost(s.pages.size)
-        val template = _ui.value.currentTemplate
-        // A page made from a template is followed by another page of the same design (and size).
-        val layout = s.pages.getOrNull(_ui.value.currentPage)?.layout
+        appendPage(index, scroll = true)
+    }
+
+    /** Adds a page after [index]: same size and design as the page before it (a template repeats). */
+    private fun appendPage(index: Int, scroll: Boolean): kotlinx.coroutines.Job? {
+        val s = session() ?: return null
+        val before = s.pages.getOrNull(index - 1) ?: s.pages.lastOrNull() ?: return null
+        val template = before.template
+        val layout = PageDesign.current(before.layout, before.template, before.width, before.height)
         val result = CompletableDeferred<AppResult<InkPageInfo>>()
         enqueue(Op.AddPage(index, template, layout, result))
-        viewModelScope.launch {
+        return viewModelScope.launch {
             when (val r = result.await()) {
                 is AppResult.Success -> {
                     val info = r.value
                     s.insertPage(info.index, InkSession.Page(info.id, info.template, info.width, info.height, PageItems.EMPTY, layout = info.layout))
-                    _ui.update { it.copy(scrollRequest = ScrollRequest(info.index)) }
+                    if (scroll) _ui.update { it.copy(scrollRequest = ScrollRequest(info.index)) }
                     refresh()
                 }
                 is AppResult.Failure -> Unit // message already shown by the queue
@@ -568,6 +652,70 @@ class InkEditorViewModel @AssistedInject constructor(
         s.setTemplate(page.id, template)
         enqueue(Op.SetTemplate(page.id, template))
         _ui.update { it.copy(currentTemplate = template) }
+    }
+
+    // ---------------------------------------------------------------- page settings (owner brief §5)
+
+    private val canChangePages: Boolean get() = _ui.value.readOnly == null
+
+    fun setArrangement(arrangement: PageArrangement) {
+        if (!canChangePages || arrangement == _ui.value.arrangement) return
+        _ui.update { it.copy(arrangement = arrangement) }
+        enqueue(Op.Run { ink.setArrangement(noteId, arrangement) })
+        if (arrangement.mode == PageMode.INFINITE) session()?.pages?.lastOrNull()?.let { extendIfInfinite(it.id) }
+    }
+
+    /** Every handwriting page gets [format]'s size (never smaller than its ink). Not for PDF notes. */
+    fun setPageFormat(format: PageFormat) {
+        val s = session() ?: return
+        if (!canChangePages || _ui.value.isPdf || format == _ui.value.pageFormat) return
+        controller()?.clearSelection()
+        val result = CompletableDeferred<AppResult<List<InkPageInfo>>>()
+        enqueue(Op.Resize(format.width, format.height, result))
+        viewModelScope.launch {
+            val r = result.await() as? AppResult.Success ?: return@launch
+            val byId = r.value.associateBy { it.id }
+            s.updatePages { p -> byId[p.id]?.let { p.copy(width = it.width, height = it.height, layout = it.layout) } ?: p }
+            refresh()
+        }
+    }
+
+    /** A plain background with [preset] spacing on the shown page or all pages. Replaces template designs. */
+    fun setBackground(ruling: Ruling, preset: SpacingPreset, allPages: Boolean) =
+        changeDesigns(allPages) { PageDesign.withBackground(it, ruling, preset) }
+
+    fun setPaperColor(color: Int, allPages: Boolean) = changeDesigns(allPages) { PageDesign.withPaperColor(it, color) }
+
+    private fun changeDesigns(allPages: Boolean, change: (TemplateLayout) -> TemplateLayout) {
+        val s = session() ?: return
+        if (!canChangePages || _ui.value.isPdf) return
+        val shownId = s.pages.getOrNull(_ui.value.currentPage)?.id ?: return
+        val targets = s.pages.filter { it.pdfPageIndex == null && (allPages || it.id == shownId) }
+        val layouts = targets.associate { p -> p.id to change(PageDesign.current(p.layout, p.template, p.width, p.height)) }
+        s.updatePages { p -> layouts[p.id]?.let { p.copy(layout = it, template = it.basicTemplate) } ?: p }
+        enqueue(Op.Run { ink.setPageLayouts(noteId, layouts) })
+        refresh()
+    }
+
+    fun setDarkPaper(enabled: Boolean) {
+        viewModelScope.launch { settings.updateNoteDefaults { it.copy(darkPaper = enabled) } }
+    }
+
+    /** Infinite mode: writing on the last page adds an empty one after it, so the surface keeps growing. */
+    private var extending = false
+
+    private fun extendIfInfinite(pageId: String) {
+        val s = session() ?: return
+        if (_ui.value.arrangement.mode != PageMode.INFINITE || _ui.value.isPdf || extending) return
+        val last = s.pages.lastOrNull() ?: return
+        if (last.id != pageId || last.items.items.isEmpty()) return
+        extending = true
+        val job = appendPage(s.pages.size, scroll = false)
+        // One page at a time: the next can be added once this one is in (or failed).
+        viewModelScope.launch {
+            job?.join()
+            extending = false
+        }
     }
 
     fun rename(title: String) {

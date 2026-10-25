@@ -101,7 +101,6 @@ class PdfFlowRobolectricTest {
         composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
         composeRule.waitForIdle()
         assertThat(exists(hasText(string(R.string.ink_page_add)))).isFalse()
-        assertThat(exists(hasText(string(R.string.ink_page_template)))).isFalse()
         assertThat(exists(hasText(string(R.string.ink_page_delete)))).isFalse()
         assertThat(exists(hasTestTag(InkTestTags.EXPORT_PDF) and isNotEnabled())).isTrue()
         assertThat(exists(hasTestTag(InkTestTags.EXPORT_PDF) and isEnabled())).isFalse()

@@ -217,4 +217,28 @@ class NotesFlowRobolectricTest {
         val saved = allNotes().single { it.title == "Algebra" }
         assertThat(saved.notebookTitle).isEqualTo("Maths")
     }
+
+    /** Settings › Note defaults: Blank note can open as handwriting with the default page (owner brief §19). */
+    @Test
+    fun blankNoteOpensAsHandwritingWithTheDefaultPage() {
+        val defaults = com.appname.notes.core.settings.NoteDefaults(
+            blankNote = com.appname.notes.core.settings.BlankNoteKind.HANDWRITING,
+            pageStyle = "basic.dot",
+            pageFormat = com.appname.notes.core.ink.template.PageFormat.A4_LANDSCAPE,
+            pageMode = com.appname.notes.core.ink.layout.PageMode.INFINITE,
+            scrollAxis = com.appname.notes.core.ink.layout.ScrollAxis.HORIZONTAL,
+        )
+        runBlocking { data.settings().updateNoteDefaults { defaults } }
+        openCreateMenu()
+        composeRule.onNodeWithTag(LibraryTestTags.NEW_NOTE).performClick()
+        waitFor(com.appname.notes.feature.ink.InkTestTags.CANVAS)
+        waitAdvancing { allNotes().size == 1 }
+        val note = allNotes().single()
+        assertThat(note.type).isEqualTo(com.appname.notes.core.domain.model.NoteType.INK)
+        val page = (runBlocking { data.ink().loadPages(note.id) } as com.appname.notes.core.common.result.AppResult.Success).value.single().info
+        assertThat(page.width).isEqualTo(1123f)
+        assertThat(page.layout).isEqualTo(defaults.newPageLayout())
+        val arrangement = (runBlocking { data.ink().arrangement(note.id) } as com.appname.notes.core.common.result.AppResult.Success).value
+        assertThat(arrangement).isEqualTo(defaults.arrangement)
+    }
 }
