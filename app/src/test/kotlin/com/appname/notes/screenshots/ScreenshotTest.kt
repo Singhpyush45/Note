@@ -52,6 +52,9 @@ import com.appname.notes.core.ink.model.StrokeItem
 import com.appname.notes.core.ink.model.StrokePoints
 import com.appname.notes.feature.editor.EditorTestTags
 import com.appname.notes.feature.ink.InkTestTags
+import com.appname.notes.feature.ink.InkToolTags
+import com.appname.notes.feature.ink.ColorPickerTags
+import com.appname.notes.core.ink.model.BrushStyle
 import com.appname.notes.feature.library.LibraryTestTags
 import com.appname.notes.feature.search.SearchTestTags
 import com.google.common.truth.Truth.assertThat
@@ -220,6 +223,72 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithText("Physics — waves").performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
         snap("ink_dark")
+    }
+
+    /** Every pen, pencil and brush variant (owner brief §12), one wavy stroke each, in a grid of 4 columns. */
+    private fun seedVariants(): com.appname.notes.core.domain.model.NoteId = runBlocking {
+        val ink = data.ink()
+        val noteId = ink.createInkNote(null, PageTemplate.BLANK).getOrNull()!!
+        data.notes().setTitle(noteId, "All brushes")
+        val page = (ink.loadPages(noteId) as AppResult.Success).value.first().info.id
+        val colours = listOf(0xFF1F1F1F, 0xFF1A73E8, 0xFFD93025, 0xFF188038, 0xFF9334E6, 0xFFE8710A, 0xFF795548, 0xFF12B5CB).map { it.toInt() }
+        val items = BrushStyle.entries.mapIndexed { i, style ->
+            val col = i % 4
+            val row = i / 4
+            val b = StrokePoints.Builder(hasPressure = true, hasTilt = false, hasOrientation = false)
+            for (k in 0..40) {
+                val t = k / 40f
+                val x = 40f + col * 190f + t * 150f
+                val y = 70f + row * 130f + kotlin.math.sin(t * 2 * Math.PI).toFloat() * 28f
+                b.add(x, y, k * 8, 0.25f + 0.7f * kotlin.math.sin(t * Math.PI).toFloat())
+            }
+            val colour = if (style.tool == InkTool.HIGHLIGHTER) (0x66 shl 24) or 0xFFEB3B else colours[row % colours.size]
+            InkCodec.quantize(StrokeItem(id(), i.toLong() + 1, InkBrush(style.tool, colour, style.defaultSize, style), b.build()))
+        }
+        ink.commit(page, InkEdit(emptyList(), items))
+        noteId
+    }
+
+    @Test
+    fun captureTools() {
+        seedVariants()
+        waitAdvancing { exists(hasText("All brushes")) }
+        composeRule.onNodeWithText("All brushes").performClick()
+        waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
+        snap("brushes_light")
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PENCIL)).performClick()
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PENCIL)).performClick()
+        waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
+        snap("tool_panel_pencil_light")
+        composeRule.onNodeWithTag(InkToolTags.PANEL_CLOSE).performClick()
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.BRUSH)).performClick()
+        composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).performClick()
+        waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
+        snap("tool_panel_brush_light")
+        composeRule.onNodeWithTag(InkToolTags.PANEL_CLOSE).performClick()
+        composeRule.onNodeWithTag(InkToolTags.MORE_COLORS).performScrollTo().performClick()
+        waitAdvancing { exists(hasTestTag(ColorPickerTags.DIALOG)) }
+        snap("color_palettes_light")
+        composeRule.onNodeWithTag(ColorPickerTags.TAB_CUSTOM).performClick()
+        composeRule.waitForIdle()
+        snap("color_custom_light")
+        pressBackInDialog()
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.LASER)).performClick()
+        composeRule.waitForIdle()
+        snap("laser_tools_light")
+        pressBack()
+        setTheme(R.string.settings_theme_dark)
+        composeRule.onNodeWithText("All brushes").performClick()
+        waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
+        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PEN)).performClick()
+        composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).performClick()
+        waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
+        snap("tool_panel_pen_dark")
+    }
+
+    private fun pressBackInDialog() {
+        composeRule.onNodeWithText(string(R.string.action_cancel)).performClick()
+        waitAdvancing { !exists(hasTestTag(ColorPickerTags.DIALOG)) }
     }
 
     protected fun pressBack() {

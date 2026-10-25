@@ -27,7 +27,6 @@ import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.Brush as BrushIcon
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Create
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -541,7 +540,7 @@ private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, on
 private fun EditorTool.icon(): ImageVector = when (this) {
     EditorTool.PEN -> Icons.Outlined.Edit
     EditorTool.MARKER -> Icons.Outlined.BorderColor
-    EditorTool.PENCIL -> Icons.Outlined.Create
+    EditorTool.PENCIL -> InkIcons.Pencil
     EditorTool.BRUSH -> Icons.Outlined.BrushIcon
     EditorTool.HIGHLIGHTER -> InkIcons.Highlighter
     EditorTool.ERASER -> InkIcons.Eraser

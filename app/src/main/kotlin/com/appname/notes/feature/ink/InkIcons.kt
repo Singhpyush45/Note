@@ -77,6 +77,17 @@ internal object InkIcons {
         }
     }
 
+    /** A wooden pencil: sharpened tip with its graphite point, body, metal band and rubber end. */
+    val Pencil: ImageVector by lazy {
+        icon("InkPencil") {
+            moveTo(3f, 21f); lineTo(4.6f, 16.2f); lineTo(15.2f, 5.6f); lineTo(18.4f, 8.8f); lineTo(7.8f, 19.4f); close()
+            moveTo(4.6f, 16.2f); lineTo(7.8f, 19.4f)
+            moveTo(3.4f, 19.8f); lineTo(4.2f, 20.6f)
+            moveTo(13.6f, 7.2f); lineTo(16.8f, 10.4f)
+            moveTo(15.2f, 5.6f); lineTo(17f, 3.8f); curveTo(17.6f, 3.2f, 18.6f, 3.2f, 19.2f, 3.8f); lineTo(20.2f, 4.8f); curveTo(20.8f, 5.4f, 20.8f, 6.4f, 20.2f, 7f); lineTo(18.4f, 8.8f)
+        }
+    }
+
     /** A pointer pen sending out a beam that ends in a glowing dot: the laser pointer. */
     val Laser: ImageVector by lazy {
         icon("InkLaser") {
