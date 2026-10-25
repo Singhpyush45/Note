@@ -708,4 +708,6 @@
     <string name="lasso_free">Free</string>
     <string name="lasso_box">Box</string>
     <string name="shape_gradient">Gradient</string>
+    <string name="insert_audio_file">Audio file</string>
+    <string name="audio_player_close">Close player</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.appname.notes.core.ink.edit
 
+import com.appname.notes.core.ink.model.AudioItem
 import com.appname.notes.core.ink.model.Placement
 import com.appname.notes.core.ink.model.TextItem
 import com.appname.notes.core.ink.model.ImageItem
@@ -85,6 +86,8 @@ fun InkItem.transformed(t: Similarity): InkItem {
         is ShapeItem -> copy(brush = brush, geometry = geometry.transformed(t), source = source?.transformed(t))
         is ImageItem -> copy(place = place.transformed(t))
         is TextItem -> copy(brush = brush, place = place.transformed(t))
+        // A player chip moves and turns but keeps its size (it's a control, not a drawing).
+        is AudioItem -> copy(place = place.transformed(t).copy(width = place.width, height = place.height))
     }
 }
 
@@ -124,6 +127,7 @@ fun InkItem.flipped(horizontal: Boolean, axis: Double): InkItem {
             if (horizontal) it else it.copy(place = it.place.copy(rotationDeg = (it.place.rotationDeg + 180f) % 360f))
         }
         is TextItem -> copy(place = mirrorPlace(place, horizontal, axis))
+        is AudioItem -> copy(place = mirrorPlace(place, horizontal, axis))
     }
 }
 

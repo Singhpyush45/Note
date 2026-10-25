@@ -163,6 +163,9 @@ class InkEditorViewModel @AssistedInject constructor(
     @param:ApplicationContext private val appContext: Context,
     reminderFactory: com.appname.notes.feature.reminders.NoteReminders.Factory,
     private val attacher: com.appname.notes.feature.attachments.Attacher,
+    private val recordings: com.appname.notes.feature.audio.RecordingController,
+    private val attachmentRepo: com.appname.notes.core.domain.repository.AttachmentRepository,
+    private val attachmentStore: com.appname.notes.feature.attachments.AttachmentFileStore,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -391,6 +394,7 @@ class InkEditorViewModel @AssistedInject constructor(
     }
 
     override fun onCleared() {
+        playback.release()
         // Let the worker finish what's queued, then stop.
         queue.close()
         (_load.value as? InkLoad.Ready)?.pdf?.close()
@@ -795,9 +799,11 @@ class InkEditorViewModel @AssistedInject constructor(
                     val size = kotlinx.coroutines.withContext(dispatchers.io) { imageSize(a.fileName) } ?: return@mapNotNull null
                     a.copy(width = size.first, height = size.second)
                 }
-                if (images.isNotEmpty()) placeImages(images, pageId, at)
+                if (images.isNotEmpty()) placeImages(images.filter { it.kind != com.appname.notes.core.domain.model.AttachmentKind.AUDIO }, pageId, at)
+                outcome.added.filter { it.kind == com.appname.notes.core.domain.model.AttachmentKind.AUDIO }.forEach { placeAudio(it, pageId, at) }
                 for (pdf in pdfs) insertPdfPages(pdf.fileName)
-                if (images.isEmpty() && pdfs.isEmpty() && outcome.added.isNotEmpty()) _message.value = UserMessage(R.string.insert_not_supported)
+                val placed = images.size + pdfs.size + outcome.added.count { it.kind == com.appname.notes.core.domain.model.AttachmentKind.AUDIO }
+                if (placed == 0 && outcome.added.isNotEmpty()) _message.value = UserMessage(R.string.insert_not_supported)
             } finally {
                 _inserting.value = false
             }
@@ -905,6 +911,75 @@ class InkEditorViewModel @AssistedInject constructor(
         val top = (at?.y?.toFloat() ?: (page.height / 3)).coerceIn(0f, page.height)
         val place = TextLayouts.place(text, style.font, style.bold, style.italic, style.align, style.size, width, left, top)
         s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(style.item(ids.newId(), page.items.nextZ, text, place)))
+        refresh()
+    }
+
+    // ------------------------------------------------------------ recordings on the page (8a)
+
+    /** The recording in progress anywhere in the app (only one at a time). */
+    val recording: StateFlow<com.appname.notes.feature.audio.RecordingState> = recordings.state
+
+    /** Plays the recordings on this note's pages. */
+    val playback = com.appname.notes.feature.audio.AudioPlayback(viewModelScope, { attachmentStore.file(it.fileName) }) {
+        _message.value = UserMessage(R.string.audio_cant_play)
+    }
+
+    /** This note's attachments (recordings are played from here). */
+    private var noteAttachments: List<com.appname.notes.core.domain.model.Attachment> = emptyList()
+
+    /** The recording started from this screen: its chip goes on the page once it is saved. */
+    private var pendingRecording: String? = null
+
+    private val attachmentWatch = viewModelScope.launch {
+        attachmentRepo.observe(noteId).collect { list ->
+            noteAttachments = list
+            val id = pendingRecording ?: return@collect
+            list.firstOrNull { it.id.value == id }?.let {
+                pendingRecording = null
+                placeAudio(it, null, null)
+            }
+        }
+    }
+
+    /** Microphone permission granted: record into this note; the chip appears on the shown page when stopped. */
+    fun startRecording() {
+        if (!canInsert()) return
+        if (recordings.start(noteId)) {
+            pendingRecording = recordings.current()?.attachmentId?.value
+        } else {
+            _message.value = UserMessage(R.string.audio_already_recording)
+        }
+    }
+
+    fun stopRecording() = recordings.stop()
+
+    fun microphoneDenied() {
+        _message.value = UserMessage(R.string.audio_permission_denied)
+    }
+
+    /** A chip was tapped: play it, or pause it if it's playing. */
+    fun onAudioTap(item: com.appname.notes.core.ink.model.AudioItem) {
+        val a = noteAttachments.firstOrNull { it.id.value == item.attachmentId } ?: run {
+            _message.value = UserMessage(R.string.audio_cant_play)
+            return
+        }
+        val st = playback.state.value
+        if (st.attachmentId == a.id && st.playing) playback.pause() else playback.play(a)
+    }
+
+    /** The attachment behind the player bar, if one is loaded. */
+    fun playingAttachment(): com.appname.notes.core.domain.model.Attachment? =
+        playback.state.value.attachmentId?.let { id -> noteAttachments.firstOrNull { it.id == id } }
+
+    private fun placeAudio(a: com.appname.notes.core.domain.model.Attachment, pageId: String?, at: Vec?) {
+        val s = session() ?: return
+        val page = pageId?.let { s.page(it) } ?: s.pages.getOrNull(_ui.value.currentPage) ?: return
+        val w = AUDIO_CHIP_W.coerceAtMost(page.width * 0.9f)
+        val h = AUDIO_CHIP_H
+        val cx = (at?.x?.toFloat() ?: (page.width / 2)).coerceIn(w / 2, page.width - w / 2)
+        val cy = (at?.y?.toFloat() ?: (page.height / 4)).coerceIn(h / 2, page.height - h / 2)
+        val item = com.appname.notes.core.ink.model.AudioItem(ids.newId(), page.items.nextZ, a.id.value, a.fileName, a.displayName, a.durationMs ?: 0, com.appname.notes.core.ink.model.Placement(cx, cy, w, h))
+        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(item))
         refresh()
     }
 
@@ -1110,6 +1185,8 @@ class InkEditorViewModel @AssistedInject constructor(
         const val PDF_PAGE_PX = 1800
         const val MAX_PDF_PAGES = 100
         const val TEXT_WIDTH = 420f
+        const val AUDIO_CHIP_W = 300f
+        const val AUDIO_CHIP_H = 64f
         const val TEXT_MIN_WIDTH = 120f
         const val RGB_MASK = 0xFFFFFF
         const val MIN_OPACITY = 0.1f

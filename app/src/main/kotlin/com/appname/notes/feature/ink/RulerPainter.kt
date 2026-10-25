@@ -11,13 +11,13 @@ import kotlin.math.roundToInt
  * Draws the ruler on top of the page (screen pixels): a frosted strip with millimetre-like ticks every 4 dp,
  * longer ones every 20 dp, its angle in the middle, and the turning knob at the right end.
  */
-internal class RulerPainter(private val density: Float) {
+internal class RulerPainter(private val dp: Float) {
     private val body = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD9F5F7FA.toInt() }
-    private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF5F6368.toInt(); style = Paint.Style.STROKE; strokeWidth = density }
-    private val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF3C4043.toInt(); strokeWidth = density * 0.8f }
-    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF202124.toInt(); textAlign = Paint.Align.CENTER; textSize = 12 * density }
+    private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF5F6368.toInt(); style = Paint.Style.STROKE; strokeWidth = dp }
+    private val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF3C4043.toInt(); strokeWidth = dp * 0.8f }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF202124.toInt(); textAlign = Paint.Align.CENTER; textSize = 12 * dp }
     private val knob = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1A73E8.toInt() }
-    private val knobRing = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = 2 * density }
+    private val knobRing = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = 2 * dp }
     private val rect = RectF()
 
     fun draw(canvas: Canvas, r: Ruler) {
@@ -27,17 +27,17 @@ internal class RulerPainter(private val density: Float) {
         val hw = (r.width / 2).toFloat()
         canvas.withRotation(r.angleDeg.toFloat(), cx, cy) {
             rect.set(cx - hl, cy - hw, cx + hl, cy + hw)
-            drawRoundRect(rect, 6 * density, 6 * density, body)
-            drawRoundRect(rect, 6 * density, 6 * density, edge)
+            drawRoundRect(rect, 6 * dp, 6 * dp, body)
+            drawRoundRect(rect, 6 * dp, 6 * dp, edge)
             // Ticks along both long edges.
-            val step = 4 * density
+            val step = 4 * dp
             var i = 0
-            var x = cx - hl + 8 * density
-            while (x < cx + hl - 8 * density) {
+            var x = cx - hl + 8 * dp
+            while (x < cx + hl - 8 * dp) {
                 val len = when {
-                    i % 10 == 0 -> 14 * density
-                    i % 5 == 0 -> 10 * density
-                    else -> 6 * density
+                    i % 10 == 0 -> 14 * dp
+                    i % 5 == 0 -> 10 * dp
+                    else -> 6 * dp
                 }
                 drawLine(x, cy - hw, x, cy - hw + len, tick)
                 drawLine(x, cy + hw, x, cy + hw - len, tick)
@@ -48,8 +48,8 @@ internal class RulerPainter(private val density: Float) {
             drawText("$angle°", cx, cy + label.textSize / 3, label)
             // The knob is drawn in ruler space (unrotated): its distance along the ruler from the centre.
             val kx = cx + (hl - hw)
-            drawCircle(kx, cy, 11 * density, knob)
-            drawCircle(kx, cy, 11 * density, knobRing)
+            drawCircle(kx, cy, 11 * dp, knob)
+            drawCircle(kx, cy, 11 * dp, knobRing)
         }
     }
 }

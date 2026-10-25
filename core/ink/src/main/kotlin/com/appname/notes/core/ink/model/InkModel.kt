@@ -355,6 +355,25 @@ data class ImageItem(
     }
 }
 
+/**
+ * A recording on the page (owner brief §8–9: audio inside a handwritten note), shown as a small player chip. The
+ * sound is the note's audio attachment [attachmentId] / [fileName]; [title] and [durationMs] are shown on the chip.
+ */
+data class AudioItem(
+    override val id: String,
+    override val z: Long,
+    val attachmentId: String,
+    val fileName: String,
+    val title: String,
+    val durationMs: Long,
+    val place: Placement,
+) : InkItem {
+    override val brush: InkBrush get() = ImageItem.NO_INK
+
+    override fun bounds(): Rect = place.bounds()
+    override fun withZ(z: Long) = copy(z = z)
+}
+
 /** Fonts for text boxes: the phone's own font families (no download). [code] is stored: never change one. */
 enum class TextFont(val code: Int) {
     SANS(0), SERIF(1), MONO(2), CURSIVE(3), CASUAL(4), CONDENSED(5), ROUNDED(6);

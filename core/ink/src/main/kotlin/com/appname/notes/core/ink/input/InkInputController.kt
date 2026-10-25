@@ -595,7 +595,7 @@ class InkInputController(
                 when (item) {
                     is StrokeItem -> item.copy(brush = brush)
                     is ShapeItem -> item.copy(brush = brush)
-                    is com.appname.notes.core.ink.model.ImageItem -> item
+                    is com.appname.notes.core.ink.model.ImageItem, is com.appname.notes.core.ink.model.AudioItem -> item
                     is com.appname.notes.core.ink.model.TextItem -> item.copy(brush = item.brush.copy(colorArgb = (colorArgb and 0xFFFFFF) or (0xFF shl 24)))
                 }
             },

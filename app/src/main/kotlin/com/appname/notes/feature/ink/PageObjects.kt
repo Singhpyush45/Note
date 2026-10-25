@@ -113,6 +113,50 @@ internal object PageObjectPainter {
         }
     }
 
+    private val chip = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFEEF2FB.toInt() }
+    private val chipEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF8AB4F8.toInt(); style = Paint.Style.STROKE; strokeWidth = 1.5f }
+    private val playDisc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1A73E8.toInt() }
+    private val playMark = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+    private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF202124.toInt(); typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) }
+    private val timePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF5F6368.toInt() }
+
+    /** A recording on the page: a rounded chip with a play button, its name and length. */
+    fun drawAudio(canvas: Canvas, item: com.appname.notes.core.ink.model.AudioItem) {
+        val p = item.place
+        canvas.withSave {
+            rotate(p.rotationDeg, p.cx, p.cy)
+            val l = p.cx - p.width / 2
+            val t = p.cy - p.height / 2
+            rect.set(l, t, l + p.width, t + p.height)
+            val r = p.height / 2
+            drawRoundRect(rect, r, r, chip)
+            drawRoundRect(rect, r, r, chipEdge)
+            val dcx = l + r
+            val dcy = t + r
+            val dr = r * 0.72f
+            drawCircle(dcx, dcy, dr, playDisc)
+            val path = android.graphics.Path().apply {
+                moveTo(dcx - dr * 0.32f, dcy - dr * 0.45f)
+                lineTo(dcx + dr * 0.5f, dcy)
+                lineTo(dcx - dr * 0.32f, dcy + dr * 0.45f)
+                close()
+            }
+            drawPath(path, playMark)
+            titlePaint.textSize = p.height * 0.3f
+            timePaint.textSize = p.height * 0.24f
+            val textLeft = l + 2 * r + p.height * 0.1f
+            val room = (l + p.width - p.height * 0.3f - textLeft).coerceAtLeast(1f)
+            val title = android.text.TextUtils.ellipsize(item.title, titlePaint, room, android.text.TextUtils.TruncateAt.END).toString()
+            drawText(title, textLeft, t + p.height * 0.45f, titlePaint)
+            drawText(formatDuration(item.durationMs), textLeft, t + p.height * 0.8f, timePaint)
+        }
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val s = (ms / 1000).coerceAtLeast(0)
+        return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+    }
+
     fun drawText(canvas: Canvas, item: TextItem) {
         val p = item.place
         val layout = TextLayouts.layout(item.text, item.font, item.bold, item.italic, item.align, item.brush.size, item.brush.colorArgb, p.width)

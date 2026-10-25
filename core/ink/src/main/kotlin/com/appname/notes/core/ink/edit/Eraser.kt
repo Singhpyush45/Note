@@ -36,7 +36,7 @@ object Eraser {
             is StrokeItem -> item.points.toVecs()
             is ShapeItem -> item.geometry.outline()
             // Photos and text boxes aren't ink: the eraser leaves them (remove them with the lasso).
-            is ImageItem, is TextItem -> return false
+            is ImageItem, is TextItem, is com.appname.notes.core.ink.model.AudioItem -> return false
         }
         return polylinesWithin(outline, path, reach)
     }

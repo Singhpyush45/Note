@@ -126,6 +126,7 @@ internal object InkPaths {
             // Export and thumbnails run off the main thread: photos are decoded right here.
             is ImageItem -> PageObjectPainter.drawImage(canvas, item, canvas.matrix.mapRadius(1f).coerceAtLeast(1f), sync = syncImages)
             is TextItem -> PageObjectPainter.drawText(canvas, item)
+            is com.appname.notes.core.ink.model.AudioItem -> PageObjectPainter.drawAudio(canvas, item)
         }
     }
 
@@ -299,6 +300,7 @@ internal class InkRenderer {
             }
             is ImageItem -> PageObjectPainter.drawImage(canvas, item, transform.mapRadius(1f))
             is TextItem -> PageObjectPainter.drawText(canvas, item)
+            is com.appname.notes.core.ink.model.AudioItem -> PageObjectPainter.drawAudio(canvas, item)
         }
     }
 

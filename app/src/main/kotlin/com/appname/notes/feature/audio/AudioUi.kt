@@ -114,7 +114,7 @@ fun RecordingBar(state: RecordingState, noteId: NoteId, onAddMarker: () -> Unit,
 
 /** A recording in the note: play/pause, a seek bar, time, and its markers as chips that play from there. */
 @Composable
-fun AudioPlayerRow(a: Attachment, controls: AudioControls, onMore: () -> Unit) {
+fun AudioPlayerRow(a: Attachment, controls: AudioControls, onMore: (() -> Unit)?) {
     val active = controls.playback.attachmentId == a.id
     val duration = (if (active) controls.playback.durationMs else 0).takeIf { it > 0 } ?: a.durationMs ?: 0
     val position = if (active) controls.playback.positionMs else 0
@@ -153,8 +153,10 @@ fun AudioPlayerRow(a: Attachment, controls: AudioControls, onMore: () -> Unit) {
                     onClick = { controls.setSpeed(AudioPlayback.nextSpeed(speed)) },
                     modifier = Modifier.testTag(AudioTestTags.SPEED).semantics { contentDescription = speedDescription },
                 ) { Text(AudioPlayback.label(speed), style = MaterialTheme.typography.labelLarge) }
-                IconButton(onClick = onMore) {
-                    Icon(Icons.Outlined.MoreVert, stringResource(R.string.attach_more_for, a.displayName))
+                if (onMore != null) {
+                    IconButton(onClick = onMore) {
+                        Icon(Icons.Outlined.MoreVert, stringResource(R.string.attach_more_for, a.displayName))
+                    }
                 }
             }
             val seekLabel = stringResource(R.string.audio_position)

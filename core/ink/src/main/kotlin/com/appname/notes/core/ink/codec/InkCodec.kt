@@ -1,5 +1,6 @@
 package com.appname.notes.core.ink.codec
 
+import com.appname.notes.core.ink.model.AudioItem
 import com.appname.notes.core.ink.model.TextAlign
 import com.appname.notes.core.ink.model.TextFont
 import com.appname.notes.core.ink.model.Placement
@@ -78,6 +79,7 @@ object InkCodec {
     private const val TYPE_SHAPE = 2
     private const val TYPE_IMAGE = 3
     private const val TYPE_TEXT = 4
+    private const val TYPE_AUDIO = 5
     private const val IMAGE_FLIPPED = 1
     private const val TEXT_BOLD = 1
     private const val TEXT_ITALIC = 2
@@ -120,7 +122,7 @@ object InkCodec {
     fun quantize(item: InkItem): InkItem = when (item) {
         is StrokeItem -> item.copy(points = quantize(item.points), brush = item.brush.normalized())
         is ShapeItem -> item.copy(source = item.source?.let { quantize(it) }, brush = item.brush.normalized())
-        is ImageItem, is TextItem -> item
+        is ImageItem, is TextItem, is AudioItem -> item
     }
 
     /** Whether [b] needs format 2 (see the format description). */
@@ -140,7 +142,7 @@ object InkCodec {
         val w = Writer()
         val b = item.brush
         // Photos and text boxes need format 3; older versions open such pages read-only.
-        val v3 = item is ImageItem || item is TextItem
+        val v3 = item is ImageItem || item is TextItem || item is AudioItem
         val v2 = v3 || needsV2(item)
         val fill = (item as? ShapeItem)?.fill
         val fillEnd = (item as? ShapeItem)?.fillEnd?.takeIf { fill != null }
@@ -151,6 +153,7 @@ object InkCodec {
                 is ShapeItem -> TYPE_SHAPE
                 is ImageItem -> TYPE_IMAGE
                 is TextItem -> TYPE_TEXT
+                is AudioItem -> TYPE_AUDIO
             },
         )
         w.u8(b.tool.code)
@@ -196,6 +199,13 @@ object InkCodec {
                 w.u8(item.font.code)
                 w.u8((if (item.bold) TEXT_BOLD else 0) or (if (item.italic) TEXT_ITALIC else 0))
                 w.u8(item.align.code)
+            }
+            is AudioItem -> {
+                w.str(item.attachmentId)
+                w.str(item.fileName)
+                w.str(item.title)
+                w.varint(item.durationMs.coerceAtLeast(0))
+                writePlace(w, item.place)
             }
         }
         return w.bytes()
@@ -302,6 +312,10 @@ object InkCodec {
                     if (style and (TEXT_BOLD or TEXT_ITALIC).inv() != 0) return DecodeResult.NewerVersion(version)
                     val align = TextAlign.fromCode(r.u8()) ?: return DecodeResult.NewerVersion(version)
                     TextItem(id, z, brush, text, place, font, bold = style and TEXT_BOLD != 0, italic = style and TEXT_ITALIC != 0, align = align)
+                }
+                TYPE_AUDIO -> {
+                    if (version < 3) return DecodeResult.Corrupt("audio in old format")
+                    AudioItem(id, z, r.str(MAX_STRING), r.str(MAX_STRING), r.str(MAX_STRING), r.varint(), readPlace(r))
                 }
                 else -> return DecodeResult.Corrupt("unknown item type")
             }

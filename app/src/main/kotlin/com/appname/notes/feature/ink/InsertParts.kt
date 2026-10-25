@@ -1,5 +1,7 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.material.icons.outlined.AudioFile
+import androidx.compose.material.icons.outlined.Mic
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -75,6 +77,8 @@ object InsertTags {
     const val TEXT = "ink_insert_text"
     const val PDF = "ink_insert_pdf"
     const val PASTE = "ink_insert_paste"
+    const val RECORD = "ink_insert_record"
+    const val AUDIO_FILE = "ink_insert_audio_file"
     const val TEXT_DIALOG = "ink_text_dialog"
     const val TEXT_FIELD = "ink_text_field"
     const val TEXT_SAVE = "ink_text_save"
@@ -88,6 +92,8 @@ data class InsertActions(
     val text: () -> Unit,
     val pdf: () -> Unit,
     val paste: () -> Unit,
+    val record: () -> Unit = {},
+    val audioFile: () -> Unit = {},
 )
 
 /** The Insert button in the top bar: photo, camera, text box, PDF pages, paste. */
@@ -124,6 +130,18 @@ fun InsertButton(actions: InsertActions) {
                 leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, null) },
                 onClick = { open = false; actions.pdf() },
                 modifier = Modifier.testTag(InsertTags.PDF),
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.audio_record)) },
+                leadingIcon = { Icon(Icons.Outlined.Mic, null) },
+                onClick = { open = false; actions.record() },
+                modifier = Modifier.testTag(InsertTags.RECORD),
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.insert_audio_file)) },
+                leadingIcon = { Icon(Icons.Outlined.AudioFile, null) },
+                onClick = { open = false; actions.audioFile() },
+                modifier = Modifier.testTag(InsertTags.AUDIO_FILE),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.insert_paste)) },

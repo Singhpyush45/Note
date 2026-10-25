@@ -79,6 +79,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
         /** Ctrl+V on a keyboard. */
         fun onPasteRequested() {}
+
+        /** A tap on a recording's chip on the page. */
+        fun onAudioTap(item: com.appname.notes.core.ink.model.AudioItem) {}
     }
 
     var listener: Listener? = null
@@ -410,6 +413,19 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         }
         val mouseScroll = source == PointerSource.MOUSE &&
             e.buttonState and (MotionEvent.BUTTON_SECONDARY or MotionEvent.BUTTON_TERTIARY) != 0
+        // A recording's chip is a button with every tool but the lasso (which moves it).
+        if (controller?.tools?.tool != EditorTool.LASSO && source != PointerSource.STYLUS_ERASER) {
+            pagePointAt(e.getX(index), e.getY(index))?.let { (pageId, p) ->
+                val chip = session?.page(pageId)?.items?.items
+                    ?.filterIsInstance<com.appname.notes.core.ink.model.AudioItem>()
+                    ?.lastOrNull { it.place.contains(p) }
+                if (chip != null) {
+                    mode = Mode.IGNORE
+                    listener?.onAudioTap(chip)
+                    return
+                }
+            }
+        }
         // Text tool: any pointer scrolls as usual; a tap (no movement) places or edits a text box on lift.
         if (controller?.tools?.tool == EditorTool.TEXT && source != PointerSource.STYLUS_ERASER) {
             textTapX = e.getX(index)

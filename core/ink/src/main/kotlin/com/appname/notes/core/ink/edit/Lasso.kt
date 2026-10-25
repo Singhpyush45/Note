@@ -39,6 +39,7 @@ object Lasso {
         is ShapeItem -> item.geometry.outline()
         is ImageItem -> item.place.outline()
         is TextItem -> item.place.outline()
+        is com.appname.notes.core.ink.model.AudioItem -> item.place.outline()
     }
 
     fun move(selection: List<InkItem>, dx: Double, dy: Double): InkEdit = transform(selection, Similarity.translate(dx, dy))
@@ -55,7 +56,7 @@ object Lasso {
             when (item) {
                 is StrokeItem -> item.copy(brush = brush)
                 is ShapeItem -> item.copy(brush = brush)
-                is ImageItem -> item
+                is ImageItem, is com.appname.notes.core.ink.model.AudioItem -> item
                 is TextItem -> item.copy(brush = item.brush.copy(colorArgb = colorArgb or (0xFF shl 24)))
             }
         },
@@ -80,6 +81,7 @@ object Lasso {
                 is ShapeItem -> moved.copy(id = newId())
                 is ImageItem -> moved.copy(id = newId())
                 is TextItem -> moved.copy(id = newId())
+                is com.appname.notes.core.ink.model.AudioItem -> moved.copy(id = newId())
             }
         }
         return InkEdit(emptyList(), copies)

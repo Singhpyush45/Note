@@ -1,5 +1,6 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
@@ -204,6 +205,10 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             else -> viewModel.nothingToPaste()
         }
     }
+    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { viewModel.insertFiles(it) }
+    val recordPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted[android.Manifest.permission.RECORD_AUDIO] == true) viewModel.startRecording() else if (granted.containsKey(android.Manifest.permission.RECORD_AUDIO)) viewModel.microphoneDenied()
+    }
     val insertActions = InsertActions(
         photo = { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         camera = if (hasCamera) {
@@ -222,7 +227,21 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         text = { viewModel.selectTool(EditorTool.TEXT); viewModel.showTextHint() },
         pdf = { pdfPicker.launch(arrayOf("application/pdf")) },
         paste = paste,
+        record = {
+            val micGranted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val needsNotify = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (micGranted) {
+                viewModel.startRecording()
+                if (needsNotify) recordPermissions.launch(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS))
+            } else {
+                recordPermissions.launch(listOfNotNull(android.Manifest.permission.RECORD_AUDIO, if (needsNotify) android.Manifest.permission.POST_NOTIFICATIONS else null).toTypedArray())
+            }
+        },
+        audioFile = { audioPicker.launch(arrayOf("audio/*")) },
     )
+    val recordingState by viewModel.recording.collectAsStateWithLifecycle()
+    val playbackState by viewModel.playback.state.collectAsStateWithLifecycle()
     val textEdit by viewModel.textEdit.collectAsStateWithLifecycle()
     textEdit?.let { req -> TextBoxDialog(req, onSave = viewModel::saveText, onDismiss = viewModel::dismissTextEdit) }
     val inserting by viewModel.inserting.collectAsStateWithLifecycle()
@@ -277,6 +296,31 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 )
                 is InkLoad.Ready -> {
                     InkCanvas(l.session, l.controller, l.pdf, ui, viewModel, onPaste = paste)
+                    // Recording into this note, and the player for a chip that was tapped.
+                    Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp)) {
+                        com.appname.notes.feature.audio.RecordingBar(recordingState, viewModel.noteId, onAddMarker = {}, onStop = viewModel::stopRecording)
+                        val playing = playbackState.attachmentId?.let { viewModel.playingAttachment() }
+                        if (playing != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.weight(1f)) {
+                                    com.appname.notes.feature.audio.AudioPlayerRow(
+                                        playing,
+                                        com.appname.notes.feature.audio.AudioControls(
+                                            playback = playbackState,
+                                            play = { viewModel.playback.play(it) },
+                                            pause = viewModel.playback::pause,
+                                            seek = viewModel.playback::seekTo,
+                                            markers = { emptyList() },
+                                            playMarker = {},
+                                            setSpeed = viewModel.playback::setSpeed,
+                                        ),
+                                        onMore = null,
+                                    )
+                                }
+                                IconButton(onClick = viewModel.playback::release) { Icon(Icons.Outlined.Close, stringResource(R.string.audio_player_close)) }
+                            }
+                        }
+                    }
                     if (ui.exporting || inserting) {
                         LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter).testTag(InkTestTags.EXPORT_PROGRESS))
                     }
@@ -452,6 +496,7 @@ private fun InkCanvas(
                     override fun onTextTap(pageId: String, x: Double, y: Double, existing: com.appname.notes.core.ink.model.TextItem?) =
                         viewModel.onTextTap(pageId, x, y, existing)
                     override fun onPasteRequested() = onPaste()
+                    override fun onAudioTap(item: com.appname.notes.core.ink.model.AudioItem) = viewModel.onAudioTap(item)
                 }
             }
         },
