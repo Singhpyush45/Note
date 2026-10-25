@@ -507,6 +507,8 @@ class InkFlowRobolectricTest {
         assertThat(text.place.height).isGreaterThan(0f)
 
         // A picture (as a browser or gallery puts it on the clipboard: a link to the image).
+        // Robolectric reports no free space unless told otherwise.
+        org.robolectric.shadows.ShadowStatFs.registerStats(java.io.File(composeRule.activity.filesDir, "attachments"), 1_000_000, 1_000_000, 1_000_000)
         val png = java.io.File(composeRule.activity.cacheDir, "pasted.png")
         val bmp = android.graphics.Bitmap.createBitmap(400, 200, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
         png.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
