@@ -316,9 +316,14 @@ class InkFlowRobolectricTest {
                 stroke(listOf(80f to 190f, 230f to 190f, 230f to 250f, 80f to 250f, 80f to 192f))
                 waitAdvancing { exists(hasContentDescription(string(R.string.ink_selection_delete))) }
             }
-            val controls = composeRule.onAllNodes(hasClickAction() and hasAnyAncestor(hasTestTag(InkTestTags.TOOLBAR))).fetchSemanticsNodes()
-            assertThat(controls).isNotEmpty()
-            for (node in controls) {
+            val matcher = hasClickAction() and hasAnyAncestor(hasTestTag(InkTestTags.TOOLBAR))
+            val count = composeRule.onAllNodes(matcher).fetchSemanticsNodes().size
+            assertThat(count).isGreaterThan(0)
+            for (i in 0 until count) {
+                // Scrolled into view first: a control scrolled out of its row has no touch area to measure.
+                val handle = composeRule.onAllNodes(matcher)[i]
+                runCatching { handle.performScrollTo() }
+                val node = handle.fetchSemanticsNode()
                 val label = node.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
                     ?: node.config.getOrNull(SemanticsProperties.Text)?.joinToString()
                     ?: node.children.firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() }
