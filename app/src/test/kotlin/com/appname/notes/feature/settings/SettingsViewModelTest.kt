@@ -14,7 +14,13 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.robolectric.annotation.Config
 
+/** Robolectric: the wallpaper tests pass real android.net.Uri values. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [36])
 class SettingsViewModelTest {
 
     @get:Rule
@@ -141,7 +147,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `a picked photo becomes the wallpaper and choosing a preset deletes the photo`() = runTest {
-        viewModel.onWallpaperPhotoPicked(android.net.Uri.EMPTY)
+        viewModel.onWallpaperPhotoPicked(android.net.Uri.parse("content://media/picker/1"))
         assertThat(repository.current().wallpaper).isEqualTo(WallpaperChoice.Photo("w1.jpg"))
         assertThat(photos.kept.last()).isEqualTo("w1.jpg") // older photos removed
         viewModel.onWallpaperSelected(WallpaperChoice.Preset(WallpaperPreset.OCEAN))
@@ -153,7 +159,7 @@ class SettingsViewModelTest {
         photos.importResult = null
         viewModel.uiState.test {
             skipUntilReady()
-            viewModel.onWallpaperPhotoPicked(android.net.Uri.EMPTY)
+            viewModel.onWallpaperPhotoPicked(android.net.Uri.parse("content://media/picker/1"))
             assertThat(awaitReady().showPhotoFailed).isTrue()
             viewModel.onPhotoFailedShown()
             assertThat(awaitReady().showPhotoFailed).isFalse()
