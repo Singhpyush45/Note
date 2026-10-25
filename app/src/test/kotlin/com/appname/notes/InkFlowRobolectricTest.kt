@@ -421,7 +421,10 @@ class InkFlowRobolectricTest {
 
     private fun tap(tag: String) {
         waitFor(tag)
-        composeRule.onNodeWithTag(tag).performScrollTo().performClick()
+        val node = composeRule.onNodeWithTag(tag)
+        // Rows that fit on screen have nothing to scroll.
+        runCatching { node.performScrollTo() }
+        node.performClick()
         composeRule.waitForIdle()
     }
 

@@ -512,7 +512,8 @@ internal fun ColorDot(argb: Int, selected: Boolean, onClick: () -> Unit, label: 
 
 @Composable
 private fun MoreColorsButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.testTag(InkToolTags.MORE_COLORS)) {
+    // 48 dp even when scrolled out of the row (an icon button is 40 dp with a 48 dp touch area).
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp).testTag(InkToolTags.MORE_COLORS)) {
         Icon(Icons.Outlined.Palette, stringResource(R.string.ink_more_colors))
     }
 }
