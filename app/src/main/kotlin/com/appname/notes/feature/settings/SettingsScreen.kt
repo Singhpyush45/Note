@@ -142,6 +142,7 @@ fun SettingsRoute(onManageTemplates: () -> Unit = {}, viewModel: SettingsViewMod
         onManageTemplates = onManageTemplates,
         onNoteDefaults = viewModel::onNoteDefaults,
         onInk = viewModel::onInk,
+        backupCard = { com.appname.notes.feature.backup.BackupCard() },
     )
 }
 
@@ -166,6 +167,7 @@ fun SettingsScreen(
     onManageTemplates: () -> Unit = {},
     onNoteDefaults: ((NoteDefaults) -> NoteDefaults) -> Unit = {},
     onInk: ((InkSettings) -> InkSettings) -> Unit = {},
+    backupCard: @Composable () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val saveErrorMessage = stringResource(R.string.settings_save_failed)
@@ -233,6 +235,7 @@ fun SettingsScreen(
                     defaults = uiState.defaults,
                     onNoteDefaults = onNoteDefaults,
                     onInk = onInk,
+                    backupCard = backupCard,
                 )
             }
         }
@@ -262,6 +265,7 @@ private fun SettingsList(
     defaults: NoteDefaults,
     onNoteDefaults: ((NoteDefaults) -> NoteDefaults) -> Unit,
     onInk: ((InkSettings) -> InkSettings) -> Unit = {},
+    backupCard: @Composable () -> Unit = {},
 ) {
     var pickingWallpaper by rememberSaveable { mutableStateOf(false) }
     var pickingHue by rememberSaveable { mutableStateOf(false) }
@@ -440,6 +444,8 @@ private fun SettingsList(
                 )
             }
         }
+
+        item { backupCard() }
 
         item {
             SettingsCard(stringResource(R.string.settings_section_maintenance)) {

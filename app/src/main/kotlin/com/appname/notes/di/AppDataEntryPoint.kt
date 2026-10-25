@@ -38,4 +38,5 @@ interface AppDataEntryPoint {
     fun pdfImporter(): PdfImporter
     fun pdfFiles(): PdfFileStore
     fun pdfWriter(): PdfAnnotationWriter
+    fun backups(): com.appname.notes.feature.backup.BackupManager
 }

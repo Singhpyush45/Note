@@ -6,6 +6,11 @@
       Device-to-device transfer (user-initiated phone switch) is allowed by data_extraction_rules.
       Revisit with FR-025 (backup/restore) in Phase 6.
     -->
+    <!--
+      Internet (Phase 9): used only for Google Drive backup, and only after the user connects their Google account in
+      Settings > Backup. Notes are never sent anywhere else; without it connected the app makes no network calls.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Audio notes (FR-012): asked for only when the user starts a recording. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

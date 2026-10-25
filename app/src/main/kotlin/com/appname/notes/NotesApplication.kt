@@ -28,6 +28,8 @@ class NotesApplication : Application() {
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     override fun onCreate() {
+        // A checked backup waiting to be restored is swapped in before anything opens the database (FR-025).
+        com.appname.notes.feature.backup.BackupManager.applyPending(this)
         if (BuildConfig.DEBUG) enableStrictMode()
         super.onCreate() // Hilt injects the fields above here
         InkCrashGuard.install()

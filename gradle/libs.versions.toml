@@ -32,8 +32,10 @@ uiautomator = "2.4.0"
 # 1.1.0 preview on purpose: 1.0.0 can abort natively when the handwriting screen closes mid-draw (see docs/dependency-review.md)
 ink = "1.1.0-alpha09"
 pdfboxAndroid = "2.0.27.0"
+playServicesAuth = "21.4.0"
 
 [libraries]
+play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 pdfbox-android = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfboxAndroid" }
 androidx-ink-authoring = { module = "androidx.ink:ink-authoring", version.ref = "ink" }
 androidx-ink-brush = { module = "androidx.ink:ink-brush", version.ref = "ink" }
