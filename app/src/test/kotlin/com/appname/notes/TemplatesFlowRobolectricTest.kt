@@ -57,6 +57,13 @@ class TemplatesFlowRobolectricTest {
         composeRule.onNodeWithTag(tag).performClick()
     }
 
+    /** Options further down the editor form are scrolled into view first (a tap off-screen would miss). */
+    private fun editorOption(tag: String) {
+        waitFor(TemplateEditorTestTags.FORM)
+        composeRule.onNodeWithTag(TemplateEditorTestTags.FORM).performScrollToNode(hasTestTag(tag))
+        click(tag)
+    }
+
     private fun allNotes() = runBlocking { data.notes().observeNotes(NoteCollection.All, NoteSort.MODIFIED).first() }
 
     private fun openTemplates() {
@@ -130,7 +137,7 @@ class TemplatesFlowRobolectricTest {
         click(TemplatesTestTags.NEW)
         waitFor(TemplateEditorTestTags.NAME)
         composeRule.onNodeWithTag(TemplateEditorTestTags.NAME).performTextInput("Exam grid")
-        click(TemplateEditorTestTags.ruling(Ruling.GRID))
+        editorOption(TemplateEditorTestTags.ruling(Ruling.GRID))
         click(TemplateEditorTestTags.SAVE)
 
         // Back on the templates screen, in Custom.
@@ -166,7 +173,7 @@ class TemplatesFlowRobolectricTest {
         val copy = runBlocking { data.templates().observeCustom().first() }.single()
         assertThat(copy.name).isEqualTo("Daily journal copy")
         assertThat(copy.layout).isEqualTo(BuiltInTemplates.byId("journals.daily")!!.layout)
-        click(TemplateEditorTestTags.format(com.appname.notes.core.ink.template.PageFormat.A4_LANDSCAPE))
+        editorOption(TemplateEditorTestTags.format(com.appname.notes.core.ink.template.PageFormat.A4_LANDSCAPE))
         click(TemplateEditorTestTags.SAVE)
         waitAdvancing { runBlocking { data.templates().get(copy.id) }!!.layout.width == 1123f }
         // The built-in itself is unchanged.

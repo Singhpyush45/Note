@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import androidx.core.graphics.withClip
 import com.appname.notes.core.ink.template.Box
 import com.appname.notes.core.ink.template.Checklist
 import com.appname.notes.core.ink.template.CircleRow
@@ -42,11 +43,10 @@ class TemplateRenderer {
 
     /** Ruling and printed parts only (the caller has drawn the paper). */
     fun drawDesign(canvas: Canvas, layout: TemplateLayout) {
-        val save = canvas.save()
-        canvas.clipRect(0f, 0f, layout.width, layout.height)
-        drawRuling(canvas, layout.paper, layout.width, layout.height)
-        for (c in layout.components) draw(canvas, c)
-        canvas.restoreToCount(save)
+        canvas.withClip(0f, 0f, layout.width, layout.height) {
+            drawRuling(this, layout.paper, layout.width, layout.height)
+            for (c in layout.components) draw(this, c)
+        }
     }
 
     private fun drawRuling(canvas: Canvas, p: PaperStyle, w: Float, h: Float) {

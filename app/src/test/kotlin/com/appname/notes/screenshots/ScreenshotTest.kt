@@ -276,8 +276,11 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithTag(TemplatesTestTags.NEW).performClick()
         waitAdvancing { exists(hasTestTag(TemplateEditorTestTags.PREVIEW)) }
         snap("template_editor_light")
-        composeRule.onNodeWithTag(TemplateEditorTestTags.ruling(Ruling.DOTS)).performClick()
+        val form = composeRule.onNodeWithTag(TemplateEditorTestTags.FORM)
+        form.performScrollToNode(hasTestTag(TemplateEditorTestTags.header(HeaderStyle.TITLE_AND_DATE)))
         composeRule.onNodeWithTag(TemplateEditorTestTags.header(HeaderStyle.TITLE_AND_DATE)).performClick()
+        form.performScrollToNode(hasTestTag(TemplateEditorTestTags.ruling(Ruling.DOTS)))
+        composeRule.onNodeWithTag(TemplateEditorTestTags.ruling(Ruling.DOTS)).performClick()
         composeRule.onNodeWithTag(TemplateEditorTestTags.FORM).performScrollToNode(hasTestTag(TemplateEditorTestTags.paper(3)))
         composeRule.onNodeWithTag(TemplateEditorTestTags.paper(3)).performClick()
         snap("template_editor_changed_light")
