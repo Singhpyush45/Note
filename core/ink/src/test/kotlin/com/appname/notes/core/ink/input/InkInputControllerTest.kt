@@ -308,6 +308,12 @@ class InkInputControllerTest {
         assertEquals(first.id, items().maxBy { it.z }.id)
         assertTrue(c.sendSelectionToBack())
         assertEquals(first.id, items().minBy { it.z }.id)
+        // Flip left-right: a line rising to the right would fall to the right; here it stays in its box.
+        val before = items().first { it.id == first.id }.bounds()
+        assertTrue(c.flipSelection(horizontal = true))
+        val after = items().first { it.id == first.id }.bounds()
+        assertEquals(before.left, after.left, 0.1)
+        assertEquals(before.right, after.right, 0.1)
         assertTrue(c.rotateSelection(90.0))
         val box = items().first { it.id == first.id }.bounds()
         assertTrue(box.bottom - box.top > box.right - box.left) // the horizontal line is now upright

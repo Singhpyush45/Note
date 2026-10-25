@@ -674,4 +674,6 @@
     <string name="ink_selection_rotate">Rotate 90°</string>
     <string name="ink_selection_front">Bring to front</string>
     <string name="ink_selection_back">Send to back</string>
+    <string name="ink_selection_flip_h">Flip left to right</string>
+    <string name="ink_selection_flip_v">Flip upside down</string>
 </resources>

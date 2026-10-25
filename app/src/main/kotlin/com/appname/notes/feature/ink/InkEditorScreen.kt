@@ -161,6 +161,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onFront = viewModel::bringSelectionToFront,
             onBack = viewModel::sendSelectionToBack,
             onRotate = viewModel::rotateSelection,
+            onFlip = viewModel::flipSelection,
         )
     }
     val context = LocalContext.current

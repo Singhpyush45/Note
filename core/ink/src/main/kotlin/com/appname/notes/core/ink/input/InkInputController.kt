@@ -1,5 +1,6 @@
 package com.appname.notes.core.ink.input
 
+import com.appname.notes.core.ink.edit.flipped
 import com.appname.notes.core.ink.model.ShapeKind
 import com.appname.notes.core.ink.codec.InkCodec
 import com.appname.notes.core.ink.edit.Eraser
@@ -518,6 +519,18 @@ class InkInputController(
         val moved = items.mapIndexed { i, it -> it.withZ(start + i) }
         if (moved.map { it.z } == items.map { it.z }) return false
         return session.apply(sel.pageId, InkEdit(items, moved))
+    }
+
+    /** Mirrors the selection left-right ([horizontal]) or upside down, in place. */
+    fun flipSelection(horizontal: Boolean): Boolean {
+        val sel = selection ?: return false
+        val items = selectedItems()
+        if (items.isEmpty()) return false
+        val axis = if (horizontal) (sel.bounds.left + sel.bounds.right) / 2 else (sel.bounds.top + sel.bounds.bottom) / 2
+        val flipped = items.map { InkCodec.quantize(it.flipped(horizontal, axis)) }
+        if (!session.apply(sel.pageId, InkEdit(items, flipped))) return false
+        selection = selectionOf(sel.pageId, selectedItems())
+        return true
     }
 
     /** Turns the selection by [degrees] around its centre. */

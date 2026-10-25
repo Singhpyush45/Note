@@ -640,6 +640,11 @@ class InkEditorViewModel @AssistedInject constructor(
         refresh()
     }
 
+    fun flipSelection(horizontal: Boolean) {
+        controller()?.flipSelection(horizontal)
+        refresh()
+    }
+
     fun rotateSelection() {
         controller()?.rotateSelection()
         refresh()

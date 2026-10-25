@@ -1,5 +1,7 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.ui.draw.rotate
+import androidx.compose.material.icons.outlined.Flip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.selection.selectable
@@ -113,6 +115,8 @@ object InkToolTags {
     const val SHAPE_FILL = "ink_shape_fill"
     const val ROTATE = "ink_selection_rotate"
     const val FRONT = "ink_selection_front"
+    const val FLIP_H = "ink_selection_flip_h"
+    const val FLIP_V = "ink_selection_flip_v"
     const val BACK = "ink_selection_back"
     fun shape(k: com.appname.notes.core.ink.model.ShapeKind) = "ink_shape_${k.name.lowercase()}"
     fun laserStyle(s: LaserStyle) = "ink_laser_${s.name.lowercase()}"
@@ -139,6 +143,7 @@ data class InkToolActions(
     val onFront: () -> Unit = {},
     val onBack: () -> Unit = {},
     val onRotate: () -> Unit = {},
+    val onFlip: (Boolean) -> Unit = {},
 )
 
 /** The tools in the bar, in order (owner brief §13). Only tools that work are shown. */
@@ -189,12 +194,15 @@ fun InkToolbar(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
             ) {
+                // On dark paper ink is shown mapped (black reads as light), so the tool tips match the page.
+                val darkPaper = LocalDarkPaper.current && com.appname.notes.core.designsystem.theme.LocalDarkTheme.current
                 BarTools.forEach { tool ->
-                    val ink = when (tool) {
+                    val raw = when (tool) {
                         EditorTool.LASER -> ui.laser.colorArgb
                         EditorTool.SHAPE -> tools.shapeColor
                         else -> tools.brushFor(tool)?.colorArgb ?: 0
                     }
+                    val ink = if (darkPaper) DarkPaper.map(raw or OPAQUE) else raw
                     ToolButton(
                         tool = tool,
                         selected = tools.tool == tool,
@@ -261,6 +269,8 @@ fun InkToolbar(
                         IconButton(onClick = actions.onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
                         IconButton(onClick = actions.onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }
                         IconButton(onClick = actions.onRotate, modifier = Modifier.testTag(InkToolTags.ROTATE)) { Icon(Icons.Outlined.Rotate90DegreesCw, stringResource(R.string.ink_selection_rotate)) }
+                        IconButton(onClick = { actions.onFlip(true) }, modifier = Modifier.testTag(InkToolTags.FLIP_H)) { Icon(Icons.Outlined.Flip, stringResource(R.string.ink_selection_flip_h)) }
+                        IconButton(onClick = { actions.onFlip(false) }, modifier = Modifier.testTag(InkToolTags.FLIP_V)) { Icon(Icons.Outlined.Flip, stringResource(R.string.ink_selection_flip_v), Modifier.rotate(90f)) }
                         IconButton(onClick = actions.onFront, modifier = Modifier.testTag(InkToolTags.FRONT)) { Icon(Icons.Outlined.FlipToFront, stringResource(R.string.ink_selection_front)) }
                         IconButton(onClick = actions.onBack, modifier = Modifier.testTag(InkToolTags.BACK)) { Icon(Icons.Outlined.FlipToBack, stringResource(R.string.ink_selection_back)) }
                         Spacer(Modifier.width(8.dp))

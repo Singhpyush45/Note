@@ -82,3 +82,31 @@ fun InkItem.transformed(t: Similarity): InkItem {
         is ShapeItem -> copy(brush = brush, geometry = geometry.transformed(t), source = source?.transformed(t))
     }
 }
+
+/**
+ * A mirror image across a vertical line x = [axis] ([horizontal] flip) or a horizontal line y = [axis].
+ * Not a [Similarity] (it reverses handedness), so it has its own mapping. Keeps id, z and sizes.
+ */
+fun InkItem.flipped(horizontal: Boolean, axis: Double): InkItem {
+    fun m(p: Pt): Pt = if (horizontal) Pt((2 * axis - p.x).toFloat(), p.y) else Pt(p.x, (2 * axis - p.y).toFloat())
+    fun pts(sp: StrokePoints): StrokePoints {
+        val nx = FloatArray(sp.size) { i -> if (horizontal) (2 * axis - sp.x[i]).toFloat() else sp.x[i] }
+        val ny = FloatArray(sp.size) { i -> if (horizontal) sp.y[i] else (2 * axis - sp.y[i]).toFloat() }
+        // Pen orientation (0 = up, clockwise) mirrors too.
+        val orient = sp.orientation?.let { o ->
+            FloatArray(sp.size) { i -> (((if (horizontal) -o[i] else PI.toFloat() - o[i]) % TWO_PI_F) + TWO_PI_F) % TWO_PI_F }
+        }
+        return StrokePoints(nx, ny, sp.t.copyOf(), sp.pressure?.copyOf(), sp.tilt?.copyOf(), orient)
+    }
+    return when (this) {
+        is StrokeItem -> copy(points = pts(points))
+        is ShapeItem -> copy(
+            geometry = when (val g = geometry) {
+                is ShapeGeometry.Segment -> g.copy(start = m(g.start), end = m(g.end))
+                is ShapeGeometry.Ellipse -> g.copy(center = m(g.center), rotationDeg = (((-g.rotationDeg) % 180f) + 180f) % 180f)
+                is ShapeGeometry.Polygon -> ShapeGeometry.Polygon(g.vertices.map { m(it) })
+            },
+            source = source?.let { pts(it) },
+        )
+    }
+}
