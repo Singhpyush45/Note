@@ -914,6 +914,51 @@ class InkEditorViewModel @AssistedInject constructor(
         return out
     }
 
+    // ------------------------------------------------------------ stickers and table grids (8c)
+
+    /** A sticker (an emoji drawn large) in the middle of the shown page; the lasso moves and resizes it. */
+    fun insertSticker(emoji: String) {
+        if (emoji.isBlank() || !canInsert()) return
+        val s = session() ?: return
+        val page = s.pages.getOrNull(_ui.value.currentPage) ?: return
+        val size = STICKER_SIZE
+        val style = TextStyle(size = size, colorArgb = 0xFF000000.toInt(), align = com.appname.notes.core.ink.model.TextAlign.CENTER)
+        val width = size * 1.6f
+        val place = TextLayouts.place(emoji, style.font, false, false, style.align, size, width, page.width / 2 - width / 2, page.height / 3)
+        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.add(style.item(ids.newId(), page.items.nextZ, emoji, place)))
+        refresh()
+    }
+
+    /**
+     * A table grid ([rows] × [cols] cells) to write in, as ruled lines on the shown page (80 % of its width); one
+     * undo removes it, the lasso moves or resizes it.
+     */
+    fun insertTable(rows: Int, cols: Int) {
+        if (!canInsert()) return
+        val r = rows.coerceIn(1, MAX_TABLE)
+        val c = cols.coerceIn(1, MAX_TABLE)
+        val s = session() ?: return
+        val page = s.pages.getOrNull(_ui.value.currentPage) ?: return
+        val w = page.width * 0.8f
+        val cellH = TABLE_ROW_HEIGHT
+        val h = (cellH * r).coerceAtMost(page.height * 0.8f)
+        val left = (page.width - w) / 2
+        val top = (page.height * 0.15f).coerceAtMost(page.height - h)
+        val brush = InkBrush(InkTool.PEN, 0xFF5F6368.toInt(), 1.5f)
+        var z = page.items.nextZ
+        val lines = ArrayList<InkItem>()
+        fun line(x0: Float, y0: Float, x1: Float, y1: Float) {
+            lines += com.appname.notes.core.ink.model.ShapeItem(
+                ids.newId(), z++, brush, com.appname.notes.core.ink.model.ShapeKind.LINE,
+                com.appname.notes.core.ink.model.ShapeGeometry.Segment(com.appname.notes.core.ink.model.Pt(x0, y0), com.appname.notes.core.ink.model.Pt(x1, y1)), null,
+            )
+        }
+        for (i in 0..r) line(left, top + h * i / r, left + w, top + h * i / r)
+        for (j in 0..c) line(left + w * j / c, top, left + w * j / c, top + h)
+        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit(emptyList(), lines))
+        refresh()
+    }
+
     /** Pasted or dropped text becomes a text box. */
     fun insertPlainText(text: String, pageId: String? = null, at: Vec? = null) {
         if (text.isBlank() || !canInsert()) return
@@ -1202,6 +1247,9 @@ class InkEditorViewModel @AssistedInject constructor(
         const val MAX_PDF_PAGES = 100
         const val TEXT_WIDTH = 420f
         const val AUDIO_CHIP_W = 300f
+        const val STICKER_SIZE = 72f
+        const val TABLE_ROW_HEIGHT = 48f
+        const val MAX_TABLE = 12
         const val AUDIO_CHIP_H = 64f
         const val TEXT_MIN_WIDTH = 120f
         const val RGB_MASK = 0xFFFFFF

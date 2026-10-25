@@ -711,4 +711,9 @@
     <string name="insert_audio_file">Audio file</string>
     <string name="audio_player_close">Close player</string>
     <string name="pdf_add_blank_page">Add blank page after this one</string>
+    <string name="insert_sticker">Sticker</string>
+    <string name="insert_table">Table</string>
+    <string name="table_rows">Rows</string>
+    <string name="table_columns">Columns</string>
+    <string name="table_insert">Insert</string>
 </resources>

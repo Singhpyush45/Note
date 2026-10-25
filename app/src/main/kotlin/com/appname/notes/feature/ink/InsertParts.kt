@@ -1,5 +1,7 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.Mic
 import android.content.ClipData
@@ -79,6 +81,10 @@ object InsertTags {
     const val PASTE = "ink_insert_paste"
     const val RECORD = "ink_insert_record"
     const val AUDIO_FILE = "ink_insert_audio_file"
+    const val STICKER = "ink_insert_sticker"
+    const val TABLE = "ink_insert_table"
+    const val TABLE_INSERT = "ink_table_insert"
+    fun sticker(i: Int) = "ink_sticker_$i"
     const val TEXT_DIALOG = "ink_text_dialog"
     const val TEXT_FIELD = "ink_text_field"
     const val TEXT_SAVE = "ink_text_save"
@@ -94,6 +100,8 @@ data class InsertActions(
     val paste: () -> Unit,
     val record: () -> Unit = {},
     val audioFile: () -> Unit = {},
+    val sticker: () -> Unit = {},
+    val table: () -> Unit = {},
 )
 
 /** The Insert button in the top bar: photo, camera, text box, PDF pages, paste. */
@@ -130,6 +138,18 @@ fun InsertButton(actions: InsertActions) {
                 leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, null) },
                 onClick = { open = false; actions.pdf() },
                 modifier = Modifier.testTag(InsertTags.PDF),
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.insert_sticker)) },
+                leadingIcon = { Icon(Icons.Outlined.EmojiEmotions, null) },
+                onClick = { open = false; actions.sticker() },
+                modifier = Modifier.testTag(InsertTags.STICKER),
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.insert_table)) },
+                leadingIcon = { Icon(Icons.Outlined.TableChart, null) },
+                onClick = { open = false; actions.table() },
+                modifier = Modifier.testTag(InsertTags.TABLE),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.audio_record)) },
@@ -310,4 +330,66 @@ private fun TextFont.label(): Int = when (this) {
     TextFont.CASUAL -> R.string.font_casual
     TextFont.CONDENSED -> R.string.font_condensed
     TextFont.ROUNDED -> R.string.font_medium
+}
+
+/** Stickers: emoji that read well large, grouped loosely (study, feelings, marks). */
+internal val Stickers = listOf(
+    "⭐", "✅", "❌", "❗", "❓", "💡", "📌", "📎", "📚", "✏️", "📝", "🎯", "⏰", "📅", "🔥", "⚠️",
+    "👍", "👎", "👏", "🙏", "💪", "🙂", "😂", "😍", "🤔", "😮", "😢", "😴", "🎉", "❤️", "💯", "🚀",
+    "➡️", "⬅️", "⬆️", "⬇️", "✔️", "✳️", "🔵", "🟢", "🟡", "🔴", "🟣", "⚫", "🏆", "🌟", "☀️", "🌙",
+)
+
+/** Picks a sticker. */
+@Composable
+fun StickerDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.insert_sticker)) },
+        text = {
+            androidx.compose.foundation.layout.FlowRow(Modifier.verticalScroll(rememberScrollState())) {
+                Stickers.forEachIndexed { i, s ->
+                    Box(
+                        Modifier
+                            .size(52.dp)
+                            .clickable(role = Role.Button) { onPick(s) }
+                            .semantics { contentDescription = s }
+                            .testTag(InsertTags.sticker(i)),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(s, fontSize = 28.sp) }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+/** Table grid size: rows and columns, each 1–12. */
+@Composable
+fun TableDialog(onInsert: (Int, Int) -> Unit, onDismiss: () -> Unit) {
+    var rows by rememberSaveable { mutableStateOf(3) }
+    var cols by rememberSaveable { mutableStateOf(3) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.insert_table)) },
+        text = {
+            Column {
+                Stepper(stringResource(R.string.table_rows), rows) { rows = it }
+                Stepper(stringResource(R.string.table_columns), cols) { cols = it }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onInsert(rows, cols) }, modifier = Modifier.testTag(InsertTags.TABLE_INSERT)) { Text(stringResource(R.string.table_insert)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+@Composable
+private fun Stepper(label: String, value: Int, onValue: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text("$label: $value", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        TextButton(onClick = { onValue((value - 1).coerceAtLeast(1)) }, enabled = value > 1) { Text("−", fontSize = 22.sp) }
+        TextButton(onClick = { onValue((value + 1).coerceAtMost(12)) }, enabled = value < 12) { Text("+", fontSize = 22.sp) }
+    }
 }
