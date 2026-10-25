@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TemplateDao {
-    @Query("SELECT * FROM custom_templates ORDER BY createdAt, id")
+    @Query("SELECT * FROM custom_templates ORDER BY createdAt, rowid")
     fun observeAll(): Flow<List<CustomTemplateEntity>>
 
     @Query("SELECT * FROM custom_templates WHERE id = :id")

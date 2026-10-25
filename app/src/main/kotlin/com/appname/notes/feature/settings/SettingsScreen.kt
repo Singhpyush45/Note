@@ -224,6 +224,7 @@ fun SettingsScreen(
                     onFingerModeSelected = onFingerModeSelected,
                     actions = appearanceActions,
                     wallpaperPhoto = wallpaperPhoto,
+                    onManageTemplates = onManageTemplates,
                 )
             }
         }
@@ -249,6 +250,7 @@ private fun SettingsList(
     onFingerModeSelected: (FingerMode) -> Unit,
     actions: AppearanceActions,
     wallpaperPhoto: ImageBitmap?,
+    onManageTemplates: () -> Unit,
 ) {
     var pickingWallpaper by rememberSaveable { mutableStateOf(false) }
     var pickingHue by rememberSaveable { mutableStateOf(false) }
