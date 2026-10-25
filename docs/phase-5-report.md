@@ -1,7 +1,7 @@
 # Phase 5 — Capture (attachments, scanner/OCR, audio, reminders, voice typing): report
 
-Status: **done on CI** — build 73 (run 40119708826): 340 JVM/Robolectric tests, 35 emulator tests, 0 failures,
-lint 0 errors, test APK published.
+Status: **done on CI** — build 79 (run 40124664545, includes 5e): 359 JVM/Robolectric tests, 37 emulator tests,
+0 failures, lint 0 errors, test APK published. (5a–5d alone: build 73.)
 Device checks by a person: `phase-5-device-checklist.md` (pending, like the Phase 3 and 4 checklists).
 
 ## What was built
