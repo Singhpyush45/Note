@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import com.appname.notes.R
 import com.appname.notes.core.ink.model.PageTemplate
@@ -35,6 +37,7 @@ import com.appname.notes.feature.ink.label
  * "Choose template" from the + menu: the page styles a handwritten note can start with, each shown as a small
  * page. (Phase 6c replaces this with the full template screen and categories.)
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TemplatePickerDialog(onPick: (PageTemplate) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
@@ -42,7 +45,8 @@ fun TemplatePickerDialog(onPick: (PageTemplate) -> Unit, onDismiss: () -> Unit) 
         modifier = Modifier.testTag(LibraryTestTags.TEMPLATE_PICKER),
         title = { Text(stringResource(R.string.create_choose_template)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // A dialog is its own window: expose test tags as resource ids here too (UI Automator tests).
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.semantics { testTagsAsResourceId = true }) {
                 PageTemplate.entries.chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         row.forEach { t ->
