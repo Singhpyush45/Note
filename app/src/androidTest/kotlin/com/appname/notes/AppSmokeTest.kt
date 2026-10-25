@@ -42,15 +42,17 @@ class AppSmokeTest {
     @Test
     fun themeSelection_appliesImmediately() {
         val dark = composeRule.activity.getString(R.string.settings_theme_dark)
-        val system = composeRule.activity.getString(R.string.settings_theme_system)
+        val system = composeRule.activity.getString(R.string.settings_theme_system_short)
 
         composeRule.onNodeWithTag("nav_settings").performClick()
-        composeRule.onNodeWithText(dark).performClick()
-        waitUntilSelected(dark) // saved on a background thread, then shown
-
-        // Restore the default so test order doesn't matter.
-        composeRule.onNodeWithText(system).performClick()
-        waitUntilSelected(system)
+        try {
+            composeRule.onNodeWithText(dark).performClick()
+            waitUntilSelected(dark) // saved on a background thread, then shown
+        } finally {
+            // Restore the default so test order doesn't matter (other tests check paper colours).
+            composeRule.onNodeWithText(system).performClick()
+            waitUntilSelected(system)
+        }
     }
 
     private fun waitUntilSelected(text: String) {

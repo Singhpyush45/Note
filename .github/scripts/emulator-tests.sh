@@ -10,6 +10,7 @@ crash_report() {
   text=$( {
     echo "== crash buffer (Java frames first) =="; adb logcat -d -b crash | grep -E "Abort message|name:|  at |#[0-9]+ pc .*(\.apk|\.oat|\.odex|\.vdex|base\.|androidx|ink|hwui)" | head -n 120
     echo "== process deaths / low memory =="; adb logcat -d | grep -E "lowmemorykiller|Low on memory|has died|Process .* \(pid|FATAL|SIGSEGV|SIGABRT|OutOfMemory" | tail -n 30
+    echo "== ANR / jank =="; adb logcat -d | grep -E "ANR in|Input dispatching timed out|Skipped [0-9]+ frames" | tail -n 15
     echo "== TestRunner =="; adb logcat -d -s TestRunner | tail -n 20
   } 2>/dev/null )
   text=${text//'%'/'%25'}; text=${text//$'\r'/}; text=${text//$'\n'/'%0A'}

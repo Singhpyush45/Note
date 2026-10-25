@@ -15,6 +15,7 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -207,7 +208,21 @@ class LifecycleE2ETest {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (clearTask) intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
         context.startActivity(intent)
-        assertThat(device.wait(Until.hasObject(By.pkg(PACKAGE).depth(0)), TIMEOUT_MS)).isTrue()
+        val shown = device.wait(Until.hasObject(By.pkg(PACKAGE).depth(0)), TIMEOUT_MS)
+        assertWithMessage("app window after launch. ${diagnostics()} ${launchDiagnostics()}").that(shown).isTrue()
+    }
+
+    /** Why a launch might not show: the resumed activity, ANRs, frames skipped, and whether the UI ever went idle. */
+    private fun launchDiagnostics(): String {
+        val resumed = device.executeShellCommand("dumpsys activity activities").lines()
+            .filter { "ResumedActivity" in it || "mFocusedApp" in it }.take(4).joinToString(" | ") { it.trim() }
+        val log = device.executeShellCommand("logcat -d -t 400").lines()
+            .filter { l -> listOf("ANR in", "Input dispatching timed out", "Skipped", "AndroidRuntime", "appname").any { it in l } }
+            .takeLast(25).joinToString("\n")
+        val idleStart = System.currentTimeMillis()
+        device.waitForIdle(3_000)
+        val idleMs = System.currentTimeMillis() - idleStart
+        return "Resumed: $resumed. waitForIdle took ${idleMs} ms (3000 = never idle). Log:\n$log"
     }
 
     private fun find(resourceId: String): UiObject2 =
