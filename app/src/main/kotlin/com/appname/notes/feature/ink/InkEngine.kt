@@ -47,6 +47,8 @@ object InkEngine {
             InkTool.PEN -> StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1)
             InkTool.MARKER -> StockBrushes.marker(StockBrushes.MarkerVersion.V1)
             InkTool.HIGHLIGHTER -> StockBrushes.highlighter(version = StockBrushes.HighlighterVersion.V1)
+            // Pencils and brushes are drawn by the app's own renderer (StyledInk); this is only a safe default.
+            InkTool.PENCIL, InkTool.BRUSH -> StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1)
         }
         return Brush.createWithColorIntArgb(family, b.colorArgb, b.size, EPSILON)
     }

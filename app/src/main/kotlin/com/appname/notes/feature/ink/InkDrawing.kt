@@ -98,10 +98,13 @@ internal object InkPaths {
         paint.strokeWidth = base
     }
 
-    /** Fallback drawing of any item; canvas in page coordinates. */
-    fun drawItem(canvas: Canvas, item: InkItem, paint: Paint = InkPaints.inkPaint(item.brush)) {
+    /**
+     * Drawing of any item without Jetpack Ink (thumbnails, PDF export); canvas in page coordinates. Variants
+     * (pencils, brushes …) are drawn by [styled], one per thread.
+     */
+    fun drawItem(canvas: Canvas, item: InkItem, paint: Paint = InkPaints.inkPaint(item.brush), styled: StyledInk? = null) {
         when (item) {
-            is StrokeItem -> drawStroke(canvas, item, paint)
+            is StrokeItem -> if (item.brush.usesJetpack) drawStroke(canvas, item, paint) else (styled ?: StyledInk(cache = false)).draw(canvas, item)
             is ShapeItem -> canvas.drawPath(shape(item.geometry), paint)
         }
     }
@@ -117,6 +120,7 @@ internal class InkRenderer {
     /** Ink stroke per item id, rebuilt when the item object changes (moved, recoloured …). */
     private val strokeCache = HashMap<String, Pair<StrokeItem, Stroke?>>()
     private val shapeCache = HashMap<String, Pair<ShapeItem, Path>>()
+    private val styled = StyledInk()
 
     private val paperPaint = Paint().apply { color = InkPaints.PAPER }
     private val shadowPaint = Paint().apply { color = 0x22000000 }
@@ -131,6 +135,7 @@ internal class InkRenderer {
     fun retain(ids: Set<String>) {
         strokeCache.keys.retainAll(ids)
         shapeCache.keys.retainAll(ids)
+        styled.retain(ids)
     }
 
     private val templateRenderer = com.appname.notes.feature.templates.TemplateRenderer()
@@ -233,6 +238,10 @@ internal class InkRenderer {
     fun drawItem(canvas: Canvas, item: InkItem, transform: Matrix) {
         when (item) {
             is StrokeItem -> {
+                if (!item.brush.usesJetpack) {
+                    styled.draw(canvas, item)
+                    return
+                }
                 val stroke = inkStroke(item)
                 val r = inkRenderer
                 if (stroke != null && r != null) {
@@ -252,11 +261,21 @@ internal class InkRenderer {
         }
     }
 
-    /** A live stroke drawn by us (only when Ink isn't available). */
+    /** A live stroke drawn by us: variants always (so wet ink looks like dry ink), classic ink when Ink isn't available. */
     fun drawLive(canvas: Canvas, brush: InkBrush, points: StrokePoints, pageToScreen: Matrix) {
-        paintFor(brush)
-        canvas.withMatrix(pageToScreen) { InkPaths.drawStroke(this, StrokeItem("live", 0, brush, points), itemPaint) }
+        val live = StrokeItem(LIVE_ID, 0, brush, points)
+        canvas.withMatrix(pageToScreen) {
+            if (!brush.usesJetpack) {
+                liveStyled.draw(this, live)
+            } else {
+                paintFor(brush)
+                InkPaths.drawStroke(this, live, itemPaint)
+            }
+        }
     }
+
+    /** The live stroke changes every frame: never cached. */
+    private val liveStyled = StyledInk(cache = false)
 
     private fun paintFor(brush: InkBrush) {
         itemPaint.style = Paint.Style.STROKE
@@ -320,5 +339,6 @@ internal class InkRenderer {
 
     private companion object {
         const val LINED_MARGIN = 64f
+        const val LIVE_ID = "live"
     }
 }

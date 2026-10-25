@@ -24,17 +24,52 @@ enum class InkTool(val code: Int) {
 
     /** Wide translucent highlighter drawn under the other ink. */
     HIGHLIGHTER(3),
+
+    /** Graphite pencils (owner brief §12): textured, lighter than ink. Stored only in format 2. */
+    PENCIL(4),
+
+    /** Paint brushes and calligraphy (owner brief §12). Stored only in format 2. */
+    BRUSH(5),
     ;
+
+    /** Pen, marker and highlighter existed in the first storage format. */
+    val isOriginal: Boolean get() = code <= 3
 
     companion object {
         fun fromCode(code: Int): InkTool? = entries.firstOrNull { it.code == code }
     }
 }
 
-/** How a stroke or shape is drawn. [colorArgb] is 0xAARRGGBB; [size] is the line width in page units. */
-data class InkBrush(val tool: InkTool, val colorArgb: Int, val size: Float) {
+/**
+ * How a stroke or shape is drawn. [colorArgb] is 0xAARRGGBB; [size] is the line width in page units.
+ * [style] is the variant (null = the tool's classic one, as in older notes); [pressure] false draws a stylus
+ * stroke as if pressed evenly.
+ */
+data class InkBrush(
+    val tool: InkTool,
+    val colorArgb: Int,
+    val size: Float,
+    val style: BrushStyle? = null,
+    val pressure: Boolean = true,
+) {
     init {
         require(size.isFinite() && size > 0f) { "brush size must be positive" }
+        require(style == null || style.tool == tool) { "style ${style?.name} isn't a ${tool.name} style" }
+    }
+
+    val effectiveStyle: BrushStyle get() = style ?: BrushStyle.classic(tool)
+
+    /** Drawn by Jetpack Ink (the classic pen, marker and highlighter); everything else by the app's renderer. */
+    val usesJetpack: Boolean get() = effectiveStyle.jetpack && pressure
+
+    /**
+     * The same brush written the canonical way, exactly as it reads back from storage: for the original tools
+     * the classic style is "no style"; pencils and brushes always name their style.
+     */
+    fun normalized(): InkBrush = when {
+        tool.isOriginal && style == BrushStyle.classic(tool) -> copy(style = null)
+        !tool.isOriginal && style == null -> copy(style = BrushStyle.classic(tool))
+        else -> this
     }
 }
 

@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -136,6 +137,28 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     var confirmDeletePage by remember { mutableStateOf(false) }
     var showPages by rememberSaveable { mutableStateOf(false) }
     var pageSettings by rememberSaveable { mutableStateOf(false) }
+    // Tool variation panel and colour picker (owner brief §13–14).
+    var panelOpen by rememberSaveable { mutableStateOf(false) }
+    var colorPicker by rememberSaveable { mutableStateOf(false) }
+    val toolActions = remember(viewModel) {
+        InkToolActions(
+            onTool = { tool -> viewModel.selectTool(tool); panelOpen = false },
+            onStyle = viewModel::setStyle,
+            onColor = viewModel::setColor,
+            onSize = viewModel::setSize,
+            onOpacity = viewModel::setOpacity,
+            onPressure = viewModel::setPressure,
+            onRecent = viewModel::applyRecent,
+            onMoreColors = { colorPicker = true },
+            onEraserMode = viewModel::setEraserMode,
+            onEraserSize = viewModel::setEraserSize,
+            onDeleteSelection = viewModel::deleteSelection,
+            onDuplicateSelection = viewModel::duplicateSelection,
+            onRecolorSelection = viewModel::recolorSelection,
+            onDoneSelection = viewModel::clearSelection,
+            onLaser = viewModel::setLaser,
+        )
+    }
     val context = LocalContext.current
     val shareTitle = stringResource(R.string.pdf_share_title)
     LaunchedEffect(ui.shareRequest) {
@@ -184,15 +207,9 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             if (load is InkLoad.Ready && ui.readOnly == null) {
                 InkToolbar(
                     ui = ui,
-                    onTool = viewModel::selectTool,
-                    onColor = viewModel::setColor,
-                    onSize = viewModel::setSize,
-                    onEraserMode = viewModel::setEraserMode,
-                    onEraserSize = viewModel::setEraserSize,
-                    onDeleteSelection = viewModel::deleteSelection,
-                    onDuplicateSelection = viewModel::duplicateSelection,
-                    onRecolorSelection = viewModel::recolorSelection,
-                    onDoneSelection = viewModel::clearSelection,
+                    actions = toolActions,
+                    panelOpen = panelOpen,
+                    onPanel = { panelOpen = it },
                     modifier = Modifier.navigationBarsPadding(),
                 )
             }
@@ -238,6 +255,15 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                             )
                         }
                     }
+                    if (panelOpen && ui.readOnly == null && ui.tools.tool.inkTool != null) {
+                        // Over the page, just above the tool bar, so opening it never moves the page.
+                        VariationPanel(
+                            ui = ui,
+                            actions = toolActions,
+                            onClose = { panelOpen = false },
+                            modifier = Modifier.align(Alignment.BottomCenter).widthIn(max = 560.dp),
+                        )
+                    }
                     if (ui.pageCount > 1) {
                         // Page count (SRS 7.1); tapping it opens the page grid to jump to a page.
                         Surface(
@@ -282,6 +308,22 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             confirm = stringResource(R.string.action_delete),
             onConfirm = { viewModel.deleteCurrentPage(); confirmDeletePage = false },
             onDismiss = { confirmDeletePage = false },
+        )
+    }
+    if (colorPicker && ready != null) {
+        val laserColor = ui.tools.tool == EditorTool.LASER
+        val current = if (laserColor) ui.laser.colorArgb else ui.tools.tool.inkTool?.let { ui.tools.brushes[it]?.colorArgb } ?: 0xFF000000.toInt()
+        ColorPickerDialog(
+            initial = current,
+            recent = ui.recentColors,
+            saved = ui.savedColors,
+            onPick = { c ->
+                if (laserColor) viewModel.setLaser(ui.laser.copy(colorArgb = c, rainbow = false)) else viewModel.setColor(c)
+                colorPicker = false
+            },
+            onSave = viewModel::saveColor,
+            onRemoveSaved = viewModel::removeSavedColor,
+            onDismiss = { colorPicker = false },
         )
     }
     if (pageSettings && ready != null) {
@@ -336,6 +378,7 @@ private fun InkCanvas(
             view.pdf = pdf
             view.arrangement = ui.arrangement
             view.darkPaper = darkPaper
+            view.laser = ui.laser
             view.bind(session, controller)
             ui.scrollRequest?.let {
                 view.scrollToPage(it.page)
@@ -451,178 +494,6 @@ private fun InkTopBar(
             }
         },
     )
-}
-
-// ---------------------------------------------------------------- toolbar
-
-private data class Swatch(val argb: Int, @param:StringRes val name: Int)
-
-private val InkColors = listOf(
-    Swatch(0xFF1F1F1F.toInt(), R.string.ink_color_black),
-    Swatch(0xFF5F6368.toInt(), R.string.ink_color_gray),
-    Swatch(0xFFD93025.toInt(), R.string.ink_color_red),
-    Swatch(0xFFE8710A.toInt(), R.string.ink_color_orange),
-    Swatch(0xFF188038.toInt(), R.string.ink_color_green),
-    Swatch(0xFF1A73E8.toInt(), R.string.ink_color_blue),
-    Swatch(0xFF9334E6.toInt(), R.string.ink_color_purple),
-    Swatch(0xFF795548.toInt(), R.string.ink_color_brown),
-)
-
-private val HighlighterColors = listOf(
-    Swatch(0xFFFFEB3B.toInt(), R.string.ink_color_yellow),
-    Swatch(0xFF76FF03.toInt(), R.string.ink_color_green),
-    Swatch(0xFF40C4FF.toInt(), R.string.ink_color_blue),
-    Swatch(0xFFFF80AB.toInt(), R.string.ink_color_pink),
-)
-
-private val Sizes = mapOf(
-    InkTool.PEN to listOf(1.5f, 2.5f, 4f),
-    InkTool.MARKER to listOf(3f, 5f, 8f),
-    InkTool.HIGHLIGHTER to listOf(12f, 18f, 26f),
-)
-private val EraserSizes = listOf(10.0, 16.0, 28.0)
-private val SizeNames = listOf(R.string.ink_size_fine, R.string.ink_size_medium, R.string.ink_size_bold)
-
-@OptIn(ExperimentalMaterial3Api::class) // segmented buttons
-@Composable
-private fun InkToolbar(
-    ui: InkEditorUi,
-    onTool: (EditorTool) -> Unit,
-    onColor: (Int) -> Unit,
-    onSize: (Float) -> Unit,
-    onEraserMode: (EraserMode) -> Unit,
-    onEraserSize: (Double) -> Unit,
-    onDeleteSelection: () -> Unit,
-    onDuplicateSelection: () -> Unit,
-    onRecolorSelection: (Int) -> Unit,
-    onDoneSelection: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val tools = ui.tools
-    Surface(tonalElevation = 3.dp, modifier = modifier.testTag(InkTestTags.TOOLBAR)) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-            ) {
-                ToolButton(EditorTool.PEN, Icons.Outlined.Edit, R.string.ink_tool_pen, tools.tool, onTool)
-                ToolButton(EditorTool.MARKER, Icons.Outlined.BorderColor, R.string.ink_tool_marker, tools.tool, onTool)
-                ToolButton(EditorTool.HIGHLIGHTER, InkIcons.Highlighter, R.string.ink_tool_highlighter, tools.tool, onTool)
-                ToolButton(EditorTool.ERASER, InkIcons.Eraser, R.string.ink_tool_eraser, tools.tool, onTool)
-                ToolButton(EditorTool.LASSO, InkIcons.Lasso, R.string.ink_tool_lasso, tools.tool, onTool)
-            }
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).height(52.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                when (tools.tool) {
-                    EditorTool.PEN, EditorTool.MARKER, EditorTool.HIGHLIGHTER -> {
-                        val inkTool = tools.tool.inkTool()!!
-                        val brush = tools.brushes.getValue(inkTool)
-                        val palette = if (inkTool == InkTool.HIGHLIGHTER) HighlighterColors else InkColors
-                        // Sizes first: on narrow phones the colour row scrolls, and sizes must stay visible.
-                        Sizes.getValue(inkTool).forEachIndexed { i, size ->
-                            SizeDot(size / Sizes.getValue(inkTool).last(), SizeNames[i], selected = brush.size == size, onClick = { onSize(size) })
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        palette.forEach { s ->
-                            ColorDot(s, selected = (brush.colorArgb and 0xFFFFFF) == (s.argb and 0xFFFFFF), onClick = { onColor(s.argb) })
-                        }
-                    }
-                    EditorTool.ERASER -> {
-                        SingleChoiceSegmentedButtonRow {
-                            EraserMode.entries.forEachIndexed { i, mode ->
-                                val description = stringResource(
-                                    if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke_description else R.string.ink_eraser_area_description,
-                                )
-                                SegmentedButton(
-                                    selected = tools.eraserMode == mode,
-                                    onClick = { onEraserMode(mode) },
-                                    shape = SegmentedButtonDefaults.itemShape(i, EraserMode.entries.size),
-                                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = description },
-                                ) {
-                                    Text(
-                                        stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area),
-                                        maxLines = 1,
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        EraserSizes.forEachIndexed { i, size ->
-                            SizeDot((size / EraserSizes.last()).toFloat(), SizeNames[i], selected = tools.eraserSizeDp == size, onClick = { onEraserSize(size) })
-                        }
-                    }
-                    EditorTool.LASSO -> if (ui.hasSelection) {
-                        // Actions first so they stay on screen on phones; the colour row may scroll.
-                        IconButton(onClick = onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
-                        IconButton(onClick = onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
-                        IconButton(onClick = onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }
-                        Spacer(Modifier.width(8.dp))
-                        InkColors.forEach { s -> ColorDot(s, selected = false, onClick = { onRecolorSelection(s.argb) }) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ToolButton(tool: EditorTool, icon: ImageVector, @StringRes label: Int, current: EditorTool, onTool: (EditorTool) -> Unit) {
-    FilledIconToggleButton(
-        checked = tool == current,
-        onCheckedChange = { onTool(tool) },
-        modifier = Modifier.testTag(InkTestTags.tool(tool)),
-    ) {
-        Icon(icon, stringResource(label))
-    }
-}
-
-/** 48 dp touch target with a 28 dp colour dot (SRS 8.2). */
-@Composable
-private fun ColorDot(swatch: Swatch, selected: Boolean, onClick: () -> Unit) {
-    val name = stringResource(swatch.name)
-    val ring = MaterialTheme.colorScheme.primary
-    Box(
-        Modifier
-            .size(48.dp)
-            .clickable(onClick = onClick)
-            .semantics {
-                contentDescription = name
-                role = Role.RadioButton
-                this.selected = selected
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .size(28.dp)
-                .then(if (selected) Modifier.border(3.dp, ring, CircleShape) else Modifier.border(1.dp, Color(0x33000000), CircleShape))
-                .padding(if (selected) 5.dp else 1.dp)
-                .background(Color(swatch.argb or 0xFF000000.toInt()), CircleShape),
-        )
-    }
-}
-
-@Composable
-private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, onClick: () -> Unit) {
-    val label = stringResource(name)
-    val colors = MaterialTheme.colorScheme
-    Box(
-        Modifier
-            .size(48.dp)
-            .clickable(onClick = onClick)
-            .then(if (selected) Modifier.background(colors.secondaryContainer, CircleShape) else Modifier)
-            .semantics {
-                contentDescription = label
-                role = Role.RadioButton
-                this.selected = selected
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(Modifier.size((6 + 16 * fraction).dp).background(colors.onSurface, CircleShape))
-    }
 }
 
 // ---------------------------------------------------------------- dialogs

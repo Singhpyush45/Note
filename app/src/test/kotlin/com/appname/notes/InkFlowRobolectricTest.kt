@@ -1,5 +1,11 @@
 package com.appname.notes
 
+import com.appname.notes.core.settings.LaserStyle
+import com.appname.notes.core.ink.model.InkTool
+import com.appname.notes.core.ink.model.BrushStyle
+import com.appname.notes.feature.ink.ColorPalettes
+import com.appname.notes.feature.ink.ColorPickerTags
+import com.appname.notes.feature.ink.InkToolTags
 import androidx.compose.ui.test.performScrollTo
 import com.appname.notes.core.ink.template.PageDesign
 import com.appname.notes.core.ink.template.SpacingPreset
@@ -409,5 +415,70 @@ class InkFlowRobolectricTest {
         assertThat(pages()[1].info.width).isEqualTo(pages()[0].info.width)
         assertThat(pages()[1].info.template).isEqualTo(pages()[0].info.template)
         assertThat(pages()[1].items).isEmpty()
+    }
+
+    // ------------------------------------------------------------ tools, variants, colours, laser (Phase 7)
+
+    private fun tap(tag: String) {
+        waitFor(tag)
+        composeRule.onNodeWithTag(tag).performScrollTo().performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Test
+    fun pencilVariantIsChosenInThePanelAndStoredWithTheStroke() {
+        openNewInkNote()
+        tap(InkTestTags.tool(EditorTool.PENCIL))
+        tap(InkTestTags.tool(EditorTool.PENCIL)) // the chosen tool again: its options
+        waitFor(InkToolTags.PANEL)
+        tap(InkToolTags.variant(BrushStyle.PENCIL_4B))
+        composeRule.onNodeWithTag(InkToolTags.PRESSURE).performClick() // pressure off
+        tap(InkToolTags.PANEL_CLOSE)
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+        val brush = (items().single() as StrokeItem).brush
+        assertThat(brush.tool).isEqualTo(InkTool.PENCIL)
+        assertThat(brush.effectiveStyle).isEqualTo(BrushStyle.PENCIL_4B)
+        assertThat(brush.size).isEqualTo(BrushStyle.PENCIL_4B.defaultSize)
+        assertThat(brush.pressure).isFalse()
+        // The set-up is remembered as recently used.
+        waitAdvancing { runBlocking { data.settings().ink.first() }.recentBrushes.firstOrNull()?.effectiveStyle == BrushStyle.PENCIL_4B }
+    }
+
+    @Test
+    fun colourPickerSetsTheToolColour() {
+        openNewInkNote()
+        tap(InkTestTags.tool(EditorTool.BRUSH))
+        tap(InkToolTags.MORE_COLORS)
+        waitFor(ColorPickerTags.DIALOG)
+        val neon = ColorPalettes.NEON.colors[3]
+        tap(ColorPickerTags.swatch(neon))
+        tap(ColorPickerTags.SAVE)
+        tap(ColorPickerTags.USE)
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+        val brush = (items().single() as StrokeItem).brush
+        assertThat(brush.colorArgb and 0xFFFFFF).isEqualTo(neon and 0xFFFFFF)
+        val ink = runBlocking { data.settings().ink.first() }
+        assertThat(ink.savedColors).contains(neon)
+        assertThat(ink.recentColors.first()).isEqualTo(neon)
+    }
+
+    @Test
+    fun laserPointerLeavesNothingInTheNote() {
+        openNewInkNote()
+        tap(InkTestTags.tool(EditorTool.LASER))
+        tap(InkToolTags.LASER_RAINBOW)
+        tap(InkToolTags.laserStyle(LaserStyle.OUTLINE))
+        waitAdvancing { runBlocking { data.settings().ink.first() }.laser.let { it.rainbow && it.style == LaserStyle.OUTLINE } }
+        stroke(line(60f, 200f, 340f, 260f))
+        stroke(line(60f, 300f, 340f, 360f), tool = MotionEvent.TOOL_TYPE_FINGER)
+        composeRule.waitForIdle()
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1500)) // the trail fades away
+        assertThat(items()).isEmpty()
+        // Switching back to the pen draws normally.
+        tap(InkTestTags.tool(EditorTool.PEN))
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
     }
 }

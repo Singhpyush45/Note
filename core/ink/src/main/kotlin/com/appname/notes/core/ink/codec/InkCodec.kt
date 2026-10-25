@@ -1,5 +1,6 @@
 package com.appname.notes.core.ink.codec
 
+import com.appname.notes.core.ink.model.BrushStyle
 import com.appname.notes.core.ink.model.InkBrush
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.InkTool
@@ -30,9 +31,10 @@ sealed interface DecodeResult {
  * The item's id and z live in database columns; this is the body.
  *
  * ```
- * u8   format version (1)
+ * u8   format version (1 or 2)
  * u8   item type: 1 = stroke, 2 = shape
  * u8   tool, i32 colour (ARGB), f32 size                      — brush
+ * v2:  u8 style (BrushStyle code), u8 flags (bit0 = pressure off)   — Phase 7 variants
  * stroke: points
  * shape:  u8 kind, geometry, u8 has-source, [points]
  * geometry: u8 tag, then 1 segment  = f32 x1 y1 x2 y2 head
@@ -45,12 +47,18 @@ sealed interface DecodeResult {
  * Varint = 7 bits per byte, high bit means "more bytes" (like protobuf). Zig-zag maps signed to unsigned
  * so small negative deltas stay small: 0→0, −1→1, 1→2, −2→3 …
  *
+ * Format 2 is written only when it is needed (a pencil, brush, non-classic variant or pressure off), so ink
+ * drawn with the original tools stays readable by older app versions. An older version that meets format 2
+ * opens the page read-only instead of losing anything.
+ *
  * Quantisation: stored values are rounded (coordinates to 1/16 unit ≈ 0.017 mm). The editor runs
  * [quantize] on every finished stroke, so what's in memory equals what's on disk exactly.
  */
 object InkCodec {
 
-    const val FORMAT_VERSION = 1
+    const val FORMAT_VERSION = 2
+
+    private const val FLAG_NO_PRESSURE = 1
 
     private const val TYPE_STROKE = 1
     private const val TYPE_SHAPE = 2
@@ -88,9 +96,12 @@ object InkCodec {
     )
 
     fun quantize(item: InkItem): InkItem = when (item) {
-        is StrokeItem -> item.copy(points = quantize(item.points))
-        is ShapeItem -> item.copy(source = item.source?.let { quantize(it) })
+        is StrokeItem -> item.copy(points = quantize(item.points), brush = item.brush.normalized())
+        is ShapeItem -> item.copy(source = item.source?.let { quantize(it) }, brush = item.brush.normalized())
     }
+
+    /** Whether [b] needs format 2 (see the format description). */
+    private fun needsV2(b: InkBrush): Boolean = !b.tool.isOriginal || !b.pressure || (b.style != null && b.style != BrushStyle.classic(b.tool))
 
     private fun wrap(a: Float): Float {
         val twoPi = (2 * PI).toFloat()
@@ -102,11 +113,17 @@ object InkCodec {
 
     fun encode(item: InkItem): ByteArray {
         val w = Writer()
-        w.u8(FORMAT_VERSION)
+        val b = item.brush
+        val v2 = needsV2(b)
+        w.u8(if (v2) 2 else 1)
         w.u8(if (item is StrokeItem) TYPE_STROKE else TYPE_SHAPE)
-        w.u8(item.brush.tool.code)
-        w.i32(item.brush.colorArgb)
-        w.f32(item.brush.size)
+        w.u8(b.tool.code)
+        w.i32(b.colorArgb)
+        w.f32(b.size)
+        if (v2) {
+            w.u8(b.effectiveStyle.code)
+            w.u8(if (b.pressure) 0 else FLAG_NO_PRESSURE)
+        }
         when (item) {
             is StrokeItem -> writePoints(w, item.points)
             is ShapeItem -> {
@@ -167,8 +184,23 @@ object InkCodec {
                 version < 1 -> return DecodeResult.Corrupt("bad version")
             }
             val type = r.u8()
-            val tool = InkTool.fromCode(r.u8()) ?: return DecodeResult.Corrupt("unknown tool")
-            val brush = InkBrush(tool, r.i32(), r.f32())
+            val toolCode = r.u8()
+            val tool = InkTool.fromCode(toolCode)
+            val color = r.i32()
+            val size = r.f32()
+            val brush = if (version >= 2) {
+                val styleCode = r.u8()
+                val flags = r.u8()
+                // A variant or flag this version doesn't know comes from a newer app: read-only, never overwritten.
+                val style = BrushStyle.fromCode(styleCode)
+                if (tool == null || style == null || style.tool != tool || flags and FLAG_NO_PRESSURE.inv() != 0) {
+                    return DecodeResult.NewerVersion(version)
+                }
+                InkBrush(tool, color, size, style, pressure = flags and FLAG_NO_PRESSURE == 0).normalized()
+            } else {
+                if (tool == null || !tool.isOriginal) return DecodeResult.Corrupt("unknown tool")
+                InkBrush(tool, color, size)
+            }
             val item: InkItem = when (type) {
                 TYPE_STROKE -> StrokeItem(id, z, brush, readPoints(r))
                 TYPE_SHAPE -> {

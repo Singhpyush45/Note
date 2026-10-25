@@ -1,5 +1,8 @@
 package com.appname.notes.feature.ink
 
+import com.appname.notes.core.settings.LaserSettings
+import com.appname.notes.core.ink.input.LaserTrail
+import com.appname.notes.core.ink.input.EditorTool
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
@@ -111,6 +114,12 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         }
 
     /** Pages shown as dark paper (dark theme, display only). */
+    /** How the laser pointer looks (owner brief §17). The trail is screen-only and never saved. */
+    var laser: LaserSettings = LaserSettings()
+
+    private val laserTrail = LaserTrail()
+    private val laserPainter = LaserPainter()
+
     var darkPaper: Boolean = false
         set(value) {
             if (field == value) return
@@ -291,7 +300,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     // ---------------------------------------------------------------- touch
 
-    private enum class Mode { IDLE, INK, PAN, PINCH, IGNORE }
+    private enum class Mode { IDLE, INK, LASER, PAN, PINCH, IGNORE }
 
     private var mode = Mode.IDLE
     private var inkPointer = -1
@@ -328,6 +337,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             MotionEvent.ACTION_POINTER_DOWN -> onExtraPointer(e, e.actionIndex)
             MotionEvent.ACTION_MOVE -> when (mode) {
                 Mode.INK -> feedInk(e)
+                Mode.LASER -> feedLaser(e)
                 Mode.PAN -> pan(e)
                 Mode.PINCH -> pinch(e)
                 else -> Unit
@@ -336,6 +346,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             MotionEvent.ACTION_UP -> {
                 when (mode) {
                     Mode.INK -> if (e.isCanceledTouch()) cancelGesture(e) else finishInk(e)
+                    Mode.LASER -> laserTrail.end()
                     Mode.PAN -> fling(e)
                     else -> Unit
                 }
@@ -375,8 +386,13 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         if ((source == PointerSource.FINGER && !fingerDraws) || mouseScroll) {
             startPan(e, index)
         } else {
-            startInk(e, index, source)
+            startDrawing(e, index, source)
         }
+    }
+
+    /** Ink, or the laser pointer when it is the tool (the pen's eraser end still erases). */
+    private fun startDrawing(e: MotionEvent, index: Int, source: PointerSource) {
+        if (controller?.tools?.tool == EditorTool.LASER && source != PointerSource.STYLUS_ERASER) startLaser(e, index, source) else startInk(e, index, source)
     }
 
     private fun onExtraPointer(e: MotionEvent, index: Int) {
@@ -386,19 +402,30 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 isStylus(inkSource) -> Unit // palm or finger while the pen writes: ignore it
                 isStylus(source) -> { // the finger stroke was really the palm: the pen wins
                     cancelGesture(e)
-                    startInk(e, index, source)
+                    startDrawing(e, index, source)
                 }
                 else -> { // second finger: it's a pinch, not a stroke
                     cancelGesture(e)
                     startPinch(e, index)
                 }
             }
+            Mode.LASER -> when {
+                isStylus(inkSource) -> Unit
+                isStylus(source) -> {
+                    laserTrail.end()
+                    startDrawing(e, index, source)
+                }
+                else -> { // second finger: pinch
+                    laserTrail.end()
+                    startPinch(e, index)
+                }
+            }
             Mode.PAN -> if (isStylus(source)) {
-                startInk(e, index, source)
+                startDrawing(e, index, source)
             } else {
                 startPinch(e, index)
             }
-            Mode.IDLE, Mode.IGNORE -> if (isStylus(source)) startInk(e, index, source)
+            Mode.IDLE, Mode.IGNORE -> if (isStylus(source)) startDrawing(e, index, source)
             Mode.PINCH -> Unit
         }
     }
@@ -408,6 +435,10 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         when (mode) {
             Mode.INK -> if (id == inkPointer) {
                 if (e.isCanceledTouch()) cancelGesture(e) else finishInk(e)
+                mode = Mode.IGNORE
+            }
+            Mode.LASER -> if (id == inkPointer) {
+                laserTrail.end()
                 mode = Mode.IGNORE
             }
             Mode.PINCH -> if (id == pinchA || id == pinchB) {
@@ -480,6 +511,25 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         listener?.onInteraction()
     }
 
+    // ---------------------------------------------------------------- laser pointer
+
+    private fun startLaser(e: MotionEvent, index: Int, source: PointerSource) {
+        mode = Mode.LASER
+        inkPointer = e.getPointerId(index)
+        inkSource = source
+        laserTrail.start(e.getX(index), e.getY(index), e.eventTime, density)
+        surface.postInvalidateOnAnimation()
+        listener?.onInteraction()
+    }
+
+    private fun feedLaser(e: MotionEvent) {
+        val index = e.findPointerIndex(inkPointer)
+        if (index < 0) return
+        for (h in 0 until e.historySize) laserTrail.move(e.getHistoricalX(index, h), e.getHistoricalY(index, h), e.getHistoricalEventTime(h), density)
+        laserTrail.move(e.getX(index), e.getY(index), e.eventTime, density)
+        surface.postInvalidateOnAnimation()
+    }
+
     private fun feedInk(e: MotionEvent) {
         val c = controller ?: return
         val v = viewport ?: return
@@ -490,6 +540,8 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         samples.add(sampleAt(e, index, inkPage, v))
         liveStroke?.let { inProgress?.addToStroke(e, inkPointer, it) }
         handle(c.move(samples), e)
+        // Drawn by us (a variant, or no Jetpack Ink): show the new points now.
+        if (liveStroke == null) surface.invalidate()
         scheduleHold()
     }
 
@@ -511,6 +563,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     private fun cancelGesture(e: MotionEvent?) {
         removeCallbacks(holdRunnable)
+        laserTrail.end()
         val response = controller?.cancel() ?: Response.NONE
         liveStroke?.let { inProgress?.cancelStroke(it, e) }
         liveStroke = null
@@ -524,7 +577,8 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 val ink = inProgress
                 val brush = controller?.liveStroke()?.first
                 val v = viewport
-                if (ink != null && brush != null && e != null && v != null && inkPage >= 0) {
+                // Variants (pencils, brushes …) are drawn live by us, so the wet stroke matches the dry one.
+                if (ink != null && brush != null && brush.usesJetpack && e != null && v != null && inkPage >= 0) {
                     val toPage = Matrix().also { pageToScreen(inkPage, v).invert(it) }
                     ink.maskPath = outsidePage(inkPage, v)
                     // Dark paper: the live layer can't be filtered, so its colour is mapped the same way here.
@@ -770,7 +824,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 )
                 if (c.activePageId == page.id) {
                     c.shapePreview?.let { renderer.drawInk(canvas, listOf(it), page.width, page.height, m) }
-                    if (inProgress == null) c.liveStroke()?.let { (brush, points) -> renderer.drawLive(canvas, brush, points, m) }
+                    c.liveStroke()?.let { (brush, points) ->
+                        if (inProgress == null || !brush.usesJetpack) renderer.drawLive(canvas, brush, points, m)
+                    }
                 }
                 if (layer >= 0) canvas.restoreToCount(layer)
                 if (c.activePageId == page.id) {
@@ -790,6 +846,12 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     renderer.drawSelection(canvas, selectionOutline, density)
                     renderer.drawHandle(canvas, r.right, r.bottom, density)
                 }
+            }
+            // The laser pointer: on top of everything, fading; keeps animating until it has gone.
+            val now = SystemClock.uptimeMillis()
+            if (laserTrail.active(now)) {
+                laserPainter.draw(canvas, laserTrail, now, laser, density)
+                postInvalidateOnAnimation()
             }
         }
     }

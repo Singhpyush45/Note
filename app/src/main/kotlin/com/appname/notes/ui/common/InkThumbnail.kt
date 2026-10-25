@@ -62,6 +62,7 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
     val bitmapPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
     val templateRenderer = remember { TemplateRenderer() }
+    val styled = remember { com.appname.notes.feature.ink.StyledInk() }
     val darkPaper = com.appname.notes.feature.ink.LocalDarkPaper.current
     val darkLayer = remember { com.appname.notes.feature.ink.DarkPaper.layerPaint() }
     val pageRect = remember { RectF() }
@@ -90,7 +91,7 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
                     for (item in thumbnail.items) {
                         if ((pass == 0) != (item.brush.tool == InkTool.HIGHLIGHTER)) continue
                         paint.set(InkPaints.inkPaint(item.brush))
-                        InkPaths.drawItem(this, item, paint)
+                        InkPaths.drawItem(this, item, paint, styled)
                     }
                 }
             }

@@ -47,6 +47,11 @@ import com.appname.notes.core.ink.template.TemplateLayout
 import com.appname.notes.core.settings.FingerMode
 import com.appname.notes.core.settings.InkSettings
 import com.appname.notes.core.settings.SettingsRepository
+import com.appname.notes.core.ink.edit.InkEdit
+import com.appname.notes.core.ink.model.StrokeItem
+import com.appname.notes.core.ink.model.BrushStyle
+import com.appname.notes.core.settings.Recents
+import com.appname.notes.core.settings.LaserSettings
 import com.appname.notes.di.ApplicationScope
 import com.appname.notes.feature.editor.ReadOnlyReason
 import com.appname.notes.feature.editor.SaveStatus
@@ -101,6 +106,12 @@ data class InkEditorUi(
     val pageDesign: TemplateLayout? = null,
     /** Dark paper in dark theme (a global setting, shown in page settings too). */
     val darkPaper: Boolean = true,
+    /** Recently used tool set-ups and colours, newest first, and the user's saved colours (owner brief §13–14). */
+    val recentBrushes: List<InkBrush> = emptyList(),
+    val recentColors: List<Int> = emptyList(),
+    val savedColors: List<Int> = emptyList(),
+    /** The laser pointer's look (owner brief §17). */
+    val laser: LaserSettings = LaserSettings(),
 )
 
 data class ScrollRequest(val page: Int, val id: Long = System.nanoTime())
@@ -268,6 +279,7 @@ class InkEditorViewModel @AssistedInject constructor(
         session.onEdit = { edit ->
             enqueue(Op.Commit(edit))
             extendIfInfinite(edit.pageId)
+            rememberUsedBrush(edit.edit)
         }
         session.onChanged = { refresh() }
         _ui.update {
@@ -549,16 +561,88 @@ class InkEditorViewModel @AssistedInject constructor(
     fun setColor(colorArgb: Int) {
         val c = controller() ?: return
         val inkTool = c.tools.tool.inkTool() ?: return
-        val brush = c.tools.brushes.getValue(inkTool)
-        // Highlighters stay translucent whatever colour is picked.
-        val color = if (inkTool == InkTool.HIGHLIGHTER) (HIGHLIGHTER_ALPHA shl 24) or (colorArgb and 0xFFFFFF) else colorArgb
+        val brush = c.tools.brushes[inkTool] ?: return
+        // The colour changes, the opacity stays (highlighters stay translucent whatever colour is picked).
+        val color = (brush.colorArgb and ALPHA_MASK) or (colorArgb and RGB_MASK)
         updateBrush(inkTool, brush.copy(colorArgb = color))
+        val opaque = colorArgb or ALPHA_MASK
+        viewModelScope.launch { settings.updateInk { it.copy(recentColors = Recents.push(it.recentColors, opaque, Recents.MAX_COLORS)) } }
     }
 
     fun setSize(size: Float) {
         val c = controller() ?: return
         val inkTool = c.tools.tool.inkTool() ?: return
-        updateBrush(inkTool, c.tools.brushes.getValue(inkTool).copy(size = size))
+        val brush = c.tools.brushes[inkTool] ?: return
+        if (!size.isFinite() || size <= 0f) return
+        updateBrush(inkTool, brush.copy(size = size))
+    }
+
+    /** Picks a variant of the current tool (owner brief §12). Size goes to the variant's natural size; colour stays. */
+    fun setStyle(style: BrushStyle) {
+        val c = controller() ?: return
+        val inkTool = c.tools.tool.inkTool() ?: return
+        if (style.tool != inkTool) return
+        val brush = c.tools.brushes[inkTool] ?: return
+        if (brush.effectiveStyle == style) return
+        updateBrush(inkTool, brush.copy(style = style, size = style.defaultSize).normalized())
+    }
+
+    /** Opacity 0..1 of the current tool's colour (highlighters at most [HIGHLIGHTER_MAX_OPACITY]). */
+    fun setOpacity(opacity: Float) {
+        val c = controller() ?: return
+        val inkTool = c.tools.tool.inkTool() ?: return
+        val brush = c.tools.brushes[inkTool] ?: return
+        if (!opacity.isFinite()) return
+        val max = if (inkTool == InkTool.HIGHLIGHTER) HIGHLIGHTER_MAX_OPACITY else 1f
+        val alpha = (opacity.coerceIn(MIN_OPACITY, max) * 255).toInt()
+        updateBrush(inkTool, brush.copy(colorArgb = (alpha shl 24) or (brush.colorArgb and RGB_MASK)))
+    }
+
+    fun setPressure(enabled: Boolean) {
+        val c = controller() ?: return
+        val inkTool = c.tools.tool.inkTool() ?: return
+        val brush = c.tools.brushes[inkTool] ?: return
+        updateBrush(inkTool, brush.copy(pressure = enabled).normalized())
+    }
+
+    /** Uses a recently used set-up again: its tool, variant, colour and size. */
+    fun applyRecent(brush: InkBrush) {
+        val c = controller() ?: return
+        val tool = EditorTool.of(brush.tool)
+        toolPickedHere = true
+        c.tools = c.tools.copy(tool = tool)
+        updateBrush(brush.tool, brush.normalized())
+        viewModelScope.launch { settings.updateInk { it.copy(lastTool = tool) } }
+    }
+
+    /** Changes how the laser pointer looks; kept for next time. */
+    fun setLaser(laser: LaserSettings) {
+        val safe = laser.copy(widthDp = laser.widthDp.takeIf { it.isFinite() }?.coerceIn(2f, 24f) ?: LaserSettings().widthDp, colorArgb = laser.colorArgb or ALPHA_MASK)
+        _ui.update { it.copy(laser = safe) }
+        viewModelScope.launch { settings.updateInk { it.copy(laser = safe) } }
+    }
+
+    fun saveColor(colorArgb: Int) {
+        val opaque = colorArgb or ALPHA_MASK
+        viewModelScope.launch {
+            settings.updateInk { s -> if (opaque in s.savedColors) s else s.copy(savedColors = (s.savedColors + opaque).takeLast(Recents.MAX_SAVED)) }
+        }
+    }
+
+    fun removeSavedColor(colorArgb: Int) {
+        viewModelScope.launch { settings.updateInk { s -> s.copy(savedColors = s.savedColors - colorArgb) } }
+    }
+
+    /** A stroke was just drawn with the current tool: its set-up goes to the front of the recent list. */
+    private fun rememberUsedBrush(edit: InkEdit) {
+        if (edit.removed.isNotEmpty()) return
+        val stroke = edit.added.singleOrNull() as? StrokeItem ?: return
+        val c = controller() ?: return
+        val current = c.tools.tool.inkTool()?.let { c.tools.brushes[it] } ?: return
+        val used = stroke.brush.normalized()
+        if (used != current.normalized()) return // an undo/redo or a pasted stroke, not a new one
+        if (inkSettings.recentBrushes.firstOrNull() == used) return
+        viewModelScope.launch { settings.updateInk { it.copy(recentBrushes = Recents.push(it.recentBrushes, used, Recents.MAX_BRUSHES)) } }
     }
 
     private fun updateBrush(tool: InkTool, brush: InkBrush) {
@@ -739,6 +823,7 @@ class InkEditorViewModel @AssistedInject constructor(
             val next = toolsFrom(s).copy(tool = tool, eraserSizeDp = c.tools.eraserSizeDp)
             if (next != c.tools) c.tools = next
         }
+        _ui.update { it.copy(recentBrushes = s.recentBrushes, recentColors = s.recentColors, savedColors = s.savedColors, laser = s.laser) }
         refresh()
     }
 
@@ -759,13 +844,10 @@ class InkEditorViewModel @AssistedInject constructor(
         const val MAX_ATTEMPTS = 6
         const val FIRST_RETRY_MS = 500L
         const val MAX_RETRY_MS = 5_000L
-        const val HIGHLIGHTER_ALPHA = 0x66
+        const val ALPHA_MASK = 0xFF shl 24
+        const val RGB_MASK = 0xFFFFFF
+        const val MIN_OPACITY = 0.1f
     }
 }
 
-internal fun EditorTool.inkTool(): InkTool? = when (this) {
-    EditorTool.PEN -> InkTool.PEN
-    EditorTool.MARKER -> InkTool.MARKER
-    EditorTool.HIGHLIGHTER -> InkTool.HIGHLIGHTER
-    EditorTool.ERASER, EditorTool.LASSO -> null
-}
+internal fun EditorTool.inkTool(): InkTool? = inkTool

@@ -18,6 +18,7 @@ import com.appname.notes.core.designsystem.theme.UiDensity
 import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.ink.input.EditorTool
 import com.appname.notes.core.ink.input.EraserMode
+import com.appname.notes.core.ink.model.BrushStyle
 import com.appname.notes.core.ink.model.InkBrush
 import com.appname.notes.core.ink.model.InkTool
 import java.io.IOException
@@ -105,7 +106,16 @@ class DataStoreSettingsRepository @Inject constructor(
         for ((tool, brush) in new.brushes) {
             prefs[colorKey(tool)] = brush.colorArgb
             prefs[sizeKey(tool)] = brush.size
+            prefs[styleKey(tool)] = brush.effectiveStyle.code
+            prefs[pressureKey(tool)] = brush.pressure
         }
+        prefs[Keys.RECENT_BRUSHES] = Recents.encodeBrushes(new.recentBrushes)
+        prefs[Keys.RECENT_COLORS] = Recents.encodeColors(new.recentColors)
+        prefs[Keys.SAVED_COLORS] = Recents.encodeColors(new.savedColors)
+        prefs[Keys.LASER_STYLE] = new.laser.style.name
+        prefs[Keys.LASER_RAINBOW] = new.laser.rainbow
+        prefs[Keys.LASER_COLOR] = new.laser.colorArgb
+        prefs[Keys.LASER_WIDTH] = new.laser.widthDp
     }
 
     private fun Preferences.toInk(): InkSettings {
@@ -117,14 +127,27 @@ class DataStoreSettingsRepository @Inject constructor(
             stylusSeen = this[Keys.INK_STYLUS_SEEN] ?: false,
             lastTool = EditorTool.entries.firstOrNull { it.name == this[Keys.INK_TOOL] } ?: defaults.lastTool,
             eraserMode = EraserMode.entries.firstOrNull { it.name == this[Keys.INK_ERASER] } ?: defaults.eraserMode,
+            recentBrushes = Recents.decodeBrushes(this[Keys.RECENT_BRUSHES]),
+            recentColors = Recents.decodeColors(this[Keys.RECENT_COLORS], Recents.MAX_COLORS),
+            savedColors = Recents.decodeColors(this[Keys.SAVED_COLORS], Recents.MAX_SAVED),
+            laser = LaserSettings(
+                style = LaserStyle.entries.firstOrNull { it.name == this[Keys.LASER_STYLE] } ?: LaserStyle.SOLID,
+                rainbow = this[Keys.LASER_RAINBOW] ?: false,
+                colorArgb = this[Keys.LASER_COLOR] ?: LaserSettings().colorArgb,
+                widthDp = this[Keys.LASER_WIDTH]?.takeIf { it.isFinite() && it in 1f..40f } ?: LaserSettings().widthDp,
+            ),
             brushes = defaults.brushes.mapValues { (tool, default) ->
                 val size = this[sizeKey(tool)]?.takeIf { it.isFinite() && it > 0f } ?: default.size
-                InkBrush(tool, this[colorKey(tool)] ?: default.colorArgb, size)
+                // An unknown or mismatched style (e.g. from a newer version) falls back to the tool's default.
+                val style = this[styleKey(tool)]?.let { BrushStyle.fromCode(it) }?.takeIf { it.tool == tool } ?: default.style
+                InkBrush(tool, this[colorKey(tool)] ?: default.colorArgb, size, style, this[pressureKey(tool)] ?: true).normalized()
             },
         )
     }
 
     private fun colorKey(tool: InkTool) = intPreferencesKey("ink_${tool.name.lowercase()}_color")
+    private fun styleKey(tool: InkTool) = intPreferencesKey("ink_${tool.name.lowercase()}_style")
+    private fun pressureKey(tool: InkTool) = booleanPreferencesKey("ink_${tool.name.lowercase()}_pressure")
     private fun sizeKey(tool: InkTool) = floatPreferencesKey("ink_${tool.name.lowercase()}_size")
 
     override suspend fun setLibrarySort(sort: NoteSort): AppResult<Unit> =
@@ -206,6 +229,13 @@ class DataStoreSettingsRepository @Inject constructor(
         val SCROLL_AXIS = stringPreferencesKey("default_scroll_axis")
         val PAPER_COLOR = intPreferencesKey("default_paper_color")
         val DARK_PAPER = booleanPreferencesKey("dark_paper")
+        val RECENT_BRUSHES = stringPreferencesKey("ink_recent_brushes")
+        val RECENT_COLORS = stringPreferencesKey("ink_recent_colors")
+        val SAVED_COLORS = stringPreferencesKey("ink_saved_colors")
+        val LASER_STYLE = stringPreferencesKey("laser_style")
+        val LASER_RAINBOW = booleanPreferencesKey("laser_rainbow")
+        val LASER_COLOR = intPreferencesKey("laser_color")
+        val LASER_WIDTH = floatPreferencesKey("laser_width")
     }
 
     private companion object {

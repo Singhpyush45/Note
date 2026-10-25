@@ -76,4 +76,16 @@ internal object InkIcons {
             moveTo(2.5f, 20.5f); curveTo(4.5f, 16.5f, 6f, 22.5f, 8f, 19.5f); curveTo(9.5f, 17.5f, 11f, 21.5f, 13f, 20f)
         }
     }
+
+    /** A pointer pen sending out a beam that ends in a glowing dot: the laser pointer. */
+    val Laser: ImageVector by lazy {
+        icon("InkLaser") {
+            moveTo(3f, 21f); lineTo(9.5f, 14.5f)
+            moveTo(8f, 13f); lineTo(11f, 16f)
+            moveTo(12f, 12f); lineTo(14f, 10f)
+            // The dot and its rays.
+            moveTo(19f, 5f); lineTo(19f, 5f)
+            moveTo(15.5f, 5f); curveTo(15.5f, 3f, 17f, 1.5f, 19f, 1.5f); curveTo(21f, 1.5f, 22.5f, 3f, 22.5f, 5f); curveTo(22.5f, 7f, 21f, 8.5f, 19f, 8.5f); curveTo(17f, 8.5f, 15.5f, 7f, 15.5f, 5f); close()
+        }
+    }
 }

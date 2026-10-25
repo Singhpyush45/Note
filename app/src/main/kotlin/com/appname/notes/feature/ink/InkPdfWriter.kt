@@ -35,6 +35,7 @@ object InkPdfWriter {
             val renderer = TemplateRenderer()
             val paper = Paint()
             val ink = Paint(Paint.ANTI_ALIAS_FLAG)
+            val styled = StyledInk(cache = false)
             pages.forEachIndexed { i, p ->
                 val w = (p.width * POINTS_PER_UNIT).toInt().coerceAtLeast(1)
                 val h = (p.height * POINTS_PER_UNIT).toInt().coerceAtLeast(1)
@@ -52,7 +53,7 @@ object InkPdfWriter {
                         for (item in ordered) {
                             if ((pass == 0) != (item.brush.tool == InkTool.HIGHLIGHTER)) continue
                             ink.set(InkPaints.inkPaint(item.brush))
-                            InkPaths.drawItem(this, item, ink)
+                            InkPaths.drawItem(this, item, ink, styled)
                         }
                     }
                 }

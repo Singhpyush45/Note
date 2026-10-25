@@ -11,6 +11,7 @@ import com.appname.notes.core.ink.geometry.Rect
 import com.appname.notes.core.ink.geometry.Vec
 import com.appname.notes.core.ink.geometry.bounds
 import com.appname.notes.core.ink.geometry.dist
+import com.appname.notes.core.ink.model.BrushStyle
 import com.appname.notes.core.ink.model.InkBrush
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.InkTool
@@ -23,7 +24,34 @@ import com.appname.notes.core.ink.recognition.HoldDetector
 import com.appname.notes.core.ink.recognition.ShapeRecognizer
 
 /** Tools in the editor's toolbar. */
-enum class EditorTool { PEN, MARKER, HIGHLIGHTER, ERASER, LASSO }
+enum class EditorTool {
+    PEN, MARKER, HIGHLIGHTER, ERASER, LASSO, PENCIL, BRUSH,
+
+    /** A pointer for presenting (owner brief §17): a fading trail on screen, never saved. The canvas draws it. */
+    LASER,
+    ;
+
+    /** The ink this tool draws with, or null for tools that don't draw (eraser, lasso, laser). */
+    val inkTool: InkTool?
+        get() = when (this) {
+            PEN -> InkTool.PEN
+            MARKER -> InkTool.MARKER
+            HIGHLIGHTER -> InkTool.HIGHLIGHTER
+            PENCIL -> InkTool.PENCIL
+            BRUSH -> InkTool.BRUSH
+            ERASER, LASSO, LASER -> null
+        }
+
+    companion object {
+        fun of(tool: InkTool): EditorTool = when (tool) {
+            InkTool.PEN -> PEN
+            InkTool.MARKER -> MARKER
+            InkTool.HIGHLIGHTER -> HIGHLIGHTER
+            InkTool.PENCIL -> PENCIL
+            InkTool.BRUSH -> BRUSH
+        }
+    }
+}
 
 /** Stroke eraser removes whole strokes and shapes; area eraser removes only the ink under it. */
 enum class EraserMode { STROKE, AREA }
@@ -53,18 +81,15 @@ data class InkToolState(
     val shapeCorrection: Boolean = true,
     val holdMillis: Long = HoldDetector.DEFAULT_HOLD_MILLIS,
 ) {
-    fun brushFor(tool: EditorTool): InkBrush? = when (tool) {
-        EditorTool.PEN -> brushes[InkTool.PEN]
-        EditorTool.MARKER -> brushes[InkTool.MARKER]
-        EditorTool.HIGHLIGHTER -> brushes[InkTool.HIGHLIGHTER]
-        EditorTool.ERASER, EditorTool.LASSO -> null
-    }
+    fun brushFor(tool: EditorTool): InkBrush? = tool.inkTool?.let { brushes[it] ?: DefaultBrushes.getValue(it) }
 }
 
 val DefaultBrushes: Map<InkTool, InkBrush> = mapOf(
     InkTool.PEN to InkBrush(InkTool.PEN, 0xFF1F1F1F.toInt(), 2.5f),
     InkTool.MARKER to InkBrush(InkTool.MARKER, 0xFF1565C0.toInt(), 5f),
     InkTool.HIGHLIGHTER to InkBrush(InkTool.HIGHLIGHTER, 0x66FFEB3B, 18f),
+    InkTool.PENCIL to InkBrush(InkTool.PENCIL, 0xFF2F2F2F.toInt(), BrushStyle.NATURAL_PENCIL.defaultSize, BrushStyle.NATURAL_PENCIL),
+    InkTool.BRUSH to InkBrush(InkTool.BRUSH, 0xFF1A73E8.toInt(), BrushStyle.BASIC_BRUSH.defaultSize, BrushStyle.BASIC_BRUSH),
 )
 
 /** Lasso selection on one page. */
@@ -184,7 +209,7 @@ class InkInputController(
         val p = Vec(s.x, s.y)
         val tool = if (source == PointerSource.STYLUS_ERASER) EditorTool.ERASER else tools.tool
         return when (tool) {
-            EditorTool.PEN, EditorTool.MARKER, EditorTool.HIGHLIGHTER -> {
+            EditorTool.PEN, EditorTool.MARKER, EditorTool.HIGHLIGHTER, EditorTool.PENCIL, EditorTool.BRUSH -> {
                 selection = null
                 val stylus = source == PointerSource.STYLUS
                 val builder = StrokePoints.Builder(
@@ -207,6 +232,7 @@ class InkInputController(
                 eraseAlong(pageId, listOf(p))
                 Response.REDRAW
             }
+            EditorTool.LASER -> Response.NONE // drawn by the canvas; nothing touches the note
             EditorTool.LASSO -> {
                 val sel = selection
                 val handle = resizeHandle
