@@ -64,7 +64,7 @@ fun CreateMenuScrim(visible: Boolean, onDismiss: () -> Unit) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.18f))
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
                 .testTag(LibraryTestTags.CREATE_SCRIM),
         )
