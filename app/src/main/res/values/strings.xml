@@ -710,4 +710,5 @@
     <string name="shape_gradient">Gradient</string>
     <string name="insert_audio_file">Audio file</string>
     <string name="audio_player_close">Close player</string>
+    <string name="pdf_add_blank_page">Add blank page after this one</string>
 </resources>

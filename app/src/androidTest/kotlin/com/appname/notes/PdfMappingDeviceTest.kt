@@ -177,4 +177,43 @@ class PdfMappingDeviceTest {
         assertThat(Color.blue(paper)).isIn(100..230) // tinted, but not solid yellow (blue 0x3B) nor white
         assertThat(Color.red(paper)).isGreaterThan(230)
     }
+
+    @Test
+    fun addedPagesTextAndPhotosAreExported() {
+        val writer = PdfAnnotationWriter(context)
+        val source = makeSource()
+        // A photo on page 1 (a red picture stored like an attachment), a text box on a page added after it.
+        com.appname.notes.feature.ink.InkImages.init(context)
+        val attachments = File(context.filesDir, "attachments").apply { mkdirs() }
+        File(attachments, "export-photo.png").outputStream().use {
+            Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) }.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        val photo = com.appname.notes.core.ink.model.ImageItem("p", 1, "export-photo.png", com.appname.notes.core.ink.model.Placement(200f, 200f, 200f, 100f))
+        val text = com.appname.notes.core.ink.model.TextItem(
+            "t", 1, InkBrush(InkTool.PEN, 0xFF000000.toInt(), 40f), "Hello", com.appname.notes.core.ink.model.Placement(300f, 300f, 300f, 60f),
+        )
+        val pages = listOf(
+            PdfAnnotationWriter.AnnotatedPage.FromPdf(0, listOf(photo)),
+            PdfAnnotationWriter.AnnotatedPage.Added(794f, 1123f, listOf(text)),
+        ) + (1 until cases.size).map { PdfAnnotationWriter.AnnotatedPage.FromPdf(it, emptyList()) }
+        val out = File(dir, "added.pdf")
+        out.outputStream().use { writer.writeAnnotatedCopy(source, pages, it) }
+        val rendered = render(out)
+        assertThat(rendered).hasSize(cases.size + 1)
+        // The added page is A4 (595 × 842 pt) and shows dark text pixels where the box is.
+        val added = rendered[1]
+        assertThat(added.width).isIn(1186..1196) // 595.5 pt at 2 px per point
+        val darkInText = (0 until 300).count { dx ->
+            val (x, y) = pixel(Vec(150.0 + dx, 300.0))
+            Color.red(added.getPixel(x, y)) < 100
+        }
+        assertThat(darkInText).isGreaterThan(3)
+        // The photo is red, upright where it was placed, on the first page (only if that page isn't rotated).
+        if (cases[0].rotation == 0 && cases[0].crop == null) {
+            val (x, y) = pixel(Vec(200.0, 200.0))
+            val c = rendered[0].getPixel(x, y)
+            assertThat(Color.red(c)).isGreaterThan(200)
+            assertThat(Color.green(c)).isLessThan(80)
+        }
+    }
 }

@@ -524,7 +524,7 @@ private fun InkCanvas(
             .fillMaxSize()
             .onGloballyPositioned { canvasOrigin = it.positionInRoot() }
             .dragAndDropTarget(
-                shouldStartDragAndDrop = { ev -> ui.readOnly == null && !ui.isPdf && acceptsDrop(ev.toAndroidDragEvent().clipDescription) },
+                shouldStartDragAndDrop = { ev -> ui.readOnly == null && acceptsDrop(ev.toAndroidDragEvent().clipDescription) },
                 target = dropTarget,
             )
             .testTag(InkTestTags.CANVAS),
@@ -573,7 +573,7 @@ private fun InkTopBar(
                 IconButton(onClick = onUndo, enabled = ui.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo)) }
                 IconButton(onClick = onRedo, enabled = ui.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, stringResource(R.string.editor_redo)) }
             }
-            if (editable && !ui.isPdf && insert != null) InsertButton(insert)
+            if (editable && insert != null) InsertButton(insert)
             reminderButton()
             if (ready) {
                 Box {
@@ -610,10 +610,10 @@ private fun InkTopBar(
                                 modifier = Modifier.testTag(InkTestTags.SHARE_PDF),
                             )
                         }
-                        if (editable && !ui.isPdf) {
-                            // A PDF's pages come from the document, so they can't be added, deleted or re-templated.
-                            DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_add)) }, onClick = { menu = false; onAddPage() })
-                            if (ui.pageCount > 1) {
+                        if (editable) {
+                            // In a PDF note, added pages go between the document's pages; only those can be deleted.
+                            DropdownMenuItem(text = { Text(stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add)) }, onClick = { menu = false; onAddPage() })
+                            if (ui.pageCount > 1 && !ui.shownPageFromPdf) {
                                 DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_delete)) }, onClick = { menu = false; onDeletePage() })
                             }
                         }

@@ -116,6 +116,8 @@ data class InkEditorUi(
     val laser: LaserSettings = LaserSettings(),
     /** The ruler is shown (owner brief §16). */
     val ruler: Boolean = false,
+    /** The shown page is one of a PDF's own pages (those can't be deleted). */
+    val shownPageFromPdf: Boolean = false,
 ) {
     /** The shape tool's current choices. */
     val shapeSettings: ShapeSettings get() = ShapeSettings(tools.shapeKind, tools.shapeColor, tools.shapeSize, tools.shapeFill, gradient = tools.shapeFillEnd != null)
@@ -327,6 +329,7 @@ class InkEditorViewModel @AssistedInject constructor(
                 pageCount = s.pages.size,
                 currentPage = page,
                 currentTemplate = shown?.template ?: PageTemplate.BLANK,
+                shownPageFromPdf = shown?.pdfPageIndex != null,
                 pageDesign = shown?.takeIf { it.pdfPageIndex == null }?.let { PageDesign.current(it.layout, it.template, it.width, it.height) },
                 pageFormat = if (ui.isPdf) null else firstInk?.let { PageFormat.closest(it.width, it.height) },
                 canUndo = s.canUndo && ui.readOnly == null,
@@ -416,16 +419,16 @@ class InkEditorViewModel @AssistedInject constructor(
 
     /** What an export writes, taken on the main thread (page lists are immutable, so this is cheap and safe). */
     private sealed interface ExportData {
-        data class Annotated(val doc: PdfDocumentInfo, val ink: Map<Int, List<InkItem>>) : ExportData
+        data class Annotated(val doc: PdfDocumentInfo, val pages: List<com.appname.notes.feature.pdf.PdfAnnotationWriter.AnnotatedPage>) : ExportData
         data class Handwriting(val pages: List<ExportPage>) : ExportData
     }
 
     private fun exportData(s: InkSession): ExportData =
-        pdfDocument?.let { ExportData.Annotated(it, inkByPdfPage(s)) } ?: ExportData.Handwriting(exportPages(s))
+        pdfDocument?.let { ExportData.Annotated(it, annotatedPages(s)) } ?: ExportData.Handwriting(exportPages(s))
 
     /** Writes the export for this note: an annotated copy of the PDF, or the handwriting as a new PDF. */
     private suspend fun writeExport(data: ExportData, open: () -> OutputStream?): Boolean = when (data) {
-        is ExportData.Annotated -> writeAnnotated(data.doc, data.ink, open)
+        is ExportData.Annotated -> writeAnnotated(data.doc, data.pages, open)
         is ExportData.Handwriting -> withContext(dispatchers.io) {
             try {
                 val out = open() ?: return@withContext false
@@ -441,19 +444,29 @@ class InkEditorViewModel @AssistedInject constructor(
         }
     }
 
-    /** Ink per PDF page, snapshotted on the main thread (page lists are immutable, so this is cheap and safe). */
-    private fun inkByPdfPage(s: InkSession): Map<Int, List<InkItem>> =
-        s.pages.mapNotNull { p -> p.pdfPageIndex?.let { it to p.items.items } }.toMap()
+    /**
+     * The note's pages in order — document pages and pages added in the app — with their content, snapshotted on
+     * the main thread (page lists are immutable, so this is cheap and safe).
+     */
+    private fun annotatedPages(s: InkSession): List<com.appname.notes.feature.pdf.PdfAnnotationWriter.AnnotatedPage> =
+        s.pages.map { p ->
+            val index = p.pdfPageIndex
+            if (index != null) {
+                com.appname.notes.feature.pdf.PdfAnnotationWriter.AnnotatedPage.FromPdf(index, p.items.items)
+            } else {
+                com.appname.notes.feature.pdf.PdfAnnotationWriter.AnnotatedPage.Added(p.width, p.height, p.items.items)
+            }
+        }
 
     /**
      * Writes a copy of the PDF with the ink drawn in (SRS 7.3) with [open]; the stored original is only read
      * (PDF-05). Runs in the app scope so it finishes even if the screen closes. Returns false on failure.
      */
-    private suspend fun writeAnnotated(doc: PdfDocumentInfo, ink: Map<Int, List<InkItem>>, open: () -> OutputStream?): Boolean =
+    private suspend fun writeAnnotated(doc: PdfDocumentInfo, pages: List<com.appname.notes.feature.pdf.PdfAnnotationWriter.AnnotatedPage>, open: () -> OutputStream?): Boolean =
         withContext(dispatchers.io) {
             try {
                 val out = open() ?: return@withContext false
-                out.use { pdfWriter.writeAnnotatedCopy(pdfFiles.file(doc.fileName), ink, it) }
+                out.use { pdfWriter.writeAnnotatedCopy(pdfFiles.file(doc.fileName), pages, it) }
                 true
             } catch (e: IOException) {
                 logger.warn(TAG, "PDF export failed", e)
@@ -740,9 +753,10 @@ class InkEditorViewModel @AssistedInject constructor(
 
     // ---------------------------------------------------------------- pages and note
 
+    /** Adds a page after the shown one; in a PDF note it is a blank page between the document's pages (8b). */
     fun addPage() {
         val s = session() ?: return
-        if (_ui.value.readOnly != null || _ui.value.isPdf) return
+        if (_ui.value.readOnly != null) return
         val index = (_ui.value.currentPage + 1).coerceAtMost(s.pages.size)
         appendPage(index, scroll = true)
     }
@@ -778,7 +792,7 @@ class InkEditorViewModel @AssistedInject constructor(
     private val _inserting = MutableStateFlow(false)
     val inserting: StateFlow<Boolean> = _inserting.asStateFlow()
 
-    private fun canInsert(): Boolean = _ui.value.readOnly == null && !_ui.value.isPdf && session() != null
+    private fun canInsert(): Boolean = _ui.value.readOnly == null && session() != null
 
     /**
      * Places photos on a page (owner request 8a): from the photo picker, camera, paste or drag-and-drop. They are
@@ -1030,8 +1044,10 @@ class InkEditorViewModel @AssistedInject constructor(
 
     fun deleteCurrentPage() {
         val s = session() ?: return
-        if (_ui.value.readOnly != null || _ui.value.isPdf || s.pages.size <= 1) return
+        if (_ui.value.readOnly != null || s.pages.size <= 1) return
         val page = s.pages.getOrNull(_ui.value.currentPage) ?: return
+        // A PDF note keeps the document's own pages; only pages added in the app can go.
+        if (page.pdfPageIndex != null) return
         val result = CompletableDeferred<AppResult<Unit>>()
         enqueue(Op.DeletePage(page.id, result))
         viewModelScope.launch {
