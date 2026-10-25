@@ -676,7 +676,8 @@ class InkEditorViewModel @AssistedInject constructor(
         viewModelScope.launch {
             val r = result.await() as? AppResult.Success ?: return@launch
             val byId = r.value.associateBy { it.id }
-            s.updatePages { p -> byId[p.id]?.let { p.copy(width = it.width, height = it.height, layout = it.layout) } ?: p }
+            // Only the size comes from the result: a design chosen meanwhile (already queued after this) is kept.
+            s.updatePages { p -> byId[p.id]?.let { p.copy(width = it.width, height = it.height, layout = p.layout?.resized(it.width, it.height)) } ?: p }
             refresh()
         }
     }
