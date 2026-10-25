@@ -40,9 +40,6 @@ import com.appname.notes.core.designsystem.component.SettingsCard
 import com.appname.notes.core.designsystem.component.SettingsSwitchRow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -329,7 +326,7 @@ fun BackupCard(viewModel: BackupViewModel = hiltViewModel()) {
                 Text(
                     stringResource(
                         R.string.backup_confirm_body,
-                        SimpleDateFormat.getDateTimeInstance(SimpleDateFormat.MEDIUM, SimpleDateFormat.SHORT, Locale.getDefault()).format(Date(m.createdAt)),
+                        DateUtils.formatDateTime(context, m.createdAt, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_SHOW_YEAR),
                         Formatter.formatShortFileSize(context, m.totalBytes),
                     ),
                 )
