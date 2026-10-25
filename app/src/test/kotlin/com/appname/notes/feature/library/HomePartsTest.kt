@@ -75,6 +75,8 @@ class HomePartsTest {
         assertThat(exists(LibraryTestTags.NEW_NOTE)).isFalse()
 
         plus.performClick()
+        composeRule.waitForIdle() // Back is only taken over once the open menu has been composed
+        composeRule.onNodeWithTag(LibraryTestTags.NEW_NOTE).assertIsDisplayed()
         composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
         composeRule.waitForIdle()
         assertThat(exists(LibraryTestTags.NEW_NOTE)).isFalse()
