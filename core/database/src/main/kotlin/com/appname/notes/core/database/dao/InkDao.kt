@@ -62,7 +62,8 @@ abstract class InkDao {
     @Query("UPDATE ink_pages SET pageIndex = pageIndex - 1 WHERE noteId = :noteId AND pageIndex > :from")
     protected abstract suspend fun shiftPagesUp(noteId: String, from: Int)
 
-    @Query("UPDATE ink_pages SET template = :template, updatedAt = :now WHERE id = :pageId")
+    /** A plain background replaces any template design on the page. */
+    @Query("UPDATE ink_pages SET template = :template, layoutJson = NULL, updatedAt = :now WHERE id = :pageId")
     abstract suspend fun setTemplate(pageId: String, template: Int, now: Long): Int
 
     @Query("UPDATE ink_pages SET updatedAt = :now WHERE id = :pageId")

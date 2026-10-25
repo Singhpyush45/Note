@@ -1,5 +1,6 @@
 package com.appname.notes
 
+import com.appname.notes.feature.templates.TemplatesTestTags
 import android.os.Looper
 import android.os.SystemClock
 import android.view.InputDevice
@@ -101,8 +102,11 @@ class InkFlowRobolectricTest {
         composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
         waitFor(LibraryTestTags.CHOOSE_TEMPLATE)
         composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
-        waitFor(LibraryTestTags.template(PageTemplate.LINED))
-        composeRule.onNodeWithTag(LibraryTestTags.template(PageTemplate.LINED)).performClick()
+        // The template screen: Lined → preview → Use template
+        waitFor(TemplatesTestTags.tile("basic.lined"))
+        composeRule.onNodeWithTag(TemplatesTestTags.tile("basic.lined")).performClick()
+        waitFor(TemplatesTestTags.USE)
+        composeRule.onNodeWithTag(TemplatesTestTags.USE).performClick()
         waitFor(InkTestTags.CANVAS)
         waitAdvancing { findCanvas(composeRule.activity.window.decorView)?.width ?: 0 > 0 }
     }

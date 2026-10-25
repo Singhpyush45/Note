@@ -23,6 +23,8 @@ class InkSession(pages: List<Page>, historyLimit: Int = UndoHistory.DEFAULT_LIMI
         val items: PageItems,
         /** For PDF notes: the PDF page shown under the ink. */
         val pdfPageIndex: Int? = null,
+        /** The page's template design (owner brief §4), drawn instead of the plain [template] background. */
+        val layout: com.appname.notes.core.ink.template.TemplateLayout? = null,
     )
 
     /** Called after every applied change (including undo/redo), in order. */
@@ -149,7 +151,7 @@ class InkSession(pages: List<Page>, historyLimit: Int = UndoHistory.DEFAULT_LIMI
     }
 
     fun setTemplate(pageId: String, template: PageTemplate) {
-        pages = pages.map { if (it.id == pageId) it.copy(template = template) else it }
+        pages = pages.map { if (it.id == pageId) it.copy(template = template, layout = null) else it }
         version++
         notifyChanged()
     }

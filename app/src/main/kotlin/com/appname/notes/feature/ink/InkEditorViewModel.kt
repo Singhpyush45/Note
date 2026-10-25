@@ -166,7 +166,12 @@ class InkEditorViewModel @AssistedInject constructor(
 
     private sealed interface Op {
         data class Commit(val edit: PageEdit) : Op
-        data class AddPage(val index: Int, val template: PageTemplate, val result: CompletableDeferred<AppResult<InkPageInfo>>) : Op
+        data class AddPage(
+            val index: Int,
+            val template: PageTemplate,
+            val layout: com.appname.notes.core.ink.template.TemplateLayout?,
+            val result: CompletableDeferred<AppResult<InkPageInfo>>,
+        ) : Op
         data class DeletePage(val pageId: String, val result: CompletableDeferred<AppResult<Unit>>) : Op
         data class SetTemplate(val pageId: String, val template: PageTemplate) : Op
     }
@@ -219,7 +224,7 @@ class InkEditorViewModel @AssistedInject constructor(
         }
         val session = InkSession(
             pages.map {
-                InkSession.Page(it.info.id, it.info.template, it.info.width, it.info.height, PageItems.of(it.items), it.info.pdfPageIndex)
+                InkSession.Page(it.info.id, it.info.template, it.info.width, it.info.height, PageItems.of(it.items), it.info.pdfPageIndex, it.info.layout)
             },
         )
         val pdfDocument = if (note.type == NoteType.PDF) (pdfRepository.document(noteId) as? AppResult.Success)?.value else null
@@ -294,7 +299,7 @@ class InkEditorViewModel @AssistedInject constructor(
     private suspend fun process(op: Op) {
         when (op) {
             is Op.Commit -> retrying { ink.commit(op.edit.pageId, op.edit.edit) }
-            is Op.AddPage -> op.result.complete(retrying { ink.addPage(noteId, op.index, op.template) })
+            is Op.AddPage -> op.result.complete(retrying { ink.addPage(noteId, op.index, op.template, op.layout) })
             is Op.DeletePage -> op.result.complete(retrying { ink.deletePage(op.pageId) })
             is Op.SetTemplate -> retrying { ink.setTemplate(op.pageId, op.template) }
         }
@@ -524,13 +529,15 @@ class InkEditorViewModel @AssistedInject constructor(
         if (_ui.value.readOnly != null || _ui.value.isPdf) return
         val index = (_ui.value.currentPage + 1).coerceAtMost(s.pages.size)
         val template = _ui.value.currentTemplate
+        // A page made from a template is followed by another page of the same design (and size).
+        val layout = s.pages.getOrNull(_ui.value.currentPage)?.layout
         val result = CompletableDeferred<AppResult<InkPageInfo>>()
-        enqueue(Op.AddPage(index, template, result))
+        enqueue(Op.AddPage(index, template, layout, result))
         viewModelScope.launch {
             when (val r = result.await()) {
                 is AppResult.Success -> {
                     val info = r.value
-                    s.insertPage(info.index, InkSession.Page(info.id, info.template, info.width, info.height, PageItems.EMPTY))
+                    s.insertPage(info.index, InkSession.Page(info.id, info.template, info.width, info.height, PageItems.EMPTY, layout = info.layout))
                     _ui.update { it.copy(scrollRequest = ScrollRequest(info.index)) }
                     refresh()
                 }

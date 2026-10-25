@@ -6,6 +6,7 @@ import com.appname.notes.core.domain.model.NotebookId
 import com.appname.notes.core.ink.edit.InkEdit
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.core.ink.template.TemplateLayout
 
 /** A page of a handwritten note, without its ink. */
 data class InkPageInfo(
@@ -18,6 +19,8 @@ data class InkPageInfo(
     val height: Float,
     /** For PDF notes: which PDF page is drawn under the ink. */
     val pdfPageIndex: Int? = null,
+    /** The page's template design (owner brief §4); null for a plain [template] background. */
+    val layout: TemplateLayout? = null,
 )
 
 /**
@@ -38,18 +41,22 @@ data class InkPageContent(
  * transaction, so drawing a stroke writes one small row and a crash loses at most the stroke in progress.
  */
 interface InkRepository {
-    /** New handwritten note with one empty page. */
-    suspend fun createInkNote(notebookId: NotebookId?, template: PageTemplate): AppResult<NoteId>
+    /**
+     * New handwritten note with one empty page: a plain [template] background, or the [layout] of a chosen
+     * template (its size, paper and printed parts; [template] is then ignored).
+     */
+    suspend fun createInkNote(notebookId: NotebookId?, template: PageTemplate, layout: TemplateLayout? = null): AppResult<NoteId>
 
     /** All pages of the note in order, each with its ink. */
     suspend fun loadPages(noteId: NoteId): AppResult<List<InkPageContent>>
 
-    /** Inserts a page at [index] (0 = first; ≥ page count = at the end). */
-    suspend fun addPage(noteId: NoteId, index: Int, template: PageTemplate): AppResult<InkPageInfo>
+    /** Inserts a page at [index] (0 = first; ≥ page count = at the end), plain or with a template [layout]. */
+    suspend fun addPage(noteId: NoteId, index: Int, template: PageTemplate, layout: TemplateLayout? = null): AppResult<InkPageInfo>
 
     /** Deletes a page and its ink. The last page can't be deleted. */
     suspend fun deletePage(pageId: String): AppResult<Unit>
 
+    /** Gives the page a plain background (removing any template design). */
     suspend fun setTemplate(pageId: String, template: PageTemplate): AppResult<Unit>
 
     /** Saves one change on a page: deletes [InkEdit.removed], inserts [InkEdit.added]. */

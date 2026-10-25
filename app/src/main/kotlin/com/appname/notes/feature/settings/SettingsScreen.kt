@@ -111,7 +111,7 @@ data class AppearanceActions(
 
 /** Connects the screen to its ViewModel. Kept separate so [SettingsScreen] is easy to preview and test. */
 @Composable
-fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsRoute(onManageTemplates: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val wallpaperPhoto by viewModel.wallpaperPhoto.collectAsStateWithLifecycle()
     SettingsScreen(
@@ -138,6 +138,7 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
             onPhotoFailedShown = viewModel::onPhotoFailedShown,
         ),
         wallpaperPhoto = wallpaperPhoto,
+        onManageTemplates = onManageTemplates,
     )
 }
 
@@ -159,6 +160,7 @@ fun SettingsScreen(
     wallpaperPhoto: ImageBitmap? = null,
     dynamicColorSupported: Boolean = supportsDynamicColor(),
     blurSupported: Boolean = supportsBlur(),
+    onManageTemplates: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val saveErrorMessage = stringResource(R.string.settings_save_failed)
@@ -331,6 +333,17 @@ private fun SettingsList(
                     summary = stringResource(R.string.settings_reset_appearance_summary),
                     onClick = { confirmReset = true },
                     modifier = Modifier.testTag(SettingsTestTags.RESET),
+                )
+            }
+        }
+
+        item {
+            SettingsCard(stringResource(R.string.settings_section_templates)) {
+                SettingsLinkRow(
+                    title = stringResource(R.string.templates_title_manage),
+                    summary = stringResource(R.string.settings_templates_summary),
+                    onClick = onManageTemplates,
+                    modifier = Modifier.testTag(SettingsTestTags.TEMPLATES),
                 )
             }
         }
@@ -671,6 +684,7 @@ private fun ThemeMode.shortLabelRes(): Int = when (this) {
 }
 
 object SettingsTestTags {
+    const val TEMPLATES = "settings_templates"
     const val SCREEN = "screen_settings"
     const val LIST = "settings_list"
     const val DOCUMENT_TEXT = "settings_document_text"

@@ -13,14 +13,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appname.notes.core.domain.model.NoteCollection
-import com.appname.notes.core.ink.model.PageTemplate
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
-/** The home screen's parts on their own (owner brief §2–3): the + menu, the selection bar, rename, templates. */
+/** The home screen's parts on their own (owner brief §2–3): the + menu, the selection bar and rename. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [36])
 class HomePartsTest {
@@ -125,16 +124,5 @@ class HomePartsTest {
         composeRule.onNodeWithTag(LibraryTestTags.RENAME_SAVE).performClick()
         composeRule.mainClock.advanceTimeBy(100)
         assertThat(renamed).isEqualTo("Lecture 5")
-    }
-
-    @Test
-    fun templatePickerReturnsTheChosenPageStyle() {
-        var chosen: PageTemplate? = null
-        var dismissed = false
-        composeRule.setContent { TemplatePickerDialog(onPick = { chosen = it }, onDismiss = { dismissed = true }) }
-        PageTemplate.entries.forEach { composeRule.onNodeWithTag(LibraryTestTags.template(it)).assertIsDisplayed() }
-        composeRule.onNodeWithTag(LibraryTestTags.template(PageTemplate.GRID)).performClick()
-        assertThat(chosen).isEqualTo(PageTemplate.GRID)
-        assertThat(dismissed).isTrue()
     }
 }

@@ -41,6 +41,17 @@ data object NotebooksKey : NavKey
 @Serializable
 data object TagsKey : NavKey
 
+/**
+ * Choose template (owner brief §4). New notes go into [notebookId]/[tagId] ("" = none), the collection the
+ * library was showing. [manage]: opened from Settings to manage the user's templates.
+ */
+@Serializable
+data class TemplatesKey(val notebookId: String = "", val tagId: String = "", val manage: Boolean = false) : NavKey
+
+/** Make ([templateId] "") or edit a custom template. */
+@Serializable
+data class TemplateEditorKey(val templateId: String = "") : NavKey
+
 /** Destinations shown in the bottom bar / navigation rail. */
 enum class TopLevelDestination(
     val key: NavKey,

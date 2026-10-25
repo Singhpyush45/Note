@@ -1,5 +1,6 @@
 package com.appname.notes
 
+import com.appname.notes.feature.templates.TemplatesTestTags
 import com.appname.notes.core.ink.model.PageTemplate
 import android.os.SystemClock
 import android.view.InputDevice
@@ -46,8 +47,11 @@ class InkLifecycleStressTest {
         composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
         composeRule.waitUntil(5_000) { composeRule.onAllNodes(hasTestTag(LibraryTestTags.CHOOSE_TEMPLATE)).fetchSemanticsNodes().isNotEmpty() }
         composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
-        composeRule.waitUntil(5_000) { composeRule.onAllNodes(hasTestTag(LibraryTestTags.template(PageTemplate.LINED))).fetchSemanticsNodes().isNotEmpty() }
-        composeRule.onNodeWithTag(LibraryTestTags.template(PageTemplate.LINED)).performClick()
+        val lined = TemplatesTestTags.tile("basic.lined")
+        composeRule.waitUntil(5_000) { composeRule.onAllNodes(hasTestTag(lined)).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithTag(lined).performClick()
+        composeRule.waitUntil(5_000) { composeRule.onAllNodes(hasTestTag(TemplatesTestTags.USE)).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithTag(TemplatesTestTags.USE).performClick()
         composeRule.waitUntil(10_000) { composeRule.onAllNodes(hasTestTag(InkTestTags.CANVAS)).fetchSemanticsNodes().isNotEmpty() }
         composeRule.waitUntil(5_000) { (canvasOrNull()?.width ?: 0) > 0 }
     }

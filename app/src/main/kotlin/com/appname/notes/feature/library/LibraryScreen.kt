@@ -91,7 +91,6 @@ import com.appname.notes.core.domain.model.NoteSummary
 import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.domain.model.Notebook
 import com.appname.notes.core.domain.model.NotebookId
-import com.appname.notes.core.ink.model.PageTemplate
 import com.appname.notes.feature.attachments.rememberDocumentScanner
 import com.appname.notes.ui.common.ActionSheet
 import com.appname.notes.ui.common.CardAction
@@ -112,7 +111,6 @@ object LibraryTestTags {
     const val CHOOSE_TEMPLATE = "create_choose_template"
     const val SCAN = "action_scan"
     const val IMPORT_FILE = "action_import_file"
-    const val TEMPLATE_PICKER = "template_picker"
     const val COLLECTION_BUTTON = "collection_button"
     const val SEARCH = "action_search"
     const val GRID = "notes_grid"
@@ -135,7 +133,6 @@ object LibraryTestTags {
     const val RENAME_FIELD = "rename_field"
     const val RENAME_SAVE = "rename_save"
 
-    fun template(t: PageTemplate) = "template_${t.name.lowercase()}"
     fun chip(nb: Notebook) = "chip_nb_${nb.id.value}"
     fun card(id: NoteId) = "note_card_${id.value}"
     fun more(id: NoteId) = "note_more_${id.value}"
@@ -148,6 +145,8 @@ fun LibraryRoute(
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
     selectedNoteId: String?,
+    /** Opens the Choose-template screen for the shown notebook/tag (null = none). */
+    onChooseTemplate: (notebookId: String?, tagId: String?) -> Unit = { _, _ -> },
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -174,11 +173,13 @@ fun LibraryRoute(
         onOpenNote = onOpenNote,
         create = CreateActions(
             blankNote = { scope.launch { viewModel.createNote()?.let { onOpenNote(it, NoteType.TEXT) } } },
-            chooseTemplate = {}, // replaced inside LibraryScreen by the template picker
+            chooseTemplate = {
+                val c = state.collection
+                onChooseTemplate((c as? NoteCollection.InNotebook)?.id?.value, (c as? NoteCollection.WithTag)?.id?.value)
+            },
             scanNote = scan,
             importFile = { importLauncher.launch(arrayOf("*/*")) },
         ),
-        onTemplatePicked = { t -> scope.launch { viewModel.createInkNote(t)?.let { onOpenNote(it, NoteType.INK) } } },
         inkThumbnail = viewModel::inkThumbnail,
         cover = viewModel::cover,
         onOpenSearch = onOpenSearch,
@@ -252,7 +253,6 @@ fun LibraryScreen(
     selectedNoteId: String?,
     onOpenNote: (NoteId, NoteType) -> Unit,
     create: CreateActions,
-    onTemplatePicked: (PageTemplate) -> Unit,
     inkThumbnail: suspend (NoteSummary) -> InkThumbnail?,
     onOpenSearch: () -> Unit,
     onSelectCollection: (NoteCollection) -> Unit,
@@ -270,7 +270,6 @@ fun LibraryScreen(
 
     var showCollections by rememberSaveable { mutableStateOf(false) }
     var createOpen by rememberSaveable { mutableStateOf(false) }
-    var showTemplates by rememberSaveable { mutableStateOf(false) }
     var actionsFor by remember { mutableStateOf<NoteSummary?>(null) }
     var renameFor by remember { mutableStateOf<NoteSummary?>(null) }
     var moveFor by remember { mutableStateOf<NoteSummary?>(null) }
@@ -323,7 +322,7 @@ fun LibraryScreen(
                 CreateMenu(
                     expanded = createOpen,
                     onExpandedChange = { createOpen = it },
-                    actions = create.copy(chooseTemplate = { showTemplates = true }),
+                    actions = create,
                 )
             }
         },
@@ -421,9 +420,6 @@ fun LibraryScreen(
     if (showCollections) {
         CollectionSheet(state, onSelect = { showCollections = false; onSelectCollection(it) }, onDismiss = { showCollections = false },
             onManageNotebooks = { showCollections = false; onManageNotebooks() }, onManageTags = { showCollections = false; onManageTags() })
-    }
-    if (showTemplates) {
-        TemplatePickerDialog(onPick = onTemplatePicked, onDismiss = { showTemplates = false })
     }
     actionsFor?.let { note ->
         ActionSheet(

@@ -20,6 +20,8 @@ import com.appname.notes.core.ink.edit.InkEdit
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.PageSizes
 import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.core.ink.template.TemplateJson
+import com.appname.notes.core.ink.template.TemplateLayout
 
 class RoomInkRepository(
     db: NotesDatabase,
@@ -30,7 +32,7 @@ class RoomInkRepository(
 
     private val dao = db.inkDao()
 
-    override suspend fun createInkNote(notebookId: NotebookId?, template: PageTemplate): AppResult<NoteId> =
+    override suspend fun createInkNote(notebookId: NotebookId?, template: PageTemplate, layout: TemplateLayout?): AppResult<NoteId> =
         storageCall(logger, "Create handwritten note") {
             val now = clock.now().toEpochMilli()
             val noteId = ids.newId()
@@ -52,20 +54,21 @@ class RoomInkRepository(
                     deletedAt = null,
                     revision = 1,
                 ),
-                newPage(noteId, index = 0, template, now),
+                newPage(noteId, index = 0, template, layout, now),
             )
             NoteId(noteId)
         }
 
-    private fun newPage(noteId: String, index: Int, template: PageTemplate, now: Long) = InkPageEntity(
+    private fun newPage(noteId: String, index: Int, template: PageTemplate, layout: TemplateLayout?, now: Long) = InkPageEntity(
         id = ids.newId(),
         noteId = noteId,
         pageIndex = index,
-        template = template.code,
-        width = PageSizes.A4_WIDTH,
-        height = PageSizes.A4_HEIGHT,
+        template = (layout?.basicTemplate ?: template).code,
+        width = layout?.width ?: PageSizes.A4_WIDTH,
+        height = layout?.height ?: PageSizes.A4_HEIGHT,
         createdAt = now,
         updatedAt = now,
+        layoutJson = layout?.let { TemplateJson.encode(it) },
     )
 
     override suspend fun loadPages(noteId: NoteId): AppResult<List<InkPageContent>> =
@@ -90,11 +93,11 @@ class RoomInkRepository(
         return InkPageContent(page.toInfo(), items, unreadable)
     }
 
-    override suspend fun addPage(noteId: NoteId, index: Int, template: PageTemplate): AppResult<InkPageInfo> =
+    override suspend fun addPage(noteId: NoteId, index: Int, template: PageTemplate, layout: TemplateLayout?): AppResult<InkPageInfo> =
         storageCall(logger, "Add page") {
             val now = clock.now().toEpochMilli()
             val count = dao.pageCount(noteId.value)
-            val page = newPage(noteId.value, index.coerceIn(0, count), template, now)
+            val page = newPage(noteId.value, index.coerceIn(0, count), template, layout, now)
             dao.addPage(page, now)
             page.toInfo()
         }
@@ -133,6 +136,8 @@ class RoomInkRepository(
         width = width,
         height = height,
         pdfPageIndex = pdfPageIndex,
+        // A damaged or unreadable design falls back to the plain background, never a crash.
+        layout = TemplateJson.decodeOrNull(layoutJson),
     )
 
     private companion object {

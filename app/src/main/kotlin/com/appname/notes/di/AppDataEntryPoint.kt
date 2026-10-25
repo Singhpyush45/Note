@@ -29,6 +29,7 @@ interface AppDataEntryPoint {
     fun attachments(): AttachmentRepository
     fun textIndex(): TextIndexRepository
     fun reminders(): com.appname.notes.core.domain.repository.ReminderRepository
+    fun templates(): com.appname.notes.core.domain.repository.TemplateRepository
     fun reminderScheduler(): com.appname.notes.feature.reminders.ReminderScheduler
     fun reminderNotifier(): com.appname.notes.feature.reminders.ReminderNotifier
     fun recordings(): com.appname.notes.feature.audio.RecordingController

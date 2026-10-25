@@ -721,7 +721,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             for (i in stack.visible(v.visibleWorld(width.toDouble(), height.toDouble()))) {
                 val page = s.pages.getOrNull(i) ?: continue
                 val m = pageToScreen(i, v)
-                renderer.drawPaper(canvas, page.width, page.height, page.template, m, shadow)
+                renderer.drawPaper(canvas, page.width, page.height, page.template, m, shadow, page.layout)
                 drawPdfPage(canvas, page, m, v.scale.toFloat())
                 val editing = selection != null && selection.pageId == page.id && liveMatrix != null
                 renderer.drawInk(

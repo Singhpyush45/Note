@@ -167,7 +167,7 @@ class LibraryViewModel @Inject constructor(
         synchronized(thumbnails) { thumbnails[key] }?.let { return it }
         val page = (ink.firstPage(note.id) as? AppResult.Success)?.value ?: return null
         val pdfPage = page.info.pdfPageIndex?.let { pdfThumbnails.render(note.id, it) }
-        val thumb = InkThumbnail(page.info.width, page.info.height, page.info.template, page.items, pdfPage)
+        val thumb = InkThumbnail(page.info.width, page.info.height, page.info.template, page.items, pdfPage, page.info.layout)
         synchronized(thumbnails) { thumbnails[key] = thumb }
         return thumb
     }

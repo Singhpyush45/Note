@@ -31,6 +31,12 @@ data class InkPageEntity(
     val updatedAt: Long,
     /** For PDF notes: the 0-based PDF page drawn under this page's ink (schema v3). Null for plain ink pages. */
     val pdfPageIndex: Int? = null,
+    /**
+     * The page's template design as JSON (schema v8, owner brief §4): size, paper, ruling and printed parts.
+     * Each page keeps its own copy, so changing or deleting a template never changes existing notes.
+     * Null = a plain page with the [template] background.
+     */
+    val layoutJson: String? = null,
 )
 
 /**

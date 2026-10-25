@@ -133,12 +133,33 @@ internal class InkRenderer {
         shapeCache.keys.retainAll(ids)
     }
 
-    /** Paper with shadow and template. [pageToScreen] maps page units to the canvas. */
-    fun drawPaper(canvas: Canvas, width: Float, height: Float, template: PageTemplate, pageToScreen: Matrix, shadowPx: Float) {
+    private val templateRenderer = com.appname.notes.feature.templates.TemplateRenderer()
+
+    /**
+     * Paper with shadow and its background: the page's template design ([layout], owner brief §4) or the plain
+     * [template]. [pageToScreen] maps page units to the canvas.
+     */
+    fun drawPaper(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        template: PageTemplate,
+        pageToScreen: Matrix,
+        shadowPx: Float,
+        layout: com.appname.notes.core.ink.template.TemplateLayout? = null,
+    ) {
         val r = paperRect
         r.set(0f, 0f, width, height)
         pageToScreen.mapRect(r)
         canvas.drawRect(r.left + shadowPx, r.top + shadowPx, r.right + shadowPx, r.bottom + shadowPx, shadowPaint)
+        if (layout != null) {
+            paperPaint.color = layout.paperColor
+            canvas.drawRect(r, paperPaint)
+            paperPaint.color = InkPaints.PAPER
+            // The design is drawn at the page's own size, whatever size the template was made for.
+            canvas.withMatrix(pageToScreen) { templateRenderer.drawDesign(this, layout.resized(width, height)) }
+            return
+        }
         canvas.drawRect(r, paperPaint)
         canvas.withMatrix(pageToScreen) { drawTemplate(this, width, height, template) }
     }

@@ -1,5 +1,11 @@
 package com.appname.notes.screenshots
 
+import androidx.compose.ui.test.performScrollToNode
+import com.appname.notes.core.ink.template.HeaderStyle
+import com.appname.notes.core.ink.template.Ruling
+import com.appname.notes.core.ink.template.TemplateCategory
+import com.appname.notes.feature.templates.TemplateEditorTestTags
+import com.appname.notes.feature.templates.TemplatesTestTags
 import android.graphics.Bitmap
 import android.os.Looper
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -240,21 +246,55 @@ abstract class ScreenshotTestBase(private val device: String) {
         snap("settings_violet_dark")
     }
 
+    /** The Choose-template screen, a preview, a note made from a planner, and the custom template editor (§4). */
+    @Test
+    fun captureTemplates() {
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitAdvancing { exists(hasTestTag(LibraryTestTags.CHOOSE_TEMPLATE)) }
+        composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
+        waitAdvancing { exists(hasTestTag(TemplatesTestTags.tile("basic.lined"))) }
+        snap("templates_light")
+        composeRule.onNodeWithTag(TemplatesTestTags.chip(TemplateCategory.PLANNERS)).performClick()
+        waitAdvancing { exists(hasTestTag(TemplatesTestTags.tile("planners.weekly"))) }
+        snap("templates_planners_light")
+        composeRule.onNodeWithTag(TemplatesTestTags.tile("planners.weekly")).performClick()
+        waitAdvancing { exists(hasTestTag(TemplatesTestTags.USE)) }
+        snap("template_preview_light")
+        composeRule.onNodeWithTag(TemplatesTestTags.USE).performClick()
+        waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
+        snap("ink_weekly_planner_light")
+        pressBack()
+        snap("library_template_note_light")
+
+        // Settings › Templates › New template, with a few options changed.
+        composeRule.onNodeWithTag("nav_settings").performClick()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.LIST)) }
+        composeRule.onNodeWithTag(com.appname.notes.feature.settings.SettingsTestTags.LIST)
+            .performScrollToNode(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.TEMPLATES))
+        composeRule.onNodeWithTag(com.appname.notes.feature.settings.SettingsTestTags.TEMPLATES).performClick()
+        waitAdvancing { exists(hasTestTag(TemplatesTestTags.NEW)) }
+        composeRule.onNodeWithTag(TemplatesTestTags.NEW).performClick()
+        waitAdvancing { exists(hasTestTag(TemplateEditorTestTags.PREVIEW)) }
+        snap("template_editor_light")
+        composeRule.onNodeWithTag(TemplateEditorTestTags.ruling(Ruling.DOTS)).performClick()
+        composeRule.onNodeWithTag(TemplateEditorTestTags.header(HeaderStyle.TITLE_AND_DATE)).performClick()
+        composeRule.onNodeWithTag(TemplateEditorTestTags.FORM).performScrollToNode(hasTestTag(TemplateEditorTestTags.paper(3)))
+        composeRule.onNodeWithTag(TemplateEditorTestTags.paper(3)).performClick()
+        snap("template_editor_changed_light")
+    }
+
     @Test
     fun captureScreens() {
         seed()
         waitAdvancing { exists(hasText("Groceries")) }
         snap("library_light")
 
-        // The single + and its menu (owner brief §3), then the template picker.
+        // The single + and its menu (owner brief §3).
         composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
         waitAdvancing { exists(hasTestTag(LibraryTestTags.NEW_NOTE)) }
         snap("library_create_menu_light")
-        composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
-        waitAdvancing { exists(hasTestTag(LibraryTestTags.TEMPLATE_PICKER)) }
-        snap("template_picker_light")
-        composeRule.onNodeWithText(string(R.string.action_cancel)).performClick()
-        waitAdvancing { !exists(hasTestTag(LibraryTestTags.TEMPLATE_PICKER)) }
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitAdvancing { !exists(hasTestTag(LibraryTestTags.NEW_NOTE)) }
 
         // Long-press selects; the header becomes the selection bar.
         composeRule.onNodeWithText("Groceries").performTouchInput { longClick() }
@@ -333,8 +373,10 @@ class TabletScreenshotTest : ScreenshotTestBase("tablet") {
         composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
         waitAdvancing { exists(hasTestTag(LibraryTestTags.CHOOSE_TEMPLATE)) }
         composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
-        waitAdvancing { exists(hasTestTag(LibraryTestTags.template(PageTemplate.LINED))) }
-        composeRule.onNodeWithTag(LibraryTestTags.template(PageTemplate.LINED)).performClick()
+        waitAdvancing { exists(hasTestTag(TemplatesTestTags.tile("basic.lined"))) }
+        composeRule.onNodeWithTag(TemplatesTestTags.tile("basic.lined")).performClick()
+        waitAdvancing { exists(hasTestTag(TemplatesTestTags.USE)) }
+        composeRule.onNodeWithTag(TemplatesTestTags.USE).performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
         assertThat(exists(hasTestTag(LibraryTestTags.SCREEN))).isFalse() // no list pane
         assertThat(exists(hasTestTag("nav_settings"))).isFalse() // no navigation rail

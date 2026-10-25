@@ -78,9 +78,10 @@ class LifecycleE2ETest {
 
     @Test
     fun handwritingSurvivesProcessDeath() {
-        find("fab_create").click() // + → Choose template → Lined
+        find("fab_create").click() // + → Choose template → Lined → Use template
         find("create_choose_template").click()
-        find("template_lined").click()
+        find("template_basic.lined").click()
+        find("template_use").click()
         val canvas = findCanvas().visibleBounds
         val y = canvas.top + canvas.height() / 4
         // A fresh install has no stylus seen yet, so a finger draws.

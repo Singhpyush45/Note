@@ -97,4 +97,9 @@ object DataModule {
     @Singleton
     fun provideReminderRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): ReminderRepository =
         RoomReminderRepository(db, clock, ids, logger)
+
+    @Provides
+    @Singleton
+    fun provideTemplateRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): com.appname.notes.core.domain.repository.TemplateRepository =
+        com.appname.notes.core.database.RoomTemplateRepository(db, clock, ids, logger)
 }

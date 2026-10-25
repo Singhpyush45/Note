@@ -46,6 +46,10 @@ import com.appname.notes.feature.organize.NotebooksRoute
 import com.appname.notes.feature.organize.TagsRoute
 import com.appname.notes.feature.search.SearchRoute
 import com.appname.notes.feature.settings.SettingsRoute
+import com.appname.notes.feature.templates.TemplateEditorRoute
+import com.appname.notes.feature.templates.TemplateEditorViewModel
+import com.appname.notes.feature.templates.TemplatesRoute
+import com.appname.notes.feature.templates.TemplatesViewModel
 
 /**
  * App shell. Phones: one screen at a time with a bottom bar (hidden while editing to give the note the
@@ -124,6 +128,7 @@ fun NotesApp(
                         onOpenSearch = { backStack.push(SearchKey) },
                         onManageNotebooks = { backStack.push(NotebooksKey) },
                         onManageTags = { backStack.push(TagsKey) },
+                        onChooseTemplate = { notebook, tag -> backStack.push(TemplatesKey(notebook.orEmpty(), tag.orEmpty())) },
                         selectedNoteId = selectedNoteId,
                     )
                 }
@@ -149,7 +154,27 @@ fun NotesApp(
                 }
                 entry<NotebooksKey> { NotebooksRoute(onBack = { backStack.pop() }) }
                 entry<TagsKey> { TagsRoute(onBack = { backStack.pop() }) }
-                entry<SettingsKey> { SettingsRoute() }
+                entry<SettingsKey> { SettingsRoute(onManageTemplates = { backStack.push(TemplatesKey(manage = true)) }) }
+                entry<TemplatesKey> { key ->
+                    val viewModel = hiltViewModel<TemplatesViewModel, TemplatesViewModel.Factory>(
+                        creationCallback = { factory -> factory.create(key.notebookId, key.tagId) },
+                    )
+                    TemplatesRoute(
+                        viewModel = viewModel,
+                        manage = key.manage,
+                        onBack = { backStack.pop() },
+                        // The template screen is replaced by the new note, so Back returns to where the user was.
+                        onNoteCreated = { id -> backStack.pop(); openNote(id, NoteType.INK) },
+                        onEdit = { id -> backStack.push(TemplateEditorKey(id)) },
+                        onNewTemplate = { backStack.push(TemplateEditorKey()) },
+                    )
+                }
+                entry<TemplateEditorKey> { key ->
+                    val viewModel = hiltViewModel<TemplateEditorViewModel, TemplateEditorViewModel.Factory>(
+                        creationCallback = { factory -> factory.create(key.templateId) },
+                    )
+                    TemplateEditorRoute(viewModel = viewModel, onClose = { backStack.pop() })
+                }
             },
         )
     }

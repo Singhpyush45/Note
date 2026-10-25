@@ -23,6 +23,8 @@ import com.appname.notes.core.domain.model.NoteSummary
 import com.appname.notes.core.ink.model.InkItem
 import com.appname.notes.core.ink.model.InkTool
 import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.core.ink.template.TemplateLayout
+import com.appname.notes.feature.templates.TemplateRenderer
 import com.appname.notes.feature.ink.InkPaints
 import com.appname.notes.feature.ink.InkPaths
 
@@ -34,11 +36,19 @@ class InkThumbnail(
     val items: List<InkItem>,
     /** For PDF notes: the PDF page under the ink, drawn over the whole page. */
     val pdfPage: Bitmap? = null,
+    /** The page's template design (owner brief §4), if it was made from one. */
+    val layout: TemplateLayout? = null,
 ) {
-    /** Shows the page from the top down to just below its ink (at least a third of the page); a PDF page whole. */
+    /** What is printed on the paper: the template design, or the plain background as a design. Null for PDF pages. */
+    val design: TemplateLayout? = if (pdfPage != null) null else layout?.resized(width, height) ?: TemplateLayout.basic(template, width, height)
+
+    /**
+     * Shows the page from the top down to just below its ink (at least a third of the page, half for a template
+     * so its design is recognisable); a PDF page whole.
+     */
     val shownHeight: Float = if (pdfPage != null) height else run {
         val bottom = items.maxOfOrNull { it.bounds().bottom.toFloat() } ?: 0f
-        (bottom + 24f).coerceIn(height / 3, height)
+        (bottom + 24f).coerceIn(if (layout != null) height / 2 else height / 3, height)
     }
 }
 
@@ -51,6 +61,7 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
     val outline = MaterialTheme.colorScheme.outlineVariant
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
     val bitmapPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
+    val templateRenderer = remember { TemplateRenderer() }
     val pageRect = remember { RectF() }
     Canvas(
         modifier
@@ -60,13 +71,15 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
             .border(1.dp, outline, MaterialTheme.shapes.small)
             .testTag("ink_thumbnail_${note.id.value}"),
     ) {
-        drawRect(androidx.compose.ui.graphics.Color(InkPaints.PAPER))
-        val thumbnail = t ?: return@Canvas
+        val thumbnail = t
+        drawRect(androidx.compose.ui.graphics.Color(thumbnail?.design?.paperColor ?: InkPaints.PAPER))
+        if (thumbnail == null) return@Canvas
         val scale = size.width / thumbnail.width
         drawIntoCanvas { c ->
             val canvas = c.nativeCanvas
             canvas.withScale(scale, scale) {
                 clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
+                thumbnail.design?.let { templateRenderer.drawDesign(this, it) }
                 thumbnail.pdfPage?.let { pageRect.set(0f, 0f, thumbnail.width, thumbnail.height); drawBitmap(it, null, pageRect, bitmapPaint) }
                 for (pass in 0..1) {
                     for (item in thumbnail.items) {
