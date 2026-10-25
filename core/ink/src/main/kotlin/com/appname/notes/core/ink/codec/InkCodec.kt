@@ -55,7 +55,8 @@ sealed interface DecodeResult {
  * Format 3 adds photos (type 3: utf-8 file name, placement cx cy w h turn, u8 flags) and text boxes (type 4:
  * utf-8 text, placement, u8 font, u8 bold/italic, u8 align); it is written only for those items.
  *
- * Format 2 flags: bit0 pressure off, bit1 a fill colour follows (i32 ARGB, shapes only).
+ * Format 2 flags: bit0 pressure off, bit1 a fill colour follows (i32 ARGB, shapes only), bit2 a second fill
+ * colour follows (gradient).
  *
  * Format 2 is written only when it is needed (a pencil, brush, non-classic variant, pressure off or a filled shape), so ink
  * drawn with the original tools stays readable by older app versions. An older version that meets format 2
@@ -70,7 +71,8 @@ object InkCodec {
 
     private const val FLAG_NO_PRESSURE = 1
     private const val FLAG_FILL = 2
-    private const val KNOWN_FLAGS = FLAG_NO_PRESSURE or FLAG_FILL
+    private const val FLAG_GRADIENT = 4
+    private const val KNOWN_FLAGS = FLAG_NO_PRESSURE or FLAG_FILL or FLAG_GRADIENT
 
     private const val TYPE_STROKE = 1
     private const val TYPE_SHAPE = 2
@@ -141,6 +143,7 @@ object InkCodec {
         val v3 = item is ImageItem || item is TextItem
         val v2 = v3 || needsV2(item)
         val fill = (item as? ShapeItem)?.fill
+        val fillEnd = (item as? ShapeItem)?.fillEnd?.takeIf { fill != null }
         w.u8(if (v3) 3 else if (v2) 2 else 1)
         w.u8(
             when (item) {
@@ -155,8 +158,9 @@ object InkCodec {
         w.f32(b.size)
         if (v2) {
             w.u8(b.effectiveStyle.code)
-            w.u8((if (b.pressure) 0 else FLAG_NO_PRESSURE) or (if (fill != null) FLAG_FILL else 0))
+            w.u8((if (b.pressure) 0 else FLAG_NO_PRESSURE) or (if (fill != null) FLAG_FILL else 0) or (if (fillEnd != null) FLAG_GRADIENT else 0))
             if (fill != null) w.i32(fill)
+            if (fillEnd != null) w.i32(fillEnd)
         }
         when (item) {
             is StrokeItem -> writePoints(w, item.points)
@@ -249,10 +253,12 @@ object InkCodec {
             val color = r.i32()
             val size = r.f32()
             var fill: Int? = null
+            var fillEnd: Int? = null
             val brush = if (version >= 2) {
                 val styleCode = r.u8()
                 val flags = r.u8()
                 if (flags and FLAG_FILL != 0) fill = r.i32()
+                if (flags and FLAG_GRADIENT != 0) fillEnd = r.i32()
                 // A variant or flag this version doesn't know comes from a newer app: read-only, never overwritten.
                 val style = BrushStyle.fromCode(styleCode)
                 if (tool == null || style == null || style.tool != tool || flags and KNOWN_FLAGS.inv() != 0) {
@@ -277,7 +283,7 @@ object InkCodec {
                         else -> return DecodeResult.Corrupt("unknown geometry")
                     }
                     val source = if (r.u8() == 1) readPoints(r) else null
-                    ShapeItem(id, z, brush, kind, geometry, source, fill)
+                    ShapeItem(id, z, brush, kind, geometry, source, fill, fillEnd)
                 }
                 TYPE_IMAGE -> {
                     if (version < 3) return DecodeResult.Corrupt("image in old format")

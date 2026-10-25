@@ -135,8 +135,17 @@ internal object InkPaths {
     fun drawFill(canvas: Canvas, item: ShapeItem, path: Path) {
         val fill = item.fill ?: return
         val p = fillPaint.get()!!
-        p.color = fill
+        val end = item.fillEnd
+        if (end != null) {
+            val b = android.graphics.RectF()
+            @Suppress("DEPRECATION") path.computeBounds(b, true)
+            p.shader = android.graphics.LinearGradient(b.left, b.top, b.right, b.bottom, fill, end, android.graphics.Shader.TileMode.CLAMP)
+        } else {
+            p.shader = null
+            p.color = fill
+        }
         canvas.drawPath(path, p)
+        p.shader = null
     }
 }
 

@@ -2,6 +2,7 @@ package com.appname.notes.feature.ink
 
 import com.appname.notes.core.settings.LaserSettings
 import com.appname.notes.core.ink.input.LaserTrail
+import com.appname.notes.core.ink.input.Ruler
 import com.appname.notes.core.ink.input.EditorTool
 import android.annotation.SuppressLint
 import android.content.Context
@@ -306,7 +307,26 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     // ---------------------------------------------------------------- touch
 
-    private enum class Mode { IDLE, INK, LASER, PAN, PINCH, IGNORE }
+    private enum class Mode { IDLE, INK, LASER, PAN, PINCH, IGNORE, RULER_MOVE, RULER_TURN }
+
+    // ---------------------------------------------------------------- ruler (owner brief §16)
+
+    /** Shows the ruler; strokes drawn along its edges come out straight. */
+    var rulerVisible: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value && ruler == null && width > 0) ruler = defaultRuler()
+            surface.invalidate()
+        }
+
+    private var ruler: Ruler? = null
+    private var rulerEdge: Int? = null
+    private val rulerPainter by lazy { RulerPainter(density) }
+
+    private fun defaultRuler() = Ruler(width / 2.0, height / 2.0, 0.0, minOf(width, height) * 0.9 + 0.0, 64.0 * density)
+
+    private fun activeRuler(): Ruler? = if (rulerVisible) (ruler ?: defaultRuler().also { ruler = it }) else null
 
     private var mode = Mode.IDLE
     private var inkPointer = -1
@@ -344,6 +364,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             MotionEvent.ACTION_MOVE -> when (mode) {
                 Mode.INK -> feedInk(e)
                 Mode.LASER -> feedLaser(e)
+                Mode.RULER_MOVE, Mode.RULER_TURN -> moveRuler(e)
                 Mode.PAN -> pan(e)
                 Mode.PINCH -> pinch(e)
                 else -> Unit
@@ -397,6 +418,22 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             return
         }
         textTapX = Float.NaN
+        // The ruler takes touches on itself: its knob turns it, its body moves it.
+        activeRuler()?.let { r ->
+            val p = Vec(e.getX(index).toDouble(), e.getY(index).toDouble())
+            val grab = when {
+                r.onKnob(p, KNOB_DP * density) -> Mode.RULER_TURN
+                r.onBody(p) -> Mode.RULER_MOVE
+                else -> null
+            }
+            if (grab != null) {
+                mode = grab
+                inkPointer = e.getPointerId(index)
+                lastX = e.getX(index)
+                lastY = e.getY(index)
+                return
+            }
+        }
         if ((source == PointerSource.FINGER && !fingerDraws) || mouseScroll) {
             startPan(e, index)
         } else {
@@ -487,8 +524,20 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 startPinch(e, index)
             }
             Mode.IDLE, Mode.IGNORE -> if (isStylus(source)) startDrawing(e, index, source)
-            Mode.PINCH -> Unit
+            Mode.PINCH, Mode.RULER_MOVE, Mode.RULER_TURN -> Unit
         }
+    }
+
+    private fun moveRuler(e: MotionEvent) {
+        val r = ruler ?: return
+        val index = e.findPointerIndex(inkPointer)
+        if (index < 0) return
+        val x = e.getX(index)
+        val y = e.getY(index)
+        ruler = if (mode == Mode.RULER_TURN) r.turnedTowards(Vec(x.toDouble(), y.toDouble())) else r.moved((x - lastX).toDouble(), (y - lastY).toDouble())
+        lastX = x
+        lastY = y
+        surface.invalidate()
     }
 
     private fun onPointerUp(e: MotionEvent, index: Int) {
@@ -526,6 +575,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     }
 
     private fun endTouch() {
+        rulerEdge = null
         mode = Mode.IDLE
         inkPointer = -1
         removeCallbacks(holdRunnable)
@@ -537,8 +587,16 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     // ---------------------------------------------------------------- ink gestures
 
     private fun sampleAt(e: MotionEvent, index: Int, page: Int, v: Viewport, historical: Int = -1): Sample {
-        val x = if (historical < 0) e.getX(index) else e.getHistoricalX(index, historical)
-        val y = if (historical < 0) e.getY(index) else e.getHistoricalY(index, historical)
+        var x = if (historical < 0) e.getX(index) else e.getHistoricalX(index, historical)
+        var y = if (historical < 0) e.getY(index) else e.getHistoricalY(index, historical)
+        // Along the ruler: every point goes onto its edge, so the line is straight.
+        val edge = rulerEdge
+        val r = ruler
+        if (edge != null && r != null) {
+            val q = r.project(Vec(x.toDouble(), y.toDouble()), edge)
+            x = q.x.toFloat()
+            y = q.y.toFloat()
+        }
         val t = if (historical < 0) e.eventTime else e.getHistoricalEventTime(historical)
         val p = screenToPage(page, v, x, y)
         val stylus = isStylus(inkSource)
@@ -566,6 +624,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         inkPointer = e.getPointerId(index)
         inkSource = source
         inkPage = page
+        // Starting next to the ruler's edge (with a drawing tool): the stroke follows the edge.
+        rulerEdge = activeRuler()?.takeIf { c.tools.tool.inkTool != null && source != PointerSource.STYLUS_ERASER }
+            ?.edgeNear(Vec(e.getX(index).toDouble(), e.getY(index).toDouble()), RULER_SNAP_DP * density)
         val response = c.down(s.pages[page].id, sampleAt(e, index, page, v), source, unitsPerDp(v))
         handle(response, e)
         scheduleHold()
@@ -639,7 +700,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 val brush = controller?.liveStroke()?.first
                 val v = viewport
                 // Variants (pencils, brushes …) are drawn live by us, so the wet stroke matches the dry one.
-                if (ink != null && brush != null && brush.usesJetpack && e != null && v != null && inkPage >= 0) {
+                if (ink != null && brush != null && brush.usesJetpack && rulerEdge == null && e != null && v != null && inkPage >= 0) {
                     val toPage = Matrix().also { pageToScreen(inkPage, v).invert(it) }
                     ink.maskPath = outsidePage(inkPage, v)
                     // Dark paper: the live layer can't be filtered, so its colour is mapped the same way here.
@@ -888,7 +949,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 if (c.activePageId == page.id) {
                     c.shapePreview?.let { renderer.drawInk(canvas, listOf(it), page.width, page.height, m) }
                     c.liveStroke()?.let { (brush, points) ->
-                        if (inProgress == null || !brush.usesJetpack) renderer.drawLive(canvas, brush, points, m)
+                        if (this@InkCanvasView.liveStroke == null) renderer.drawLive(canvas, brush, points, m)
                     }
                 }
                 if (layer >= 0) canvas.restoreToCount(layer)
@@ -911,6 +972,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     renderer.drawRotateHandle(canvas, r.centerX(), selectionOutline.top, r.top - (InkInputController.ROTATE_HANDLE_DP * density).toFloat(), density)
                 }
             }
+            activeRuler()?.let { rulerPainter.draw(canvas, it) }
             // The laser pointer: on top of everything, fading; keeps animating until it has gone.
             val now = SystemClock.uptimeMillis()
             if (laserTrail.active(now)) {
@@ -931,3 +993,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         postTranslate(t.dx.toFloat(), t.dy.toFloat())
     }
 }
+
+/** Touch radius of the ruler's turning knob, and how close to its edge a stroke must start to follow it (dp). */
+private const val KNOB_DP = 26.0
+private const val RULER_SNAP_DP = 24.0

@@ -419,6 +419,8 @@ data class ShapeItem(
     val source: StrokePoints?,
     /** Fill colour (ARGB) inside closed shapes, or null for outline only (owner brief §14–15). */
     val fill: Int? = null,
+    /** With a fill: a second colour, the fill then runs from [fill] (top-left) to this one (bottom-right). */
+    val fillEnd: Int? = null,
 ) : InkItem {
     init {
         require(kind.accepts(geometry)) { "$kind can't use ${geometry::class.simpleName}" }

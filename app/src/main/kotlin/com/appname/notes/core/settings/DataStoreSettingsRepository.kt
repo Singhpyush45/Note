@@ -121,6 +121,7 @@ class DataStoreSettingsRepository @Inject constructor(
         prefs[Keys.SHAPE_SIZE] = new.shape.size
         prefs[Keys.SHAPE_FILLED] = new.shape.fillArgb != null
         new.shape.fillArgb?.let { prefs[Keys.SHAPE_FILL] = it }
+        prefs[Keys.SHAPE_GRADIENT] = new.shape.gradient
     }
 
     private fun Preferences.toInk(): InkSettings {
@@ -146,6 +147,7 @@ class DataStoreSettingsRepository @Inject constructor(
                 colorArgb = this[Keys.SHAPE_COLOR] ?: ShapeSettings().colorArgb,
                 size = this[Keys.SHAPE_SIZE]?.takeIf { it.isFinite() && it in 0.5f..40f } ?: ShapeSettings().size,
                 fillArgb = if (this[Keys.SHAPE_FILLED] == true) this[Keys.SHAPE_FILL] else null,
+                gradient = this[Keys.SHAPE_GRADIENT] ?: false,
             ),
             brushes = defaults.brushes.mapValues { (tool, default) ->
                 val size = this[sizeKey(tool)]?.takeIf { it.isFinite() && it > 0f } ?: default.size
@@ -252,6 +254,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val SHAPE_SIZE = floatPreferencesKey("shape_size")
         val SHAPE_FILLED = booleanPreferencesKey("shape_filled")
         val SHAPE_FILL = intPreferencesKey("shape_fill")
+        val SHAPE_GRADIENT = booleanPreferencesKey("shape_gradient")
     }
 
     private companion object {

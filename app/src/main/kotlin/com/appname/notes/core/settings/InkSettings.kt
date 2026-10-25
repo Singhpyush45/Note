@@ -64,7 +64,19 @@ data class ShapeSettings(
     val colorArgb: Int = 0xFF1F1F1F.toInt(),
     val size: Float = 2.5f,
     val fillArgb: Int? = null,
-)
+    /** With a fill: it runs into a second, neighbouring colour (a gradient). */
+    val gradient: Boolean = false,
+) {
+    /** The gradient's second colour: the fill's hue turned 50°, same transparency. */
+    val fillEndArgb: Int?
+        get() = fillArgb?.takeIf { gradient }?.let { f ->
+            val hsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(f or (0xFF shl 24), hsv)
+            hsv[0] = (hsv[0] + 50f) % 360f
+            hsv[1] = maxOf(hsv[1], 0.35f)
+            (f and (0xFF shl 24)) or (android.graphics.Color.HSVToColor(hsv) and 0xFFFFFF)
+        }
+}
 
 /** Laser pointer looks (owner brief §17). */
 enum class LaserStyle { SOLID, OUTLINE, DOT }

@@ -114,9 +114,11 @@ data class InkEditorUi(
     val savedColors: List<Int> = emptyList(),
     /** The laser pointer's look (owner brief §17). */
     val laser: LaserSettings = LaserSettings(),
+    /** The ruler is shown (owner brief §16). */
+    val ruler: Boolean = false,
 ) {
     /** The shape tool's current choices. */
-    val shapeSettings: ShapeSettings get() = ShapeSettings(tools.shapeKind, tools.shapeColor, tools.shapeSize, tools.shapeFill)
+    val shapeSettings: ShapeSettings get() = ShapeSettings(tools.shapeKind, tools.shapeColor, tools.shapeSize, tools.shapeFill, gradient = tools.shapeFillEnd != null)
 }
 
 data class ScrollRequest(val page: Int, val id: Long = System.nanoTime())
@@ -627,7 +629,7 @@ class InkEditorViewModel @AssistedInject constructor(
     fun setShape(shape: ShapeSettings) {
         val c = controller() ?: return
         val safe = shape.copy(size = shape.size.takeIf { it.isFinite() }?.coerceIn(0.5f, 40f) ?: 2.5f)
-        c.tools = c.tools.copy(shapeKind = safe.kind, shapeColor = safe.colorArgb, shapeSize = safe.size, shapeFill = safe.fillArgb)
+        c.tools = c.tools.copy(shapeKind = safe.kind, shapeColor = safe.colorArgb, shapeSize = safe.size, shapeFill = safe.fillArgb, shapeFillEnd = safe.fillEndArgb)
         refresh()
         persistInk { it.copy(shape = safe) }
     }
@@ -640,6 +642,16 @@ class InkEditorViewModel @AssistedInject constructor(
     fun sendSelectionToBack() {
         controller()?.sendSelectionToBack()
         refresh()
+    }
+
+    fun setLassoBox(box: Boolean) {
+        val c = controller() ?: return
+        c.tools = c.tools.copy(lassoBox = box)
+        refresh()
+    }
+
+    fun toggleRuler() {
+        _ui.update { it.copy(ruler = !it.ruler) }
     }
 
     fun flipSelection(horizontal: Boolean) {
@@ -1063,7 +1075,7 @@ class InkEditorViewModel @AssistedInject constructor(
         val c = controller()
         if (c != null && localInkWrites == 0) {
             val tool = if (toolPickedHere) c.tools.tool else s.lastTool
-            val next = toolsFrom(s).copy(tool = tool, eraserSizeDp = c.tools.eraserSizeDp)
+            val next = toolsFrom(s).copy(tool = tool, eraserSizeDp = c.tools.eraserSizeDp, lassoBox = c.tools.lassoBox)
             if (next != c.tools) c.tools = next
         }
         _ui.update { it.copy(recentBrushes = s.recentBrushes, recentColors = s.recentColors, savedColors = s.savedColors, laser = if (localInkWrites == 0) s.laser else it.laser) }
@@ -1080,6 +1092,7 @@ class InkEditorViewModel @AssistedInject constructor(
         shapeColor = s.shape.colorArgb,
         shapeSize = s.shape.size,
         shapeFill = s.shape.fillArgb,
+        shapeFillEnd = s.shape.fillEndArgb,
     )
 
     private companion object {

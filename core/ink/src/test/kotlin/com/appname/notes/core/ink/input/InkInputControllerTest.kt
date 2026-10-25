@@ -289,6 +289,9 @@ class InkInputControllerTest {
         val back = com.appname.notes.core.ink.codec.InkCodec.decode(shape.id, shape.z, com.appname.notes.core.ink.codec.InkCodec.encode(shape))
         assertEquals(shape, (back as com.appname.notes.core.ink.codec.DecodeResult.Ok).item)
         assertEquals(1, com.appname.notes.core.ink.codec.InkCodec.encode(shape.copy(fill = null))[0].toInt())
+        // A gradient fill keeps its second colour too.
+        val g = shape.copy(fillEnd = 0x40FF0000)
+        assertEquals(g, (com.appname.notes.core.ink.codec.InkCodec.decode(g.id, g.z, com.appname.notes.core.ink.codec.InkCodec.encode(g)) as com.appname.notes.core.ink.codec.DecodeResult.Ok).item)
         // Lines can't be filled; a tap adds nothing.
         c.tools = c.tools.copy(shapeKind = com.appname.notes.core.ink.model.ShapeKind.LINE)
         draw(line(Vec(100.0, 400.0), Vec(300.0, 400.0)))
@@ -317,5 +320,15 @@ class InkInputControllerTest {
         assertTrue(c.rotateSelection(90.0))
         val box = items().first { it.id == first.id }.bounds()
         assertTrue(box.bottom - box.top > box.right - box.left) // the horizontal line is now upright
+    }
+
+    @Test
+    fun `box lasso selects what is inside the box`() {
+        draw(line(Vec(100.0, 100.0), Vec(200.0, 100.0)))
+        draw(line(Vec(100.0, 400.0), Vec(200.0, 400.0)))
+        c.tools = c.tools.copy(tool = EditorTool.LASSO, lassoBox = true)
+        draw(line(Vec(80.0, 80.0), Vec(220.0, 130.0)))
+        assertEquals(1, c.selectedItems().size)
+        assertEquals(100.0, c.selectedItems().single().bounds().center.y, 2.0)
     }
 }

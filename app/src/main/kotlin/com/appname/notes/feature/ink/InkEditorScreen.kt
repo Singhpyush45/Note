@@ -166,6 +166,8 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onBack = viewModel::sendSelectionToBack,
             onRotate = viewModel::rotateSelection,
             onFlip = viewModel::flipSelection,
+            onRuler = viewModel::toggleRuler,
+            onLassoBox = viewModel::setLassoBox,
         )
     }
     val context = LocalContext.current
@@ -462,6 +464,7 @@ private fun InkCanvas(
             view.arrangement = ui.arrangement
             view.darkPaper = darkPaper
             view.laser = ui.laser
+            view.rulerVisible = ui.ruler && ui.readOnly == null
             view.bind(session, controller)
             ui.scrollRequest?.let {
                 view.scrollToPage(it.page)

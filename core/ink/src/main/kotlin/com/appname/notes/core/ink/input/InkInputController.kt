@@ -93,6 +93,10 @@ data class InkToolState(
     val shapeColor: Int = 0xFF1F1F1F.toInt(),
     val shapeSize: Float = 2.5f,
     val shapeFill: Int? = null,
+    /** With a fill: its second colour for a gradient. */
+    val shapeFillEnd: Int? = null,
+    /** Lasso draws a box instead of a free loop (owner brief §16: selection modes). */
+    val lassoBox: Boolean = false,
 ) {
     /** The outline of shapes drawn with the shape tool: a plain pen line. */
     val shapeBrush: InkBrush get() = InkBrush(InkTool.PEN, shapeColor, shapeSize)
@@ -313,7 +317,12 @@ class InkInputController(
                 Response.REDRAW
             }
             is Gesture.LassoDraw -> {
-                if (dist(lassoPath.last(), p) >= unitsPerDp) lassoPath = lassoPath + p
+                if (tools.lassoBox) {
+                    val a = lassoPath.first()
+                    lassoPath = listOf(a, Vec(p.x, a.y), p, Vec(a.x, p.y), a)
+                } else if (dist(lassoPath.last(), p) >= unitsPerDp) {
+                    lassoPath = lassoPath + p
+                }
                 Response.REDRAW
             }
             is Gesture.ShapeDraw -> {
@@ -321,7 +330,7 @@ class InkInputController(
                     null
                 } else {
                     val brush = tools.shapeBrush
-                    ShapeItem(PREVIEW_ID, 0, brush, tools.shapeKind, ShapeTool.geometry(tools.shapeKind, g.start, p, brush.size), null, fillFor(tools.shapeKind))
+                    ShapeItem(PREVIEW_ID, 0, brush, tools.shapeKind, ShapeTool.geometry(tools.shapeKind, g.start, p, brush.size), null, fillFor(tools.shapeKind), tools.shapeFillEnd?.takeIf { fillFor(tools.shapeKind) != null })
                 }
                 Response.REDRAW
             }

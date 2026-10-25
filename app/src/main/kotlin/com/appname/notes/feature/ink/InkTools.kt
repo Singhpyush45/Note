@@ -1,5 +1,7 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.outlined.Flip
@@ -117,6 +119,9 @@ object InkToolTags {
     const val ROTATE = "ink_selection_rotate"
     const val FRONT = "ink_selection_front"
     const val FLIP_H = "ink_selection_flip_h"
+    const val RULER = "ink_ruler"
+    const val LASSO_BOX = "ink_lasso_box"
+    const val LASSO_FREE = "ink_lasso_free"
     const val FLIP_V = "ink_selection_flip_v"
     const val BACK = "ink_selection_back"
     fun shape(k: com.appname.notes.core.ink.model.ShapeKind) = "ink_shape_${k.name.lowercase()}"
@@ -145,6 +150,8 @@ data class InkToolActions(
     val onBack: () -> Unit = {},
     val onRotate: () -> Unit = {},
     val onFlip: (Boolean) -> Unit = {},
+    val onRuler: () -> Unit = {},
+    val onLassoBox: (Boolean) -> Unit = {},
 )
 
 /** The tools in the bar, in order (owner brief §13). Only tools that work are shown. */
@@ -213,6 +220,21 @@ fun InkToolbar(
                         onClick = { if (tools.tool == tool && tool.inkTool != null) onPanel(!panelOpen) else actions.onTool(tool) },
                     )
                 }
+                OptionDivider()
+                // The ruler: on or off, whatever the tool.
+                val rulerLabel = stringResource(R.string.ink_ruler)
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .then(if (ui.ruler) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
+                        .toggleable(value = ui.ruler, role = Role.Switch, onValueChange = { actions.onRuler() })
+                        .semantics { contentDescription = rulerLabel }
+                        .testTag(InkToolTags.RULER),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.Straighten, null, tint = if (ui.ruler) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             // Each tool's options start scrolled to the beginning.
@@ -272,6 +294,16 @@ fun InkToolbar(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
+                    tools.tool == EditorTool.LASSO && !ui.hasSelection -> SingleChoiceSegmentedButtonRow {
+                        listOf(false, true).forEachIndexed { i, box ->
+                            SegmentedButton(
+                                selected = tools.lassoBox == box,
+                                onClick = { actions.onLassoBox(box) },
+                                shape = SegmentedButtonDefaults.itemShape(i, 2),
+                                modifier = Modifier.heightIn(min = 48.dp).testTag(if (box) InkToolTags.LASSO_BOX else InkToolTags.LASSO_FREE),
+                            ) { Text(stringResource(if (box) R.string.lasso_box else R.string.lasso_free), maxLines = 1) }
+                        }
+                    }
                     tools.tool == EditorTool.LASSO -> if (ui.hasSelection) {
                         IconButton(onClick = actions.onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
                         IconButton(onClick = actions.onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
@@ -498,11 +530,20 @@ private fun ShapeControls(shape: ShapeSettings, recent: List<Int>, actions: InkT
         ) { ShapeGlyph(kind, MaterialTheme.colorScheme.onSurface) }
     }
     Spacer(Modifier.width(4.dp))
+    // Fill: none → one colour → gradient → none.
     val filled = shape.fillArgb != null
     FilterChip(
         selected = filled,
-        onClick = { actions.onShape(shape.copy(fillArgb = if (filled) null else fillOf(shape.colorArgb))) },
-        label = { Text(stringResource(R.string.shape_fill)) },
+        onClick = {
+            actions.onShape(
+                when {
+                    !filled -> shape.copy(fillArgb = fillOf(shape.colorArgb), gradient = false)
+                    !shape.gradient -> shape.copy(gradient = true)
+                    else -> shape.copy(fillArgb = null, gradient = false)
+                },
+            )
+        },
+        label = { Text(stringResource(if (filled && shape.gradient) R.string.shape_gradient else R.string.shape_fill)) },
         modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.SHAPE_FILL),
     )
     Spacer(Modifier.width(4.dp))
