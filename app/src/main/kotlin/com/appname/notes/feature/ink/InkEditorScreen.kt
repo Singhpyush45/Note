@@ -1,5 +1,14 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -127,6 +136,7 @@ object InkTestTags {
     const val PAGE_SETTINGS = "ink_page_settings"
     const val EXPORT_NOTE_PDF = "ink_export_note_pdf"
     fun tool(tool: EditorTool) = "ink_tool_${tool.name.lowercase()}"
+    const val SCROLL_BAR = "ink_scroll_bar"
 }
 
 @Composable
@@ -204,6 +214,18 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             clip.text != null -> viewModel.insertPlainText(clip.text)
             else -> viewModel.nothingToPaste()
         }
+    }
+    // Settings › Handwriting › Ask before leaving with Back.
+    var confirmLeave by rememberSaveable { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = ui.backGuard && load is InkLoad.Ready && !confirmLeave) { confirmLeave = true }
+    if (confirmLeave) {
+        ConfirmDialog(
+            title = stringResource(R.string.ink_leave_title),
+            body = stringResource(R.string.ink_leave_body),
+            confirm = stringResource(R.string.ink_leave),
+            onConfirm = { confirmLeave = false; onClose() },
+            onDismiss = { confirmLeave = false },
+        )
     }
     var stickerPicker by rememberSaveable { mutableStateOf(false) }
     var tablePicker by rememberSaveable { mutableStateOf(false) }
@@ -364,6 +386,14 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                             actions = toolActions,
                             onClose = { panelOpen = false },
                             modifier = Modifier.align(Alignment.BottomCenter).widthIn(max = 560.dp),
+                        )
+                    }
+                    if (ui.scrollBar && ui.pageCount > 2) {
+                        PageScrollBar(
+                            current = ui.currentPage,
+                            count = ui.pageCount,
+                            onPage = viewModel::goToPage,
+                            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp, top = 72.dp, bottom = 72.dp),
                         )
                     }
                     if (ui.pageCount > 1) {
@@ -729,3 +759,49 @@ private fun PagesDialog(pages: List<InkSession.Page>, current: Int, onPick: (Int
 }
 
 private const val MAX_INSERT = 10
+
+/**
+ * Settings › Handwriting › Page scroll bar: a slim bar on the right; drag or tap it to jump to a page (owner brief
+ * §18). TalkBack sees it as an adjustable control (swipe up/down to change the page).
+ */
+@Composable
+private fun PageScrollBar(current: Int, count: Int, onPage: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val label = stringResource(R.string.ink_scroll_bar)
+    val pageText = stringResource(R.string.ink_page_indicator, current + 1, count)
+    var trackHeight by remember { mutableStateOf(1) }
+    fun pageAt(y: Float) = ((y / trackHeight.coerceAtLeast(1)) * count).toInt().coerceIn(0, count - 1)
+    Box(
+        modifier
+            .fillMaxHeight()
+            .width(28.dp)
+            .androidx_onSize { trackHeight = it }
+            .pointerInput(count) {
+                detectTapGestures { onPage(pageAt(it.y)) }
+            }
+            .pointerInput(count) {
+                detectVerticalDragGestures { change, _ -> onPage(pageAt(change.position.y)) }
+            }
+            .semantics {
+                contentDescription = label
+                stateDescription = pageText
+                progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(current.toFloat(), 0f..(count - 1).toFloat(), steps = (count - 2).coerceAtLeast(0))
+                setProgress { v -> onPage(v.toInt().coerceIn(0, count - 1)); true }
+            }
+            .testTag(InkTestTags.SCROLL_BAR),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Box(Modifier.fillMaxHeight().width(3.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape))
+        val fraction = if (count <= 1) 0f else current.toFloat() / (count - 1)
+        Box(
+            Modifier
+                .layout { measurable, constraints ->
+                    val p = measurable.measure(constraints)
+                    layout(p.width, p.height) { p.place(0, ((trackHeight - p.height) * fraction).toInt()) }
+                }
+                .size(width = 10.dp, height = 40.dp)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f), CircleShape),
+        )
+    }
+}
+
+private fun Modifier.androidx_onSize(onHeight: (Int) -> Unit) = this.then(Modifier.onSizeChanged { onHeight(it.height) })

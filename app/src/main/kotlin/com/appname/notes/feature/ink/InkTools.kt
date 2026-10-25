@@ -204,7 +204,7 @@ fun InkToolbar(
             ) {
                 // On dark paper ink is shown mapped (black reads as light), so the tool tips match the page.
                 val darkPaper = LocalDarkPaper.current && com.appname.notes.core.designsystem.theme.LocalDarkTheme.current
-                BarTools.forEach { tool ->
+                BarTools.filter { it !in ui.hiddenTools || it == tools.tool }.forEach { tool ->
                     val raw = when (tool) {
                         EditorTool.LASER -> ui.laser.colorArgb
                         EditorTool.SHAPE -> tools.shapeColor
@@ -731,6 +731,10 @@ private fun EditorTool.icon(): ImageVector = when (this) {
     EditorTool.SHAPE -> Icons.Outlined.Category
     EditorTool.TEXT -> Icons.Outlined.TextFields
 }
+
+/** The tool's name (Settings › tool bar uses it too). */
+@StringRes
+fun toolLabel(tool: EditorTool): Int = tool.label()
 
 @StringRes
 private fun EditorTool.label(): Int = when (this) {

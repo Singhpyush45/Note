@@ -122,6 +122,9 @@ class DataStoreSettingsRepository @Inject constructor(
         prefs[Keys.SHAPE_FILLED] = new.shape.fillArgb != null
         new.shape.fillArgb?.let { prefs[Keys.SHAPE_FILL] = it }
         prefs[Keys.SHAPE_GRADIENT] = new.shape.gradient
+        prefs[Keys.HIDDEN_TOOLS] = new.hiddenTools.joinToString(",") { it.name }
+        prefs[Keys.SCROLL_BAR] = new.scrollBar
+        prefs[Keys.BACK_GUARD] = new.backGuard
     }
 
     private fun Preferences.toInk(): InkSettings {
@@ -149,6 +152,9 @@ class DataStoreSettingsRepository @Inject constructor(
                 fillArgb = if (this[Keys.SHAPE_FILLED] == true) this[Keys.SHAPE_FILL] else null,
                 gradient = this[Keys.SHAPE_GRADIENT] ?: false,
             ),
+            hiddenTools = this[Keys.HIDDEN_TOOLS].orEmpty().split(',').mapNotNull { n -> EditorTool.entries.firstOrNull { it.name == n } }.toSet(),
+            scrollBar = this[Keys.SCROLL_BAR] ?: true,
+            backGuard = this[Keys.BACK_GUARD] ?: false,
             brushes = defaults.brushes.mapValues { (tool, default) ->
                 val size = this[sizeKey(tool)]?.takeIf { it.isFinite() && it > 0f } ?: default.size
                 // An unknown or mismatched style (e.g. from a newer version) falls back to the tool's default.
@@ -255,6 +261,9 @@ class DataStoreSettingsRepository @Inject constructor(
         val SHAPE_FILLED = booleanPreferencesKey("shape_filled")
         val SHAPE_FILL = intPreferencesKey("shape_fill")
         val SHAPE_GRADIENT = booleanPreferencesKey("shape_gradient")
+        val HIDDEN_TOOLS = stringPreferencesKey("ink_hidden_tools")
+        val SCROLL_BAR = booleanPreferencesKey("ink_scroll_bar")
+        val BACK_GUARD = booleanPreferencesKey("ink_back_guard")
     }
 
     private companion object {

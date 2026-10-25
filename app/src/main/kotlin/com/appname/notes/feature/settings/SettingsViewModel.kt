@@ -172,6 +172,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { handle(repository.updateInk { it.copy(holdDuration = duration) }) }
     }
 
+    /** Any other handwriting setting (tool bar, scroll bar, back guard). */
+    fun onInk(change: (com.appname.notes.core.settings.InkSettings) -> com.appname.notes.core.settings.InkSettings) {
+        viewModelScope.launch { handle(repository.updateInk(change)) }
+    }
+
     fun onFingerModeSelected(mode: FingerMode) {
         viewModelScope.launch { handle(repository.updateInk { it.copy(fingerMode = mode) }) }
     }

@@ -49,6 +49,12 @@ data class InkSettings(
     val laser: LaserSettings = LaserSettings(),
     /** The shape tool's last choices (owner brief §15). */
     val shape: ShapeSettings = ShapeSettings(),
+    /** Tools left out of the tool bar (owner brief §18: customise the toolbar). Pen and eraser always stay. */
+    val hiddenTools: Set<EditorTool> = emptySet(),
+    /** A scroll bar on the right of handwritten notes for jumping through pages. */
+    val scrollBar: Boolean = true,
+    /** Back asks before leaving a handwritten note, so a stray edge swipe doesn't close it while writing. */
+    val backGuard: Boolean = false,
 ) {
     val fingerDraws: Boolean
         get() = when (fingerMode) {

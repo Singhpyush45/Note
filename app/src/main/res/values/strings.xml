@@ -716,4 +716,14 @@
     <string name="table_rows">Rows</string>
     <string name="table_columns">Columns</string>
     <string name="table_insert">Insert</string>
+    <string name="settings_scroll_bar">Page scroll bar</string>
+    <string name="settings_scroll_bar_summary">A bar on the right of handwritten notes to jump through the pages.</string>
+    <string name="settings_back_guard">Ask before leaving with Back</string>
+    <string name="settings_back_guard_summary">So a stray swipe from the screen edge doesn\'t close the note while you write.</string>
+    <string name="settings_toolbar">Tool bar: tools to show</string>
+    <string name="ink_leave_title">Leave this note?</string>
+    <string name="ink_leave_body">Everything is saved. Press Leave to close the note.</string>
+    <string name="ink_leave">Leave</string>
+    <string name="ink_scroll_bar">Pages</string>
+    <string name="text_box_math">Maths</string>
 </resources>

@@ -118,6 +118,10 @@ data class InkEditorUi(
     val ruler: Boolean = false,
     /** The shown page is one of a PDF's own pages (those can't be deleted). */
     val shownPageFromPdf: Boolean = false,
+    /** Settings › Handwriting: tools left out of the tool bar, the page scroll bar, asking before Back. */
+    val hiddenTools: Set<EditorTool> = emptySet(),
+    val scrollBar: Boolean = true,
+    val backGuard: Boolean = false,
 ) {
     /** The shape tool's current choices. */
     val shapeSettings: ShapeSettings get() = ShapeSettings(tools.shapeKind, tools.shapeColor, tools.shapeSize, tools.shapeFill, gradient = tools.shapeFillEnd != null)
@@ -1217,6 +1221,7 @@ class InkEditorViewModel @AssistedInject constructor(
             val next = toolsFrom(s).copy(tool = tool, eraserSizeDp = c.tools.eraserSizeDp, lassoBox = c.tools.lassoBox)
             if (next != c.tools) c.tools = next
         }
+        _ui.update { it.copy(hiddenTools = s.hiddenTools, scrollBar = s.scrollBar, backGuard = s.backGuard) }
         _ui.update { it.copy(recentBrushes = s.recentBrushes, recentColors = s.recentColors, savedColors = s.savedColors, laser = if (localInkWrites == 0) s.laser else it.laser) }
         refresh()
     }

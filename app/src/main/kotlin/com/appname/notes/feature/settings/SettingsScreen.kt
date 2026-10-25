@@ -141,6 +141,7 @@ fun SettingsRoute(onManageTemplates: () -> Unit = {}, viewModel: SettingsViewMod
         wallpaperPhoto = wallpaperPhoto,
         onManageTemplates = onManageTemplates,
         onNoteDefaults = viewModel::onNoteDefaults,
+        onInk = viewModel::onInk,
     )
 }
 
@@ -164,6 +165,7 @@ fun SettingsScreen(
     blurSupported: Boolean = supportsBlur(),
     onManageTemplates: () -> Unit = {},
     onNoteDefaults: ((NoteDefaults) -> NoteDefaults) -> Unit = {},
+    onInk: ((InkSettings) -> InkSettings) -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val saveErrorMessage = stringResource(R.string.settings_save_failed)
@@ -230,6 +232,7 @@ fun SettingsScreen(
                     onManageTemplates = onManageTemplates,
                     defaults = uiState.defaults,
                     onNoteDefaults = onNoteDefaults,
+                    onInk = onInk,
                 )
             }
         }
@@ -258,6 +261,7 @@ private fun SettingsList(
     onManageTemplates: () -> Unit,
     defaults: NoteDefaults,
     onNoteDefaults: ((NoteDefaults) -> NoteDefaults) -> Unit,
+    onInk: ((InkSettings) -> InkSettings) -> Unit = {},
 ) {
     var pickingWallpaper by rememberSaveable { mutableStateOf(false) }
     var pickingHue by rememberSaveable { mutableStateOf(false) }
@@ -392,6 +396,32 @@ private fun SettingsList(
                         )
                     }
                 }
+                SettingsSwitchRow(
+                    title = stringResource(R.string.settings_scroll_bar),
+                    summary = stringResource(R.string.settings_scroll_bar_summary),
+                    checked = ink.scrollBar,
+                    onCheckedChange = { on -> onInk { it.copy(scrollBar = on) } },
+                    modifier = Modifier.testTag(SettingsTestTags.SCROLL_BAR),
+                )
+                SettingsSwitchRow(
+                    title = stringResource(R.string.settings_back_guard),
+                    summary = stringResource(R.string.settings_back_guard_summary),
+                    checked = ink.backGuard,
+                    onCheckedChange = { on -> onInk { it.copy(backGuard = on) } },
+                    modifier = Modifier.testTag(SettingsTestTags.BACK_GUARD),
+                )
+                // Customise the tool bar: which tools it shows (pen and eraser always).
+                SubHeading(stringResource(R.string.settings_toolbar))
+                com.appname.notes.core.ink.input.EditorTool.entries
+                    .filter { it != com.appname.notes.core.ink.input.EditorTool.PEN && it != com.appname.notes.core.ink.input.EditorTool.ERASER }
+                    .forEach { tool ->
+                        SettingsSwitchRow(
+                            title = stringResource(com.appname.notes.feature.ink.toolLabel(tool)),
+                            checked = tool !in ink.hiddenTools,
+                            onCheckedChange = { on -> onInk { s -> s.copy(hiddenTools = if (on) s.hiddenTools - tool else s.hiddenTools + tool) } },
+                            modifier = Modifier.testTag(SettingsTestTags.tool(tool)),
+                        )
+                    }
             }
         }
 
@@ -706,6 +736,9 @@ object SettingsTestTags {
     fun defaultMode(m: com.appname.notes.core.ink.layout.PageMode) = "settings_mode_${m.name.lowercase()}"
     fun defaultAxis(a: com.appname.notes.core.ink.layout.ScrollAxis) = "settings_axis_${a.name.lowercase()}"
     fun defaultPaper(i: Int) = "settings_paper_$i"
+    const val SCROLL_BAR = "settings_scroll_bar"
+    const val BACK_GUARD = "settings_back_guard"
+    fun tool(t: com.appname.notes.core.ink.input.EditorTool) = "settings_tool_${t.name.lowercase()}"
     const val SCREEN = "screen_settings"
     const val LIST = "settings_list"
     const val DOCUMENT_TEXT = "settings_document_text"

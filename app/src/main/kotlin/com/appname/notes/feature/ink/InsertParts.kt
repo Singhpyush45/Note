@@ -85,6 +85,7 @@ object InsertTags {
     const val TABLE = "ink_insert_table"
     const val TABLE_INSERT = "ink_table_insert"
     fun sticker(i: Int) = "ink_sticker_$i"
+    fun math(s: String) = "ink_math_$s"
     const val TEXT_DIALOG = "ink_text_dialog"
     const val TEXT_FIELD = "ink_text_field"
     const val TEXT_SAVE = "ink_text_save"
@@ -240,6 +241,13 @@ fun TextBoxDialog(request: TextEditRequest, onSave: (String, TextStyle) -> Unit,
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth().testTag(InsertTags.TEXT_FIELD),
                 )
+                // Equations: maths symbols, Greek letters, powers and indices, typed into the text at the end.
+                Text(stringResource(R.string.text_box_math), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
+                    MathSymbols.forEach { sym ->
+                        TextButton(onClick = { text += sym }, modifier = Modifier.testTag(InsertTags.math(sym))) { Text(sym, fontSize = 18.sp) }
+                    }
+                }
                 Text(stringResource(R.string.text_box_font), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextFont.entries.forEach { f ->
@@ -393,3 +401,9 @@ private fun Stepper(label: String, value: Int, onValue: (Int) -> Unit) {
         TextButton(onClick = { onValue((value + 1).coerceAtMost(12)) }, enabled = value < 12) { Text("+", fontSize = 22.sp) }
     }
 }
+
+/** Symbols for writing equations in a text box (Unicode, so they show in every font and export). */
+internal val MathSymbols = listOf(
+    "+", "−", "×", "÷", "=", "≠", "≈", "≤", "≥", "±", "√", "∛", "∞", "π", "θ", "α", "β", "γ", "Δ", "λ", "μ", "σ", "Σ", "Ω",
+    "∫", "∑", "∏", "∂", "∇", "→", "⇒", "⇔", "∈", "∉", "⊂", "∪", "∩", "∀", "∃", "°", "²", "³", "ⁿ", "⁻¹", "₀", "₁", "₂", "½", "¼", "⅓",
+)
