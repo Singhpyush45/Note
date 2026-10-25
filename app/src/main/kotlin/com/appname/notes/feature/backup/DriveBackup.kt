@@ -58,7 +58,7 @@ object DriveAuth {
 
     /** The result of the consent screen. */
     fun fromIntent(context: Context, data: Intent?): Result = try {
-        toResult(Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data))
+        toResult(Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data ?: Intent()))
     } catch (e: Exception) {
         failure(e)
     }

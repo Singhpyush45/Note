@@ -6,9 +6,6 @@ import android.database.sqlite.SQLiteDatabase
 import android.os.StatFs
 import com.appname.notes.BuildConfig
 import com.appname.notes.core.database.NotesDatabase
-import com.appname.notes.feature.attachments.AttachmentFileStore
-import com.appname.notes.feature.audio.RecordingController
-import com.appname.notes.feature.pdf.PdfFileStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.InputStream
@@ -138,7 +135,7 @@ class BackupManager @Inject constructor(
     companion object {
         /** Kept in step with @Database(version) of [NotesDatabase]. */
         const val DB_VERSION = 10
-        val FILE_DIRS = listOf(AttachmentFileStore.DIR, PdfFileStore.DIR, RecordingController.DIR, "wallpapers", "datastore")
+        val FILE_DIRS = listOf("attachments", "pdfs", "recordings", "wallpapers", "datastore") // the folders of AttachmentFileStore, PdfFileStore, RecordingController, WallpaperStore, settings
         private const val PENDING = "restore-pending"
         private const val STAGING = "restore-staging"
         private const val OLD = "restore-old"
