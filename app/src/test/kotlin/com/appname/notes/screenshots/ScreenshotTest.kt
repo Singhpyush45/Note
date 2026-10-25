@@ -195,6 +195,21 @@ abstract class ScreenshotTestBase(private val device: String) {
         items += ShapeItem(id(), z++, pen, ShapeKind.CIRCLE, ShapeGeometry.Ellipse(Pt(560f, 330f), 75f, 75f, 0f), null)
         items += ShapeItem(id(), z++, InkBrush(InkTool.MARKER, 0xFFD93025.toInt(), 4f), ShapeKind.LINE, ShapeGeometry.Segment(Pt(72f, 450f), Pt(420f, 450f)), null)
         items += ShapeItem(id(), z++, pen, ShapeKind.TRIANGLE, ShapeGeometry.Polygon(listOf(Pt(120f, 640f), Pt(220f, 480f), Pt(320f, 640f))), null)
+        // A text box in the handwriting font and a photo (8a).
+        items += com.appname.notes.core.ink.model.TextItem(
+            id(), z++, InkBrush(InkTool.PEN, 0xFF1A73E8.toInt(), 28f), "Waves — summary", com.appname.notes.core.ink.model.Placement(560f, 470f, 300f, 40f),
+            com.appname.notes.core.ink.model.TextFont.CURSIVE, bold = true,
+        )
+        val photoName = "seed-photo.png"
+        java.io.File(java.io.File(composeRule.activity.filesDir, "attachments").apply { mkdirs() }, photoName).outputStream().use { out ->
+            val bmp = android.graphics.Bitmap.createBitmap(320, 200, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(bmp)
+            c.drawColor(0xFF87CEEB.toInt())
+            c.drawCircle(250f, 60f, 30f, android.graphics.Paint().apply { color = 0xFFFFD54F.toInt() })
+            c.drawRect(0f, 140f, 320f, 200f, android.graphics.Paint().apply { color = 0xFF66BB6A.toInt() })
+            bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+        }
+        items += com.appname.notes.core.ink.model.ImageItem(id(), z++, photoName, com.appname.notes.core.ink.model.Placement(560f, 600f, 260f, 162f, -4f))
         ink.commit(page, InkEdit(emptyList(), items))
         noteId
     }

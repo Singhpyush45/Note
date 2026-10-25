@@ -497,6 +497,7 @@ class InkFlowRobolectricTest {
     }
 
     @Test
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE) // real image decoding
     fun pastedTextAndPhotoGoOnTheHandwrittenPage() {
         openNewInkNote()
         pasteFromClipboard(android.content.ClipData.newPlainText("t", "Lecture 5: waves"))
