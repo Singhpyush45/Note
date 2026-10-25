@@ -33,6 +33,7 @@ unless stated otherwise.
 | ML Kit Text Recognition (`com.google.mlkit:text-recognition`, `-devanagari`) | 16.0.1 | On-device OCR, bundled models (ADR-0011) | Added Phase 5. Google, free to use (ML Kit terms), no data leaves the device. Larger APK. |
 | WorkManager (`androidx.work:work-runtime-ktx`) | 2.12.0 | Background document indexing | Added Phase 5. |
 | PdfBox-Android (`com.tom-roush:pdfbox-android`) | 2.0.27.0 | Read page boxes; write the annotated export copy | Added Phase 4 (ADR-0009 Part B). Apache-2.0, a port of Apache PDFBox **maintained by one person** (not Google): kept behind `PdfAnnotationWriter` so it can be swapped. Display uses the platform `PdfRenderer` instead. |
+| Play services auth (`com.google.android.gms:play-services-auth`) | 21.4.0 | Google sign-in for Drive backup (Phase 9, ADR-0015) | Google, Android SDK licence. Only `Identity.getAuthorizationClient` with the `drive.appdata` scope is used; no Drive library: the few REST calls are made with `HttpURLConnection`. Needs Google Play services on the phone; file backup works without it. |
 
 ## Watch list (later phases)
 - Room 3 — revisit in Phase 6 (ADR-0008).

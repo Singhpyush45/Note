@@ -4,7 +4,7 @@
     <!--
       Backup policy (SRS 3.2, 13.2): no automatic cloud backup of private notes without explicit consent.
       Device-to-device transfer (user-initiated phone switch) is allowed by data_extraction_rules.
-      Revisit with FR-025 (backup/restore) in Phase 6.
+      User-controlled backup (file or Google Drive app folder) is in Settings > Backup (FR-025, ADR-0015).
     -->
     <!--
       Internet (Phase 9): used only for Google Drive backup, and only after the user connects their Google account in

@@ -94,3 +94,11 @@ fonts; drag and drop / copy-paste photos from anywhere (browser, gallery)".
 - Table grids are lines to write in, not a spreadsheet; typed-note tables, equations, match-style paste and the
   advanced settings (toolbar, scroll bar, links/web previews) are still to come (8c).
 - Text is still typed in a dialog, not directly on the page.
+
+## 8c status (26 Oct, later)
+- Done: maths symbols row in the text box dialog; Settings › Handwriting: choose which tools show in the tool bar,
+  page scroll bar (notes with more than 2 pages), ask before leaving with Back.
+- Paste in typed notes already matches the style where it lands: pasted text arrives as plain text and is treated
+  like typing (bold/italic/etc. around the cursor continue into it).
+- Still open: tables inside typed notes, real equation layout (beyond symbols), link web previews/clipping,
+  typing directly on the handwritten page.
