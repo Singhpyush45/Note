@@ -545,7 +545,6 @@
 
     <!-- Voice typing (owner brief §11) -->
     <string name="action_close">Close</string>
-    <string name="voice_typing">Voice typing</string>
     <string name="voice_mic_off">Voice typing. Touch and hold for language</string>
     <string name="voice_mic_on">Voice typing is on. Tap to stop</string>
     <string name="voice_state_on">On</string>
@@ -570,7 +569,6 @@
     <string name="voice_pack_ready">Ready</string>
     <string name="voice_pack_download">Download</string>
     <string name="voice_pack_start">Start</string>
-    <string name="voice_downloading">Downloading the voice pack… %1$d%%</string>
     <string name="voice_download_failed">Couldn\'t download the voice pack. Check the internet and try again.</string>
     <string name="voice_phone_audio_denied">Without that permission the app can\'t hear sound from other apps. The microphone still works.</string>
     <string name="voice_problem_audio">Couldn\'t open the microphone or phone audio. Close other recording apps and try again.</string>
