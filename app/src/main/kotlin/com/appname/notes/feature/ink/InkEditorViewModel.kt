@@ -86,6 +86,9 @@ data class InkEditorUi(
     val canRedo: Boolean = false,
     val tools: InkToolState = InkToolState(),
     val hasSelection: Boolean = false,
+    /** Photos in the selection that still have their background / that had it removed. */
+    val selectionPhotos: Int = 0,
+    val selectionCutouts: Int = 0,
     val readOnly: ReadOnlyReason? = null,
     val saveStatus: SaveStatus = SaveStatus.SAVED,
     val fingerDraws: Boolean = true,
@@ -333,6 +336,7 @@ class InkEditorViewModel @AssistedInject constructor(
                 if (c.tools.tool == EditorTool.LASSO) c.tools = c.tools.copy(tool = back)
             }
         }
+        val selectedPhotos = if (c.selection != null) c.selectedItems().filterIsInstance<com.appname.notes.core.ink.model.ImageItem>() else emptyList()
         _ui.update { ui ->
             val page = ui.currentPage.coerceIn(0, (s.pages.size - 1).coerceAtLeast(0))
             val shown = s.pages.getOrNull(page)
@@ -348,6 +352,8 @@ class InkEditorViewModel @AssistedInject constructor(
                 canRedo = s.canRedo && ui.readOnly == null,
                 tools = c.tools,
                 hasSelection = c.selection != null,
+                selectionPhotos = selectedPhotos.count { it.original == null },
+                selectionCutouts = selectedPhotos.count { it.original != null },
                 fingerDraws = inkSettings.fingerDraws,
                 version = s.version,
             )
@@ -692,6 +698,65 @@ class InkEditorViewModel @AssistedInject constructor(
         controller()?.flipSelection(horizontal)
         refresh()
     }
+
+    /**
+     * Removes the background of the selected photos (owner request), on the phone: each becomes a cut-out of its
+     * main subject, transparent around it, at the same place. The photo as it was is kept, for [restoreBackground].
+     * One undo step for all of them.
+     */
+    fun removeBackground() {
+        val c = controller() ?: return
+        val pageId = c.selection?.pageId ?: return
+        val photos = c.selectedItems().filterIsInstance<com.appname.notes.core.ink.model.ImageItem>().filter { it.original == null }
+        if (photos.isEmpty() || !canInsert()) return
+        viewModelScope.launch {
+            _inserting.value = true
+            try {
+                var problem: Int? = null
+                val cut = HashMap<String, String>() // item id -> new file
+                for (photo in photos) {
+                    val out = java.io.File(java.io.File(appContext.cacheDir, "cutouts").apply { mkdirs() }, "${photo.fileName.substringBeforeLast('.')} (no background).png")
+                    val result = withContext(dispatchers.io) { BackgroundRemover.cutOut(attachmentFile(photo.fileName), out) }
+                    when (result) {
+                        is BackgroundRemover.Result.Done -> {
+                            val added = attacher.attach(noteId, listOf(Uri.fromFile(result.file))).added.firstOrNull()
+                            result.file.delete()
+                            if (added != null) cut[photo.id] = added.fileName else problem = R.string.cutout_failed
+                        }
+                        BackgroundRemover.Result.NoSubject -> problem = R.string.cutout_no_subject
+                        BackgroundRemover.Result.NotReady -> problem = R.string.cutout_not_ready
+                        BackgroundRemover.Result.Failed -> problem = R.string.cutout_failed
+                    }
+                }
+                problem?.let { _message.value = UserMessage(it) }
+                if (cut.isEmpty()) return@launch
+                val s = session() ?: return@launch
+                val page = s.page(pageId) ?: return@launch
+                // The photos as they are now (they may have been moved meanwhile).
+                val now = page.items.items.filterIsInstance<com.appname.notes.core.ink.model.ImageItem>().filter { it.id in cut && it.original == null }
+                if (now.isEmpty()) return@launch
+                s.apply(pageId, com.appname.notes.core.ink.edit.InkEdit(now, now.map { it.copy(fileName = cut.getValue(it.id), original = it.fileName) }))
+                refresh()
+            } finally {
+                _inserting.value = false
+            }
+        }
+    }
+
+    /** Puts the selected cut-out photos back as they were, background included. */
+    fun restoreBackground() {
+        val c = controller() ?: return
+        val pageId = c.selection?.pageId ?: return
+        if (!canInsert()) return
+        val cutouts = c.selectedItems().filterIsInstance<com.appname.notes.core.ink.model.ImageItem>()
+            .filter { it.original != null && attachmentFile(it.original!!).exists() }
+        if (cutouts.isEmpty()) return
+        session()?.apply(pageId, com.appname.notes.core.ink.edit.InkEdit(cutouts, cutouts.map { it.copy(fileName = it.original!!, original = null) }))
+        refresh()
+    }
+
+    private fun attachmentFile(fileName: String) =
+        java.io.File(java.io.File(appContext.filesDir, com.appname.notes.feature.attachments.AttachmentFileStore.DIR), fileName)
 
     fun rotateSelection() {
         controller()?.rotateSelection()
@@ -1298,7 +1363,12 @@ class InkEditorViewModel @AssistedInject constructor(
                         is com.appname.notes.core.ink.model.ImageItem -> {
                             val file = java.io.File(java.io.File(appContext.filesDir, com.appname.notes.feature.attachments.AttachmentFileStore.DIR), item.fileName)
                             val added = attacher.attach(noteId, listOf(Uri.fromFile(file))).added.firstOrNull() ?: return@mapNotNull null
-                            item.copy(fileName = added.fileName)
+                            // A cut-out keeps its photo as it was, so the background can still be put back here.
+                            val original = item.original?.let { o ->
+                                val f = java.io.File(file.parentFile, o)
+                                if (f.exists()) attacher.attach(noteId, listOf(Uri.fromFile(f))).added.firstOrNull()?.fileName else null
+                            }
+                            item.copy(fileName = added.fileName, original = original)
                         }
                         else -> item
                     }

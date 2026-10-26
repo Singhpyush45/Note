@@ -85,4 +85,29 @@ class VoiceInsertEditingTest {
         assertThat(c.state.text).isEqualTo("Start middle part end")
         assertThat(c.state.selection.start).isEqualTo("Start middle part".length)
     }
+
+    @Test
+    fun `after a pause the sentence before is closed and the next starts with a capital`() {
+        val c = controller("")
+        c.voiceCommit("this is a video about physics")
+        c.voiceLive("it governs", sentenceEnd = ".")
+        assertThat(c.state.text).isEqualTo("This is a video about physics. It governs")
+        c.voiceCommit("it governs everything", sentenceEnd = ".")
+        // A short breath: the sentence just goes on.
+        c.voiceCommit("from molecules")
+        assertThat(c.state.text).isEqualTo("This is a video about physics. It governs everything from molecules")
+        c.voiceFinish(".")
+        assertThat(c.state.text).isEqualTo("This is a video about physics. It governs everything from molecules.")
+        c.undo()
+        assertThat(c.state.text).isEqualTo("This is a video about physics. It governs everything from molecules")
+    }
+
+    @Test
+    fun `stopping doesn't add a full stop when the cursor moved away`() {
+        val c = controller("Notes")
+        c.voiceCommit("first point")
+        c.onValueChange(c.textFieldValue.copy(selection = TextRange(0)))
+        c.voiceFinish(".")
+        assertThat(c.state.text).isEqualTo("Notes first point")
+    }
 }

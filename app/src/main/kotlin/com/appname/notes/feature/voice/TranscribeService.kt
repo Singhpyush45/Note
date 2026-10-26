@@ -141,6 +141,7 @@ class TranscribeService : Service() {
             return
         }
         val recognizer = Recognizer(model, SAMPLE_RATE.toFloat())
+        recognizer.setWords(true) // word confidences, to drop noise heard as words
         val buf = ShortArray(CHUNK)
         var lastPartial = ""
         var silentChunks = 0
@@ -159,7 +160,7 @@ class TranscribeService : Service() {
                     LiveTranscriber.warn(if (silentChunks > SILENT_WARN_CHUNKS) LiveTranscriber.Problem.SILENT_PHONE_AUDIO else null)
                 }
                 if (recognizer.acceptWaveForm(buf, n)) {
-                    LiveTranscriber.emit(LiveTranscriber.Event.Final(LiveTranscriber.field(recognizer.result, "text")))
+                    LiveTranscriber.emit(LiveTranscriber.Event.Final(LiveTranscriber.confidentText(recognizer.result)))
                     lastPartial = ""
                 } else {
                     val partial = LiveTranscriber.field(recognizer.partialResult, "partial")
@@ -169,7 +170,7 @@ class TranscribeService : Service() {
                     }
                 }
             }
-            LiveTranscriber.emit(LiveTranscriber.Event.Final(LiveTranscriber.field(recognizer.finalResult, "text")))
+            LiveTranscriber.emit(LiveTranscriber.Event.Final(LiveTranscriber.confidentText(recognizer.finalResult), last = true))
         } catch (e: Exception) {
             LiveTranscriber.fail(LiveTranscriber.Problem.AUDIO)
         } finally {

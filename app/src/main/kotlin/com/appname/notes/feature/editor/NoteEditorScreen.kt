@@ -117,8 +117,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.material.icons.outlined.AlarmAdd
 import androidx.compose.material.icons.outlined.AudioFile
 import com.appname.notes.feature.reminders.RemindersRow
-import com.appname.notes.feature.voice.VoiceTypingActions
-import com.appname.notes.feature.voice.VoiceTypingBar
 import com.appname.notes.feature.reminders.rememberReminderUi
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
@@ -266,17 +264,22 @@ fun NoteEditorRoute(
     )
     var exportWarning by remember { mutableStateOf<ExportResult?>(null) }
 
-    // Live transcription (owner request): the microphone is asked for on first use; "Phone audio" asks Android's
-    // permission to hear other apps each time it starts.
-    val voiceBar by viewModel.voice.collectAsStateWithLifecycle()
+    // Live transcription (owner request): one mic button in the toolbar. The microphone permission is asked for on
+    // first use; "sound playing on this phone" asks Android's permission to hear other apps each time it starts.
+    val voiceChoice by viewModel.voice.collectAsStateWithLifecycle()
+    val voiceStatus by viewModel.voiceStatus.collectAsStateWithLifecycle()
+    val voiceLevel by viewModel.voiceLevel.collectAsStateWithLifecycle()
+    val voiceDownloads by viewModel.voiceDownloads.collectAsStateWithLifecycle()
+    val voicePacks by viewModel.packsChanged.collectAsStateWithLifecycle()
+    var voiceDialog by rememberSaveable { mutableStateOf(false) }
     val projection = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val data = r.data
         if (r.resultCode == android.app.Activity.RESULT_OK && data != null) viewModel.startVoice(r.resultCode to data) else viewModel.voiceProjectionDenied()
     }
     val beginVoice = {
-        val bar = viewModel.voice.value
-        if (bar != null && viewModel.packReady(bar.language)) {
-            if (bar.source == com.appname.notes.feature.voice.VoiceSource.PHONE_AUDIO && com.appname.notes.feature.voice.LiveTranscriber.phoneAudioSupported) {
+        val choice = viewModel.voice.value
+        if (viewModel.packReady(choice.language)) {
+            if (choice.source == com.appname.notes.feature.voice.VoiceSource.PHONE_AUDIO && com.appname.notes.feature.voice.LiveTranscriber.phoneAudioSupported) {
                 val mpm = context.getSystemService(android.media.projection.MediaProjectionManager::class.java)
                 runCatching { projection.launch(mpm.createScreenCaptureIntent()) }
             } else {
@@ -287,20 +290,59 @@ fun NoteEditorRoute(
     val voicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) beginVoice() else viewModel.voicePermissionDenied()
     }
+    val micAllowed = { ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED }
     val startVoice = {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            beginVoice()
-        } else {
-            voicePermission.launch(Manifest.permission.RECORD_AUDIO)
-        }
+        if (micAllowed()) beginVoice() else voicePermission.launch(Manifest.permission.RECORD_AUDIO)
     }
-    val openVoice = {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            viewModel.openVoiceTyping(start = true)
-        } else {
-            viewModel.openVoiceTyping()
-            voicePermission.launch(Manifest.permission.RECORD_AUDIO)
+    val tapMic = {
+        when {
+            viewModel.voiceStatus.value != com.appname.notes.feature.voice.LiveTranscriber.Status.IDLE -> viewModel.stopVoice()
+            voiceDownloads.containsKey(voiceChoice.language.pack) -> Unit // downloading: it starts by itself
+            viewModel.voiceNeedsChoice() -> voiceDialog = true
+            else -> startVoice()
         }
+        Unit
+    }
+    if (voiceDialog) {
+        com.appname.notes.feature.voice.VoicePackDialog(
+            initial = voiceChoice.language,
+            installed = { l -> voicePacks.let { viewModel.packReady(l) } },
+            onConfirm = { l ->
+                voiceDialog = false
+                viewModel.setVoiceLanguage(l)
+                if (viewModel.packReady(l)) {
+                    startVoice()
+                } else {
+                    viewModel.downloadVoicePack(l)
+                    // Asked now, so listening can start as soon as the download is done.
+                    if (!micAllowed()) voicePermission.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
+            onDismiss = { voiceDialog = false },
+        )
+    }
+    val voiceMic: @Composable (Modifier) -> Unit = { buttonModifier ->
+        com.appname.notes.feature.voice.VoiceMic(
+            state = com.appname.notes.feature.voice.VoiceMicState(
+                language = voiceChoice.language,
+                source = voiceChoice.source,
+                status = voiceStatus,
+                level = voiceLevel,
+                download = voiceDownloads[voiceChoice.language.pack],
+                phoneAudioSupported = com.appname.notes.feature.voice.LiveTranscriber.phoneAudioSupported,
+            ),
+            onTap = tapMic,
+            onLanguage = { l ->
+                val restart = viewModel.setVoiceLanguage(l)
+                when {
+                    !viewModel.packReady(l) -> voiceDialog = true
+                    restart -> startVoice()
+                }
+                Unit
+            },
+            onSource = { src -> if (viewModel.setVoiceSource(src)) startVoice() else Unit },
+            buttonModifier = buttonModifier,
+        )
     }
 
     // Reminders (FR-010): the dialog, and asking for notifications when one is set.
@@ -342,42 +384,6 @@ fun NoteEditorRoute(
         onRemind = { reminderUi.add() },
     )
 
-    val bar = voiceBar
-    val voicePanel: (@Composable (Modifier) -> Unit)? = if (bar == null) {
-        null
-    } else {
-        { panelModifier ->
-            val status by viewModel.voiceStatus.collectAsStateWithLifecycle()
-            val problem by viewModel.voiceProblem.collectAsStateWithLifecycle()
-            val level by viewModel.voiceLevel.collectAsStateWithLifecycle()
-            val downloads by viewModel.voiceDownloads.collectAsStateWithLifecycle()
-            val packs by viewModel.packsChanged.collectAsStateWithLifecycle()
-            val ready = remember(bar.language, packs, downloads) { viewModel.packReady(bar.language) }
-            VoiceTypingBar(
-                modifier = panelModifier,
-                state = com.appname.notes.feature.voice.VoiceBarState(
-                    language = bar.language,
-                    source = bar.source,
-                    packReady = ready,
-                    download = downloads[bar.language.pack],
-                    status = status,
-                    problem = problem,
-                    level = level,
-                    phoneAudioSupported = com.appname.notes.feature.voice.LiveTranscriber.phoneAudioSupported,
-                ),
-                actions = VoiceTypingActions(
-                    start = startVoice,
-                    pause = viewModel::pauseVoice,
-                    language = viewModel::setVoiceLanguage,
-                    source = viewModel::setVoiceSource,
-                    download = { viewModel.downloadVoicePack(bar.language) },
-                    redownload = { viewModel.redownloadVoicePack(bar.language) },
-                    done = viewModel::closeVoiceTyping,
-                ),
-            )
-        }
-    }
-
     NoteEditorScreen(
         load = load,
         readOnly = readOnly,
@@ -404,9 +410,8 @@ fun NoteEditorRoute(
                 onFixAlerts = reminderUi::fixAlerts,
             )
         },
-        onVoiceTyping = if (editable) openVoice else null,
+        voiceMic = if (editable) voiceMic else null,
         onClipLink = if (editable) viewModel::clipLink else null,
-        voicePanel = voicePanel,
         onRemindTask = if (editable) {
             { viewModel.taskAtCursor()?.let(reminderUi::add) ?: Unit }
         } else {
@@ -503,11 +508,9 @@ fun NoteEditorScreen(
     reminders: @Composable () -> Unit = {},
     /** "Remind me about this task" on a checklist item; null when the note can't be edited. */
     onRemindTask: (() -> Unit)? = null,
-    /** Opens voice typing; null when the note can't be edited. */
-    onVoiceTyping: (() -> Unit)? = null,
+    /** The voice-typing mic for the toolbar (given the button's modifier); null when the note can't be edited. */
+    voiceMic: (@Composable (Modifier) -> Unit)? = null,
     onClipLink: ((String) -> Unit)? = null,
-    /** The open voice-typing panel, shown in place of the formatting toolbar. */
-    voicePanel: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val controller = (load as? EditorLoad.Ready)?.controller
     Scaffold(
@@ -550,10 +553,8 @@ fun NoteEditorScreen(
             }
         },
         bottomBar = {
-            if (voicePanel != null) {
-                voicePanel(Modifier.navigationBarsPadding().imePadding())
-            } else if (controller != null && readOnly == null) {
-                FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding(), onAudioMarker = onAudioMarker, onRemindTask = onRemindTask, onVoiceTyping = onVoiceTyping, onClipLink = onClipLink)
+            if (controller != null && readOnly == null) {
+                FormatToolbar(controller, Modifier.navigationBarsPadding().imePadding(), onAudioMarker = onAudioMarker, onRemindTask = onRemindTask, voiceMic = voiceMic, onClipLink = onClipLink)
             }
         },
     ) { padding ->

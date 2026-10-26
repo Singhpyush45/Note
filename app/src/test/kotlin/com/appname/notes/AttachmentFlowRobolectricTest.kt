@@ -210,21 +210,21 @@ class AttachmentFlowRobolectricTest {
     }
 
     /**
-     * Voice typing opens straight away in a bar in place of the toolbar (owner request: no pop-up, no Insert). On a
-     * fresh install the offline voice pack isn't there yet, so the bar offers the download; the language can be
-     * changed; Done closes it and the toolbar returns.
+     * Voice typing is one mic button in the toolbar (owner request: no extra panel). On a fresh install the offline
+     * voice pack isn't there, so the first tap asks for the language (with each pack's size); Cancel leaves
+     * everything as it was. The formatting toolbar stays.
      */
     @Test
-    fun voiceTypingStartsAtOnceInABar() {
+    fun voiceTypingIsAMicButtonThatAsksForTheLanguageFirst() {
         org.robolectric.Shadows.shadowOf(composeRule.activity.application).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
         openNote(noteWithAttachments())
         composeRule.onNodeWithTag(EditorTestTags.VOICE).performClick()
-        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET)) }
-        assertThat(exists(hasTestTag(EditorTestTags.TOOLBAR))).isFalse()
-        assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.LANGUAGE))).isTrue()
+        waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.DIALOG)) }
+        assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.language(com.appname.notes.feature.voice.VoiceLanguage.HINGLISH)))).isTrue()
         assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.DOWNLOAD))).isTrue()
-        composeRule.onNodeWithTag(com.appname.notes.feature.voice.VoiceTestTags.STOP).performClick()
-        waitAdvancing { exists(hasTestTag(EditorTestTags.TOOLBAR)) }
-        assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET))).isFalse()
+        assertThat(exists(hasTestTag(EditorTestTags.TOOLBAR))).isTrue()
+        composeRule.onNodeWithText(string(R.string.action_cancel)).performClick()
+        waitAdvancing { !exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.DIALOG)) }
+        assertThat(exists(hasTestTag(EditorTestTags.VOICE))).isTrue()
     }
 }

@@ -36,6 +36,7 @@ unless stated otherwise.
 | Play services auth (`com.google.android.gms:play-services-auth`) | 21.4.0 | Google sign-in for Drive backup (Phase 9, ADR-0015) | Google, Android SDK licence. Only `Identity.getAuthorizationClient` with the `drive.appdata` scope is used; no Drive library: the few REST calls are made with `HttpURLConnection`. Needs Google Play services on the phone; file backup works without it. |
 | Vosk (`com.alphacephei:vosk-android`) | 0.3.75 | Built-in live transcription (voice typing), fully offline | Apache-2.0, Alpha Cephei. Native Kaldi recogniser; the models (36–44 MB each, Apache-2.0) are **not** in the APK — downloaded once over HTTPS from alphacephei.com when the user picks a language, unzipped with a zip-slip check, deletable. Audio never leaves the phone. Adds native .so files (~+20 MB per ABI in the universal APK). |
 | JNA (`net.java.dev.jna:jna`, aar) | 5.18.1 | Required by Vosk to call its native library | Apache-2.0 / LGPL-2.1 dual licence (used under Apache-2.0). Kept by R8 rules. |
+| ML Kit subject segmentation (`com.google.android.gms:play-services-mlkit-subject-segmentation`) | 16.0.0-beta1 | "Remove background" for photos on handwritten pages | Google, ML Kit terms. Runs on the phone through Google Play services (the model is fetched by Play services, declared with `com.google.mlkit.vision.DEPENDENCIES`); pictures are not uploaded. Beta API: only `SubjectSegmentation.getClient` + foreground bitmap are used, failures fall back to a message. |
 
 ## Watch list (later phases)
 - Room 3 — revisit in Phase 6 (ADR-0008).

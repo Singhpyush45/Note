@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.AlarmAdd
-import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
@@ -73,8 +72,8 @@ fun FormatToolbar(
     onAudioMarker: (AudioMarker) -> Unit = {},
     /** "Remind me about this task", shown while the cursor is on a checklist item (FR-010). */
     onRemindTask: (() -> Unit)? = null,
-    /** Voice typing (§11); first in the toolbar so it's always visible. */
-    onVoiceTyping: (() -> Unit)? = null,
+    /** The voice-typing mic (§11), pinned at the start of the toolbar so it's always visible; given its modifier. */
+    voiceMic: (@Composable (Modifier) -> Unit)? = null,
     /** "Clip page" for a web link (8c). */
     onClipLink: ((String) -> Unit)? = null,
 ) {
@@ -86,67 +85,67 @@ fun FormatToolbar(
     val uriHandler = LocalUriHandler.current
 
     Surface(tonalElevation = 3.dp, modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 4.dp)
-                .testTag(EditorTestTags.TOOLBAR)
-                .semantics { contentDescription = toolbarLabel },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onVoiceTyping != null) {
-                val voiceLabel = stringResource(R.string.voice_typing)
-                IconButton(onClick = onVoiceTyping, modifier = noFocus.testTag(EditorTestTags.VOICE).semantics { contentDescription = voiceLabel }) {
-                    Icon(Icons.Outlined.Mic, contentDescription = null)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (voiceMic != null) {
+                voiceMic(noFocus.padding(start = 4.dp).testTag(EditorTestTags.VOICE))
+                VerticalDivider(Modifier.padding(horizontal = 2.dp).height(24.dp))
+            }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 4.dp)
+                    .testTag(EditorTestTags.TOOLBAR)
+                    .semantics { contentDescription = toolbarLabel },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StyleButton(Icons.Outlined.FormatBold, R.string.fmt_bold, SpanType.BOLD in active) { controller.toggleStyle(SpanType.BOLD) }
+                StyleButton(Icons.Outlined.FormatItalic, R.string.fmt_italic, SpanType.ITALIC in active) { controller.toggleStyle(SpanType.ITALIC) }
+                StyleButton(Icons.Outlined.FormatUnderlined, R.string.fmt_underline, SpanType.UNDERLINE in active) { controller.toggleStyle(SpanType.UNDERLINE) }
+                StyleButton(Icons.Outlined.FormatStrikethrough, R.string.fmt_strike, SpanType.STRIKETHROUGH in active) { controller.toggleStyle(SpanType.STRIKETHROUGH) }
+                StyleButton(Icons.Outlined.Code, R.string.fmt_code, SpanType.CODE in active) { controller.toggleStyle(SpanType.CODE) }
+                val marker = linkUrl?.let(AudioMarker::parse)
+                if (marker != null) {
+                    // An audio marker (FR-012): play the recording from that moment.
+                    val label = stringResource(R.string.audio_play_from, marker.label)
+                    IconButton(onClick = { onAudioMarker(marker) }, modifier = noFocus.semantics { contentDescription = label }) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    }
+                    ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
+                } else if (linkUrl != null) {
+                    ToolbarIcon(Icons.AutoMirrored.Outlined.OpenInNew, R.string.fmt_open_link) { runCatching { uriHandler.openUri(linkUrl) } }
+                    if (onClipLink != null && (linkUrl.startsWith("https://") || linkUrl.startsWith("http://"))) {
+                        ToolbarIcon(Icons.Outlined.TravelExplore, R.string.clip_page, tag = EditorTestTags.CLIP) { onClipLink(linkUrl) }
+                    }
+                    ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
+                } else {
+                    ToolbarIcon(Icons.Outlined.Link, R.string.fmt_link, enabled = controller.hasSelection) { showLinkDialog = true }
                 }
                 VerticalDivider(Modifier.padding(horizontal = 4.dp).height(24.dp))
-            }
-            StyleButton(Icons.Outlined.FormatBold, R.string.fmt_bold, SpanType.BOLD in active) { controller.toggleStyle(SpanType.BOLD) }
-            StyleButton(Icons.Outlined.FormatItalic, R.string.fmt_italic, SpanType.ITALIC in active) { controller.toggleStyle(SpanType.ITALIC) }
-            StyleButton(Icons.Outlined.FormatUnderlined, R.string.fmt_underline, SpanType.UNDERLINE in active) { controller.toggleStyle(SpanType.UNDERLINE) }
-            StyleButton(Icons.Outlined.FormatStrikethrough, R.string.fmt_strike, SpanType.STRIKETHROUGH in active) { controller.toggleStyle(SpanType.STRIKETHROUGH) }
-            StyleButton(Icons.Outlined.Code, R.string.fmt_code, SpanType.CODE in active) { controller.toggleStyle(SpanType.CODE) }
-            val marker = linkUrl?.let(AudioMarker::parse)
-            if (marker != null) {
-                // An audio marker (FR-012): play the recording from that moment.
-                val label = stringResource(R.string.audio_play_from, marker.label)
-                IconButton(onClick = { onAudioMarker(marker) }, modifier = noFocus.semantics { contentDescription = label }) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                HeadingButton("H1", R.string.fmt_h1, kind == BlockKind.HEADING1) { controller.toggleKind(BlockKind.HEADING1) }
+                HeadingButton("H2", R.string.fmt_h2, kind == BlockKind.HEADING2) { controller.toggleKind(BlockKind.HEADING2) }
+                HeadingButton("H3", R.string.fmt_h3, kind == BlockKind.HEADING3) { controller.toggleKind(BlockKind.HEADING3) }
+                StyleButton(Icons.AutoMirrored.Outlined.FormatListBulleted, R.string.fmt_bullet, kind == BlockKind.BULLET) { controller.toggleKind(BlockKind.BULLET) }
+                StyleButton(Icons.Outlined.FormatListNumbered, R.string.fmt_numbered, kind == BlockKind.NUMBERED) { controller.toggleKind(BlockKind.NUMBERED) }
+                StyleButton(Icons.Outlined.CheckBox, R.string.fmt_checklist, kind == BlockKind.CHECKLIST) { controller.toggleKind(BlockKind.CHECKLIST) }
+                if (kind == BlockKind.CHECKLIST && onRemindTask != null) {
+                    val remindLabel = stringResource(R.string.reminder_add_task)
+                    IconButton(onClick = onRemindTask, modifier = noFocus.testTag(EditorTestTags.REMIND_TASK).semantics { contentDescription = remindLabel }) {
+                        Icon(Icons.Outlined.AlarmAdd, contentDescription = null)
+                    }
                 }
-                ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
-            } else if (linkUrl != null) {
-                ToolbarIcon(Icons.AutoMirrored.Outlined.OpenInNew, R.string.fmt_open_link) { runCatching { uriHandler.openUri(linkUrl) } }
-                if (onClipLink != null && (linkUrl.startsWith("https://") || linkUrl.startsWith("http://"))) {
-                    ToolbarIcon(Icons.Outlined.TravelExplore, R.string.clip_page, tag = EditorTestTags.CLIP) { onClipLink(linkUrl) }
+                StyleButton(Icons.Outlined.FormatQuote, R.string.fmt_quote, kind == BlockKind.QUOTE) { controller.toggleKind(BlockKind.QUOTE) }
+                VerticalDivider(Modifier.padding(horizontal = 4.dp).height(24.dp))
+                if (controller.inTable) {
+                    // In a table: next cell, add/remove rows and columns.
+                    ToolbarIcon(Icons.AutoMirrored.Outlined.KeyboardTab, R.string.table_next_cell, tag = EditorTestTags.TABLE_NEXT) { controller.tableNextCell() }
+                    ToolbarIcon(Icons.Outlined.TableRows, R.string.table_add_row, tag = EditorTestTags.TABLE_ADD_ROW) { controller.tableAddRow() }
+                    ToolbarIcon(Icons.Outlined.ViewColumn, R.string.table_add_column, tag = EditorTestTags.TABLE_ADD_COLUMN) { controller.tableAddColumn() }
+                    ToolbarIcon(Icons.Outlined.PlaylistRemove, R.string.table_delete_row) { controller.tableDeleteRow() }
+                    ToolbarIcon(Icons.Outlined.DeleteSweep, R.string.table_delete_column) { controller.tableDeleteColumn() }
+                } else {
+                    ToolbarIcon(Icons.Outlined.TableChart, R.string.typed_table_insert, tag = EditorTestTags.TABLE_INSERT) { controller.insertTable(3, 3) }
                 }
-                ToolbarIcon(Icons.Outlined.LinkOff, R.string.fmt_remove_link) { controller.removeLink() }
-            } else {
-                ToolbarIcon(Icons.Outlined.Link, R.string.fmt_link, enabled = controller.hasSelection) { showLinkDialog = true }
-            }
-            VerticalDivider(Modifier.padding(horizontal = 4.dp).height(24.dp))
-            HeadingButton("H1", R.string.fmt_h1, kind == BlockKind.HEADING1) { controller.toggleKind(BlockKind.HEADING1) }
-            HeadingButton("H2", R.string.fmt_h2, kind == BlockKind.HEADING2) { controller.toggleKind(BlockKind.HEADING2) }
-            HeadingButton("H3", R.string.fmt_h3, kind == BlockKind.HEADING3) { controller.toggleKind(BlockKind.HEADING3) }
-            StyleButton(Icons.AutoMirrored.Outlined.FormatListBulleted, R.string.fmt_bullet, kind == BlockKind.BULLET) { controller.toggleKind(BlockKind.BULLET) }
-            StyleButton(Icons.Outlined.FormatListNumbered, R.string.fmt_numbered, kind == BlockKind.NUMBERED) { controller.toggleKind(BlockKind.NUMBERED) }
-            StyleButton(Icons.Outlined.CheckBox, R.string.fmt_checklist, kind == BlockKind.CHECKLIST) { controller.toggleKind(BlockKind.CHECKLIST) }
-            if (kind == BlockKind.CHECKLIST && onRemindTask != null) {
-                val remindLabel = stringResource(R.string.reminder_add_task)
-                IconButton(onClick = onRemindTask, modifier = noFocus.testTag(EditorTestTags.REMIND_TASK).semantics { contentDescription = remindLabel }) {
-                    Icon(Icons.Outlined.AlarmAdd, contentDescription = null)
-                }
-            }
-            StyleButton(Icons.Outlined.FormatQuote, R.string.fmt_quote, kind == BlockKind.QUOTE) { controller.toggleKind(BlockKind.QUOTE) }
-            VerticalDivider(Modifier.padding(horizontal = 4.dp).height(24.dp))
-            if (controller.inTable) {
-                // In a table: next cell, add/remove rows and columns.
-                ToolbarIcon(Icons.AutoMirrored.Outlined.KeyboardTab, R.string.table_next_cell, tag = EditorTestTags.TABLE_NEXT) { controller.tableNextCell() }
-                ToolbarIcon(Icons.Outlined.TableRows, R.string.table_add_row, tag = EditorTestTags.TABLE_ADD_ROW) { controller.tableAddRow() }
-                ToolbarIcon(Icons.Outlined.ViewColumn, R.string.table_add_column, tag = EditorTestTags.TABLE_ADD_COLUMN) { controller.tableAddColumn() }
-                ToolbarIcon(Icons.Outlined.PlaylistRemove, R.string.table_delete_row) { controller.tableDeleteRow() }
-                ToolbarIcon(Icons.Outlined.DeleteSweep, R.string.table_delete_column) { controller.tableDeleteColumn() }
-            } else {
-                ToolbarIcon(Icons.Outlined.TableChart, R.string.typed_table_insert, tag = EditorTestTags.TABLE_INSERT) { controller.insertTable(3, 3) }
             }
         }
     }

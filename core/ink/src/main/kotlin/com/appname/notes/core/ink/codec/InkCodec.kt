@@ -81,6 +81,7 @@ object InkCodec {
     private const val TYPE_TEXT = 4
     private const val TYPE_AUDIO = 5
     private const val IMAGE_FLIPPED = 1
+    private const val IMAGE_ORIGINAL = 2
     private const val TEXT_BOLD = 1
     private const val TEXT_ITALIC = 2
 
@@ -191,7 +192,8 @@ object InkCodec {
             is ImageItem -> {
                 w.str(item.fileName)
                 writePlace(w, item.place)
-                w.u8(if (item.flipped) IMAGE_FLIPPED else 0)
+                w.u8((if (item.flipped) IMAGE_FLIPPED else 0) or (if (item.original != null) IMAGE_ORIGINAL else 0))
+                item.original?.let(w::str)
             }
             is TextItem -> {
                 w.str(item.text)
@@ -300,8 +302,9 @@ object InkCodec {
                     val name = r.str(MAX_STRING)
                     val place = readPlace(r)
                     val flags = r.u8()
-                    if (flags and IMAGE_FLIPPED.inv() != 0) return DecodeResult.NewerVersion(version)
-                    ImageItem(id, z, name, place, flipped = flags and IMAGE_FLIPPED != 0)
+                    if (flags and (IMAGE_FLIPPED or IMAGE_ORIGINAL).inv() != 0) return DecodeResult.NewerVersion(version)
+                    val original = if (flags and IMAGE_ORIGINAL != 0) r.str(MAX_STRING) else null
+                    ImageItem(id, z, name, place, flipped = flags and IMAGE_FLIPPED != 0, original = original)
                 }
                 TYPE_TEXT -> {
                     if (version < 3) return DecodeResult.Corrupt("text in old format")

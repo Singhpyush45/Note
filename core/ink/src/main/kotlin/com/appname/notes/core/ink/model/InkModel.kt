@@ -336,7 +336,8 @@ data class Placement(val cx: Float, val cy: Float, val width: Float, val height:
 
 /**
  * A photo on the page (owner request 8a). The picture is a note attachment ([fileName] in attachment storage);
- * [flipped] mirrors it left-right. [brush] is unused (photos have no ink) but keeps the item model uniform.
+ * [flipped] mirrors it left-right. [original]: set when the background was removed, the photo as it was (so it can
+ * be put back). [brush] is unused (photos have no ink) but keeps the item model uniform.
  */
 data class ImageItem(
     override val id: String,
@@ -344,6 +345,7 @@ data class ImageItem(
     val fileName: String,
     val place: Placement,
     val flipped: Boolean = false,
+    val original: String? = null,
 ) : InkItem {
     override val brush: InkBrush get() = NO_INK
 

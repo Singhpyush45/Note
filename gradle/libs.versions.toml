@@ -25,6 +25,7 @@ room = "2.8.5"
 exifinterface = "1.3.7"
 mlkitTextRecognition = "16.0.1"
 mlkitDocumentScanner = "16.0.0"
+mlkitSubjectSegmentation = "16.0.0-beta1"
 workManager = "2.12.0"
 adaptive = "1.3.0"
 materialIconsExtended = "1.7.8"
@@ -74,6 +75,7 @@ compose-material3-adaptive-navigation3 = { module = "androidx.compose.material3.
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
 
 mlkit-document-scanner = { module = "com.google.android.gms:play-services-mlkit-document-scanner", version.ref = "mlkitDocumentScanner" }
+mlkit-subject-segmentation = { module = "com.google.android.gms:play-services-mlkit-subject-segmentation", version.ref = "mlkitSubjectSegmentation" }
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
 mlkit-text-recognition-devanagari = { module = "com.google.mlkit:text-recognition-devanagari", version.ref = "mlkitTextRecognition" }
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }

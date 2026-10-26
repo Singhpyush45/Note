@@ -32,8 +32,11 @@ enum class VoiceSource {
  */
 object LiveTranscriber {
     sealed interface Event {
-        data class Partial(val text: String) : Event
-        data class Final(val text: String) : Event
+        /** [at]: when it was heard (System.nanoTime), to tell a pause between sentences from one inside a sentence. */
+        data class Partial(val text: String, val at: Long = System.nanoTime()) : Event
+
+        /** [last]: the end of listening (Stop), so the sentence is closed with a full stop. */
+        data class Final(val text: String, val last: Boolean = false, val at: Long = System.nanoTime()) : Event
     }
 
     enum class Status { IDLE, STARTING, LISTENING }
@@ -122,24 +125,45 @@ object LiveTranscriber {
     internal fun field(result: String, name: String): String =
         runCatching { json.parseToJsonElement(result).jsonObject[name]?.jsonPrimitive?.content }.getOrNull().orEmpty()
 
+    /**
+     * The text of a final Vosk result, leaving out short bits the recogniser wasn't sure of: in silence or noise
+     * small models "hear" a word or two ("no", "in", "the") that nobody said.
+     */
+    internal fun confidentText(result: String): String = runCatching {
+        val o = json.parseToJsonElement(result).jsonObject
+        val text = o["text"]?.jsonPrimitive?.content.orEmpty()
+        val words = (o["result"] as? kotlinx.serialization.json.JsonArray).orEmpty()
+            .mapNotNull { (it as? kotlinx.serialization.json.JsonObject)?.get("conf")?.jsonPrimitive?.content?.toFloatOrNull() }
+        if (words.isNotEmpty() && words.size <= SHORT_WORDS && words.average() < SHORT_MIN_CONFIDENCE) "" else text
+    }.getOrDefault("")
+
+    private const val SHORT_WORDS = 2
+    private const val SHORT_MIN_CONFIDENCE = 0.85
+
     internal fun emit(e: Event) {
         _events.tryEmit(e)
     }
 }
 
 /**
- * Turns what the recogniser wrote into note text: Hinglish gets English letters; English gets "I" capitalised; each
- * finished sentence ends with a full stop (Hindi: "।") since the offline models don't add punctuation.
+ * Turns what the recogniser wrote into note text: Hinglish gets English letters; English gets "I" capitalised. The
+ * offline models don't punctuate, so a sentence is closed with a full stop (Hindi: "।") when the speaker pauses
+ * long enough ([PAUSE_NANOS]) or listening stops; a short breath inside a sentence just continues it.
  */
 object VoiceFormat {
+    /** Silence between two pieces of speech that counts as the end of a sentence. */
+    const val PAUSE_NANOS = 700_000_000L
+
     fun partial(text: String, language: VoiceLanguage): String = clean(text, language)
 
-    fun final(text: String, language: VoiceLanguage): String {
+    /** A finished piece; [end] (listening stopped) closes it with a full stop. */
+    fun final(text: String, language: VoiceLanguage, end: Boolean = false): String {
         val t = clean(text, language)
-        if (t.isEmpty()) return ""
-        if (t.last() in ".!?।") return t
-        return t + if (language.hindiScript) "।" else "."
+        if (t.isEmpty() || !end || t.last() in ".!?।") return t
+        return t + stop(language)
     }
+
+    fun stop(language: VoiceLanguage): String = if (language.hindiScript) "।" else "."
 
     private fun clean(text: String, language: VoiceLanguage): String {
         // Vosk marks words it isn't sure of as "[unk]"; leave them out.

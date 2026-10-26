@@ -1,231 +1,286 @@
 package com.appname.notes.feature.voice
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Pause
-import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.appname.notes.R
 
 object VoiceTestTags {
-    const val SHEET = "voice_sheet"
-    const val START = "voice_start"
-    const val PAUSE = "voice_pause"
-    const val STOP = "voice_stop"
-    const val TEXT = "voice_text"
-    const val LANGUAGE = "voice_language"
-    const val SOURCE = "voice_source"
-    const val DOWNLOAD = "voice_download"
+    const val LABEL = "voice_label"
+    const val MENU = "voice_menu"
+    const val DIALOG = "voice_pack_dialog"
+    const val DOWNLOAD = "voice_pack_download"
     fun language(l: VoiceLanguage) = "voice_lang_${l.key}"
+    fun source(s: VoiceSource) = "voice_source_${s.name}"
 }
 
-data class VoiceBarState(
+/** "Recording on" green (fixed, so it reads as "on" whatever the theme or wallpaper colours are). */
+private val LiveGreen = Color(0xFF1E8E3E)
+
+data class VoiceMicState(
     val language: VoiceLanguage,
     val source: VoiceSource,
-    val packReady: Boolean,
+    val status: LiveTranscriber.Status,
+    /** Loudness 0..1 of what is heard. */
+    val level: Float,
     /** 0..1 while the language's pack downloads. */
     val download: Float?,
-    val status: LiveTranscriber.Status,
-    val problem: LiveTranscriber.Problem?,
-    val level: Float,
     val phoneAudioSupported: Boolean,
 )
 
-data class VoiceTypingActions(
-    val start: () -> Unit,
-    val pause: () -> Unit,
-    val language: (VoiceLanguage) -> Unit,
-    val source: (VoiceSource) -> Unit,
-    val download: () -> Unit,
-    val redownload: () -> Unit,
-    val done: () -> Unit,
-)
-
 /**
- * Live transcription (owner request: built-in, word by word, straight into the note). A slim bar at the bottom of
- * the editor: the words appear in the note as they are spoken (and settle when the sentence ends); the bar shows that
- * it is listening (with a level meter), the language, the sound source (microphone, or sound playing on this phone)
- * and Pause/Resume and Done. The first time a language is used its offline voice pack is downloaded.
+ * Voice typing as one microphone button in the formatting toolbar, like a keyboard's mic (owner request: no extra
+ * panel). Tap: it turns green and pulses with the sound while words are written into the note; tap again: off.
+ * Touch and hold (or tap the small language label while it is on): language and sound source. While the voice pack
+ * downloads, a ring around the mic shows the progress.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun VoiceTypingBar(state: VoiceBarState, actions: VoiceTypingActions, modifier: Modifier = Modifier) {
-    BackHandler(onBack = actions.done)
+fun VoiceMic(
+    state: VoiceMicState,
+    onTap: () -> Unit,
+    onLanguage: (VoiceLanguage) -> Unit,
+    onSource: (VoiceSource) -> Unit,
+    modifier: Modifier = Modifier,
+    buttonModifier: Modifier = Modifier,
+) {
+    var menu by remember { mutableStateOf(false) }
     val listening = state.status == LiveTranscriber.Status.LISTENING
+    val starting = state.status == LiveTranscriber.Status.STARTING
+    val on = listening || starting
     // Keep the screen on while listening, so a long lecture isn't cut off by the screen timeout.
     val view = LocalView.current
     DisposableEffect(listening) {
         view.keepScreenOn = listening
         onDispose { view.keepScreenOn = false }
     }
-    Surface(
-        tonalElevation = 3.dp,
-        shadowElevation = 6.dp,
-        shape = MaterialTheme.shapes.extraLarge.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)),
-        modifier = modifier.fillMaxWidth().testTag(VoiceTestTags.SHEET),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            when {
-                state.download != null -> {
-                    Text(stringResource(R.string.voice_downloading, (state.download * 100).toInt()), style = MaterialTheme.typography.bodyMedium)
-                    LinearProgressIndicator(progress = { state.download }, modifier = Modifier.fillMaxWidth())
-                }
-                !state.packReady -> {
-                    Text(
-                        stringResource(R.string.voice_pack_needed, stringResource(languageName(state.language)), state.language.pack.sizeMb),
-                        style = MaterialTheme.typography.bodyMedium,
+    val description = stringResource(if (on) R.string.voice_mic_on else R.string.voice_mic_off)
+    val stateText = stringResource(if (on) R.string.voice_state_on else R.string.voice_state_off)
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = buttonModifier
+                    .size(48.dp)
+                    .then(if (listening) Modifier.pulseRings(state.level) else Modifier)
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(bounded = false, radius = 24.dp),
+                        role = Role.Button,
+                        onClick = onTap,
+                        onLongClick = { menu = true },
                     )
-                }
-                else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    LevelMeter(if (listening) state.level else 0f, listening)
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        stringResource(
-                            when (state.status) {
-                                LiveTranscriber.Status.LISTENING -> R.string.voice_live_hint
-                                LiveTranscriber.Status.STARTING -> R.string.voice_starting
-                                LiveTranscriber.Status.IDLE -> R.string.voice_paused
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f).testTag(VoiceTestTags.TEXT).semantics { liveRegion = LiveRegionMode.Polite },
-                    )
-                }
-            }
-            state.problem?.let { p ->
-                Text(
-                    stringResource(
-                        when (p) {
-                            LiveTranscriber.Problem.AUDIO -> R.string.voice_problem_audio
-                            LiveTranscriber.Problem.MODEL -> R.string.voice_problem_model
-                            LiveTranscriber.Problem.SILENT_PHONE_AUDIO -> R.string.voice_problem_silent
-                            LiveTranscriber.Problem.STOPPED -> R.string.voice_problem_stopped
-                        },
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                if (p == LiveTranscriber.Problem.MODEL) TextButton(onClick = actions.redownload) { Text(stringResource(R.string.voice_download)) }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                LanguageButton(state.language, actions.language)
-                if (state.phoneAudioSupported) SourceButton(state.source, actions.source)
-                Spacer(Modifier.weight(1f))
+                    .semantics {
+                        contentDescription = description
+                        stateDescription = stateText
+                    },
+            ) {
                 when {
-                    !state.packReady && state.download == null ->
-                        Button(onClick = actions.download, modifier = Modifier.testTag(VoiceTestTags.DOWNLOAD)) { Text(stringResource(R.string.voice_download), maxLines = 1) }
-                    listening || state.status == LiveTranscriber.Status.STARTING ->
-                        OutlinedButton(onClick = actions.pause, modifier = Modifier.testTag(VoiceTestTags.PAUSE)) {
-                            Icon(Icons.Outlined.Pause, stringResource(R.string.voice_pause), Modifier.size(18.dp))
-                        }
-                    state.packReady ->
-                        OutlinedButton(onClick = actions.start, modifier = Modifier.testTag(VoiceTestTags.START)) {
-                            Icon(Icons.Outlined.Mic, stringResource(R.string.voice_resume), Modifier.size(18.dp))
-                        }
+                    state.download != null -> {
+                        CircularProgressIndicator(progress = { state.download }, modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
+                        Icon(Icons.Outlined.Mic, null, Modifier.size(18.dp))
+                    }
+                    listening -> Box(Modifier.size(36.dp).background(LiveGreen, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Mic, null, Modifier.size(20.dp), tint = Color.White)
+                    }
+                    starting -> {
+                        CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp, color = LiveGreen)
+                        Icon(Icons.Filled.Mic, null, Modifier.size(20.dp), tint = LiveGreen)
+                    }
+                    else -> Icon(Icons.Outlined.Mic, null)
                 }
-                Button(onClick = actions.done, modifier = Modifier.testTag(VoiceTestTags.STOP)) { Text(stringResource(R.string.voice_done), maxLines = 1) }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.PhoneAndroid, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    stringResource(R.string.voice_offline),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-            }
+            VoiceMenu(menu, state, onDismiss = { menu = false }, onLanguage = { menu = false; onLanguage(it) }, onSource = { menu = false; onSource(it) })
+        }
+        if (on) {
+            // Which language is being written; tap to change it.
+            Text(
+                stringResource(shortName(state.language)),
+                style = MaterialTheme.typography.labelMedium,
+                color = LiveGreen,
+                maxLines = 1,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .combinedClickable(onClick = { menu = true })
+                    .padding(end = 6.dp, top = 15.dp)
+                    .testTag(VoiceTestTags.LABEL),
+            )
         }
     }
 }
 
-/** Five bars that rise with the sound heard. */
+/** A halo that follows the loudness and rings moving out of the green mic. */
 @Composable
-private fun LevelMeter(level: Float, active: Boolean) {
-    val shown by animateFloatAsState(level, label = "level")
-    Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-        val color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-        listOf(0.5f, 0.8f, 1f, 0.8f, 0.5f).forEach { k ->
-            val h = (0.2f + (shown * 4f).coerceAtMost(1f) * k * 0.8f).coerceIn(0.2f, 1f)
-            Box(Modifier.width(3.dp).fillMaxHeight(h).background(color, RoundedCornerShape(2.dp)))
-        }
-    }
-}
-
-@Composable
-private fun LanguageButton(current: VoiceLanguage, onPick: (VoiceLanguage) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { open = true }, modifier = Modifier.testTag(VoiceTestTags.LANGUAGE)) {
-            Text(stringResource(languageName(current)), maxLines = 1)
-            Icon(Icons.Filled.ArrowDropDown, null)
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            VoiceLanguage.entries.forEach { l ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(languageName(l))) },
-                    onClick = { open = false; onPick(l) },
-                    modifier = Modifier.testTag(VoiceTestTags.language(l)),
-                )
-            }
+private fun Modifier.pulseRings(level: Float): Modifier {
+    val t = rememberInfiniteTransition(label = "pulse")
+    val phase by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart), label = "phase")
+    val loud by animateFloatAsState(level.coerceIn(0f, 1f), tween(120), label = "level")
+    return drawBehind {
+        val base = 18.dp.toPx()
+        val extra = 5.dp.toPx()
+        // The sound itself: a soft halo that follows the loudness.
+        drawCircle(LiveGreen.copy(alpha = 0.22f), radius = base + extra * (loud * 4f).coerceAtMost(1f))
+        // A steady ring moving outwards, so "on" is visible even in silence.
+        for (k in 0..1) {
+            val p = (phase + k * 0.5f) % 1f
+            drawCircle(LiveGreen.copy(alpha = 0.35f * (1f - p)), radius = base + extra * p, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
         }
     }
 }
 
 @Composable
-private fun SourceButton(current: VoiceSource, onPick: (VoiceSource) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { open = true }, modifier = Modifier.testTag(VoiceTestTags.SOURCE)) {
-            Text(stringResource(sourceName(current)), maxLines = 1)
-            Icon(Icons.Filled.ArrowDropDown, null)
+private fun VoiceMenu(
+    open: Boolean,
+    state: VoiceMicState,
+    onDismiss: () -> Unit,
+    onLanguage: (VoiceLanguage) -> Unit,
+    onSource: (VoiceSource) -> Unit,
+) {
+    DropdownMenu(expanded = open, onDismissRequest = onDismiss, modifier = Modifier.testTag(VoiceTestTags.MENU)) {
+        MenuHeader(R.string.voice_menu_language)
+        VoiceLanguage.entries.forEach { l ->
+            DropdownMenuItem(
+                text = { Text(stringResource(languageName(l))) },
+                onClick = { onLanguage(l) },
+                leadingIcon = { Check(l == state.language) },
+                modifier = Modifier.testTag(VoiceTestTags.language(l)),
+            )
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        if (state.phoneAudioSupported) {
+            HorizontalDivider()
+            MenuHeader(R.string.voice_menu_source)
             VoiceSource.entries.forEach { s ->
-                DropdownMenuItem(text = { Text(stringResource(sourceName(s))) }, onClick = { open = false; onPick(s) })
+                DropdownMenuItem(
+                    text = { Text(stringResource(sourceName(s))) },
+                    onClick = { onSource(s) },
+                    leadingIcon = { Check(s == state.source) },
+                    modifier = Modifier.testTag(VoiceTestTags.source(s)),
+                )
             }
         }
     }
+}
+
+@Composable
+private fun MenuHeader(text: Int) {
+    Text(
+        stringResource(text),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun Check(on: Boolean) {
+    if (on) Icon(Icons.Filled.Check, null, Modifier.size(20.dp)) else Spacer(Modifier.width(20.dp))
+}
+
+/**
+ * Shown the first time voice typing is used (or for a language not downloaded yet): pick the language; its voice
+ * pack is downloaded once. A language already on the phone starts at once.
+ */
+@Composable
+fun VoicePackDialog(
+    initial: VoiceLanguage,
+    installed: (VoiceLanguage) -> Boolean,
+    onConfirm: (VoiceLanguage) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var picked by rememberSaveable { mutableStateOf(initial) }
+    val ready = installed(picked)
+    AlertDialog(
+        modifier = Modifier.testTag(VoiceTestTags.DIALOG),
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Outlined.Mic, null) },
+        title = { Text(stringResource(R.string.voice_pack_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.voice_pack_body), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.size(8.dp))
+                VoiceLanguage.entries.forEach { l ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .selectable(selected = l == picked, onClick = { picked = l }, role = Role.RadioButton)
+                            .testTag(VoiceTestTags.language(l)),
+                    ) {
+                        RadioButton(selected = l == picked, onClick = null)
+                        Text(stringResource(languageName(l)), Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (installed(l)) stringResource(R.string.voice_pack_ready) else stringResource(R.string.voice_pack_size, l.pack.sizeMb),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(picked) }, modifier = Modifier.testTag(VoiceTestTags.DOWNLOAD), shape = RoundedCornerShape(50)) {
+                Text(stringResource(if (ready) R.string.voice_pack_start else R.string.voice_pack_download))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
 }
 
 private fun sourceName(s: VoiceSource) = when (s) {
@@ -233,7 +288,7 @@ private fun sourceName(s: VoiceSource) = when (s) {
     VoiceSource.PHONE_AUDIO -> R.string.voice_source_phone
 }
 
-private fun languageName(l: VoiceLanguage) = when (l) {
+fun languageName(l: VoiceLanguage) = when (l) {
     VoiceLanguage.ENGLISH_INDIA -> R.string.voice_lang_in
     VoiceLanguage.HINDI -> R.string.voice_lang_hi
     VoiceLanguage.HINGLISH -> R.string.voice_lang_hinglish
@@ -241,3 +296,10 @@ private fun languageName(l: VoiceLanguage) = when (l) {
     VoiceLanguage.ENGLISH_UK -> R.string.voice_lang_uk
 }
 
+private fun shortName(l: VoiceLanguage) = when (l) {
+    VoiceLanguage.ENGLISH_INDIA -> R.string.voice_short_in
+    VoiceLanguage.HINDI -> R.string.voice_short_hi
+    VoiceLanguage.HINGLISH -> R.string.voice_short_hinglish
+    VoiceLanguage.ENGLISH_US -> R.string.voice_short_us
+    VoiceLanguage.ENGLISH_UK -> R.string.voice_short_uk
+}

@@ -101,6 +101,7 @@ dependencies {
     // On-device text recognition, models bundled so it works offline (FR-011, ADR-0011).
     implementation(libs.mlkit.text.recognition)
     implementation(libs.mlkit.document.scanner) // Google's scanner screen, runs in Play services (no camera permission)
+    implementation(libs.mlkit.subject.segmentation)
     implementation(libs.mlkit.text.recognition.devanagari)
     implementation(libs.androidx.work.runtime) // background document indexing (NFR-08)
     implementation(libs.androidx.lifecycle.runtime.compose)

@@ -189,6 +189,8 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onRuler = viewModel::toggleRuler,
             onLassoBox = viewModel::setLassoBox,
             onCopySelection = viewModel::copySelection,
+            onRemoveBackground = viewModel::removeBackground,
+            onRestoreBackground = viewModel::restoreBackground,
         )
     }
     val context = LocalContext.current

@@ -22,7 +22,7 @@ class PageObjectsTest {
     @Test
     fun `photos and text are stored in format 3 and read back exactly`() {
         val audio = AudioItem("a", 5, "att-1", "rec.aac", "Lecture recording", 754_000, Placement(150f, 60f, 300f, 64f))
-        for (item in listOf(photo, photo.copy(flipped = true), text, audio)) {
+        for (item in listOf(photo, photo.copy(flipped = true), photo.copy(fileName = "cut.png", original = "abc.jpg", flipped = true), text, audio)) {
             val bytes = InkCodec.encode(item)
             assertEquals(3, bytes[0].toInt())
             assertEquals(item, (InkCodec.decode(item.id, item.z, bytes) as DecodeResult.Ok).item)

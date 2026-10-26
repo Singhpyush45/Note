@@ -164,16 +164,35 @@ class EditorController(
     private var liveText = ""
     private var liveBase: EditorState? = null
 
+    /** Where the last voice sentence ended (to close it with a full stop when listening stops); -1: none. */
+    private var voiceEnd = -1
+
     /**
      * Words being heard right now, written straight into the note at the cursor and replaced as they firm up
      * (word by word, like live captions). Not an undo step on its own; [voiceCommit] makes the sentence one.
+     * [sentenceEnd] ("." or "।"): the words start a new sentence after a pause, so the previous one is closed with
+     * it and these begin with a capital; null: they carry on the sentence before.
      */
-    fun voiceLive(text: String) = voiceWrite(text, commit = false)
+    fun voiceLive(text: String, sentenceEnd: String? = null) = voiceWrite(text, commit = false, sentenceEnd)
 
-    /** The finished sentence: replaces the live words and becomes one undo step. Empty text removes them. */
-    fun voiceCommit(text: String) = voiceWrite(text, commit = true)
+    /** The finished words: replace the live ones and become one undo step. Empty text removes them. */
+    fun voiceCommit(text: String, sentenceEnd: String? = null) = voiceWrite(text, commit = true, sentenceEnd)
 
-    private fun voiceWrite(raw: String, commit: Boolean) {
+    /** Listening stopped: closes the last voice sentence with [punctuation] if the cursor is still right after it. */
+    fun voiceFinish(punctuation: String) {
+        val s = state
+        val at = voiceEnd
+        voiceEnd = -1
+        if (liveStart >= 0 || at <= 0 || at > s.text.length || s.selection.min != at || s.selection.max != at) return
+        if (!s.text[at - 1].isLetterOrDigit()) return
+        val result = s.applyTextChange(s.text.substring(0, at) + punctuation + s.text.substring(at), Selection(at + punctuation.length), null, newId)
+        history.record(s, EditKind.FORMAT)
+        state = result.state
+        version++
+        refreshHistoryFlags()
+    }
+
+    private fun voiceWrite(raw: String, commit: Boolean, sentenceEnd: String?) {
         val s = state
         // The user typed or moved things meanwhile: leave what is there and start again at the cursor.
         if (liveStart >= 0 && (liveStart + liveText.length > s.text.length || !s.text.regionMatches(liveStart, liveText, 0, liveText.length))) {
@@ -187,14 +206,22 @@ class EditorController(
         }
         val before = s.text.substring(0, liveStart)
         val after = s.text.substring(liveStart + liveText.length)
-        val prefix = if (before.isNotEmpty() && !before.last().isWhitespace()) " " else ""
-        val sentenceStart = before.trimEnd(' ').let { it.isEmpty() || it.last() in ".!?\n।:" }
-        val body = raw.trim().let { if (sentenceStart) it.replaceFirstChar { ch -> ch.titlecase(java.util.Locale.ROOT) } else it }
+        val trimmed = before.trimEnd(' ')
+        val ended = trimmed.isEmpty() || trimmed.last() in ".!?\n।:"
+        // After a pause the sentence before is closed here (only right after a word, never after a space).
+        val close = sentenceEnd != null && !ended && before.last().isLetterOrDigit()
+        val prefix = when {
+            close -> sentenceEnd + " "
+            before.isNotEmpty() && !before.last().isWhitespace() -> " "
+            else -> ""
+        }
+        val body = raw.trim().let { if (ended || close) it.replaceFirstChar { ch -> ch.titlecase(java.util.Locale.ROOT) } else it }
         val content = if (body.isEmpty()) "" else prefix + body
         val newText = before + content + after
         val result = s.applyTextChange(newText, Selection(liveStart + content.length), null, newId)
         if (commit) {
-            liveBase?.let { history.record(it, EditKind.FORMAT) }
+            if (content.isNotEmpty()) liveBase?.let { history.record(it, EditKind.FORMAT) }
+            voiceEnd = if (content.isEmpty()) voiceEnd else liveStart + content.length
             liveStart = -1
             liveText = ""
             liveBase = null

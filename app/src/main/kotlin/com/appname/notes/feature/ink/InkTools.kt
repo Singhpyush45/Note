@@ -10,6 +10,8 @@ import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.outlined.Flip
+import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.selection.selectable
@@ -110,6 +112,8 @@ import kotlin.math.sin
 
 object InkToolTags {
     const val PANEL = "ink_tool_panel"
+    const val REMOVE_BG = "ink_remove_bg"
+    const val RESTORE_BG = "ink_restore_bg"
     const val PANEL_CLOSE = "ink_tool_panel_close"
     const val VARIANT_CHIP = "ink_variant_chip"
     const val SIZE = "ink_tool_size"
@@ -167,6 +171,9 @@ data class InkToolActions(
     val onLassoBox: (Boolean) -> Unit = {},
     /** Copies the selection (to paste with Paste or press-and-hold › Paste). */
     val onCopySelection: () -> Unit = {},
+    /** Cuts the main subject out of the selected photos / puts their background back. */
+    val onRemoveBackground: () -> Unit = {},
+    val onRestoreBackground: () -> Unit = {},
 )
 
 /** The tools in the bar, in order (owner brief §13). Only tools that work are shown. */
@@ -376,6 +383,19 @@ internal fun ToolOptionsRow(ui: InkEditorUi, actions: InkToolActions, panelOpen:
             }
             tools.tool == EditorTool.LASSO -> if (ui.hasSelection) {
                 IconButton(onClick = actions.onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
+                // Photos: remove the background (or put it back) — first, so it's seen right after pasting a photo.
+                if (ui.selectionPhotos > 0) {
+                    androidx.compose.material3.TextButton(onClick = actions.onRemoveBackground, modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.REMOVE_BG)) {
+                        Icon(androidx.compose.material.icons.Icons.Outlined.AutoFixHigh, null, Modifier.size(18.dp))
+                        Text(stringResource(R.string.ink_selection_remove_bg), Modifier.padding(start = 6.dp), maxLines = 1)
+                    }
+                }
+                if (ui.selectionCutouts > 0) {
+                    androidx.compose.material3.TextButton(onClick = actions.onRestoreBackground, modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.RESTORE_BG)) {
+                        Icon(androidx.compose.material.icons.Icons.Outlined.Wallpaper, null, Modifier.size(18.dp))
+                        Text(stringResource(R.string.ink_selection_restore_bg), Modifier.padding(start = 6.dp), maxLines = 1)
+                    }
+                }
                 IconButton(onClick = actions.onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
                 IconButton(onClick = actions.onCopySelection, modifier = Modifier.testTag(InkToolTags.COPY)) { Icon(Icons.Outlined.CopyAll, stringResource(R.string.ink_selection_copy)) }
                 IconButton(onClick = actions.onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }

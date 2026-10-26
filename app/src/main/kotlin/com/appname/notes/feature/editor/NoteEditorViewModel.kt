@@ -477,18 +477,20 @@ class NoteEditorViewModel @AssistedInject constructor(
 
     // ------------------------------------------------------------------ live transcription (owner request)
 
-    /** The voice bar, when open: chosen language and sound source. */
-    data class VoiceBar(val language: VoiceLanguage, val source: VoiceSource)
+    /** The voice-typing choices: language and sound source. */
+    data class VoiceChoice(val language: VoiceLanguage, val source: VoiceSource)
 
-    private val _voice = MutableStateFlow<VoiceBar?>(null)
-    val voice: StateFlow<VoiceBar?> = _voice.asStateFlow()
+    private val _voice = MutableStateFlow(VoiceChoice(VoiceLanguage.defaultFor(java.util.Locale.getDefault()), VoiceSource.MICROPHONE))
+    val voice: StateFlow<VoiceChoice> = _voice.asStateFlow()
+
+    /** The language was chosen before (the dialog then isn't needed for a downloaded pack). */
+    private var voiceLanguageSaved = false
 
     val voiceStatus = LiveTranscriber.status
-    val voiceProblem = LiveTranscriber.problem
     val voiceLevel = LiveTranscriber.level
     val voiceDownloads = VoicePacks.progress
 
-    /** Bumped when a voice pack finishes downloading, so the bar re-checks what is installed. */
+    /** Bumped when a voice pack is downloaded or removed, so the screen re-checks what is installed. */
     private val _packsChanged = MutableStateFlow(0)
     val packsChanged: StateFlow<Int> = _packsChanged.asStateFlow()
 
@@ -496,66 +498,129 @@ class NoteEditorViewModel @AssistedInject constructor(
     private var voiceOwner = false
     @Volatile private var cleared = false
 
-    private val voiceEvents = viewModelScope.launch {
-        LiveTranscriber.events.collect { e ->
-            if (!voiceOwner) return@collect
-            val c = controller ?: return@collect
-            if (_readOnly.value != null) return@collect
-            val language = _voice.value?.language ?: return@collect
-            when (e) {
-                is LiveTranscriber.Event.Partial -> c.voiceLive(VoiceFormat.partial(e.text, language))
-                is LiveTranscriber.Event.Final -> c.voiceCommit(VoiceFormat.final(e.text, language))
+    // Sentence tracking: words being heard are an open piece; a long enough pause before a new piece ends a sentence.
+    private var voicePieceOpen = false
+    private var voicePieceEnd: String? = null
+    private var voicePartial = ""
+    private var voiceLastFinalAt = 0L
+
+    init {
+        viewModelScope.launch {
+            val saved = VoiceLanguage.fromTag(settings.voiceLanguage.first())
+            if (saved != null) {
+                voiceLanguageSaved = true
+                _voice.value = _voice.value.copy(language = saved)
+            }
+        }
+        viewModelScope.launch {
+            LiveTranscriber.events.collect { e -> if (voiceOwner) onVoiceEvent(e) }
+        }
+        viewModelScope.launch {
+            LiveTranscriber.problem.collect { p -> if (p != null && voiceOwner) onVoiceProblem(p) }
+        }
+        viewModelScope.launch {
+            // Stopped without a last result (an error): keep what was heard so far.
+            LiveTranscriber.status.collect { st ->
+                if (st == LiveTranscriber.Status.IDLE && voiceOwner && voicePieceOpen) {
+                    controller?.voiceCommit(voicePartial, voicePieceEnd)
+                    voicePieceOpen = false
+                }
             }
         }
     }
 
-    fun packReady(language: VoiceLanguage) = VoicePacks.installed(appContext, language.pack)
-
-    /** Opens the voice bar with the language used last time (or the phone's English). */
-    fun openVoiceTyping(start: Boolean = false) {
+    private fun onVoiceEvent(e: LiveTranscriber.Event) {
+        val c = controller ?: return
         if (_readOnly.value != null) return
-        if (_voice.value != null) {
-            if (start) startVoice()
-            return
+        val language = _voice.value.language
+        if (!voicePieceOpen) {
+            if (e is LiveTranscriber.Event.Partial && e.text.isBlank()) return
+            voicePieceOpen = true
+            val at = when (e) {
+                is LiveTranscriber.Event.Partial -> e.at
+                is LiveTranscriber.Event.Final -> e.at
+            }
+            voicePieceEnd = if (voiceLastFinalAt != 0L && at - voiceLastFinalAt > VoiceFormat.PAUSE_NANOS) VoiceFormat.stop(language) else null
         }
-        viewModelScope.launch {
-            val language = VoiceLanguage.fromTag(settings.voiceLanguage.first()) ?: VoiceLanguage.defaultFor(java.util.Locale.getDefault())
-            if (_voice.value == null) _voice.value = VoiceBar(language, VoiceSource.MICROPHONE)
-            // Straight into listening when the language's pack is there (otherwise the bar offers the download).
-            if (start) startVoice()
+        when (e) {
+            is LiveTranscriber.Event.Partial -> {
+                voicePartial = VoiceFormat.partial(e.text, language)
+                c.voiceLive(voicePartial, voicePieceEnd)
+            }
+            is LiveTranscriber.Event.Final -> {
+                val text = VoiceFormat.final(e.text, language, end = e.last)
+                c.voiceCommit(text, voicePieceEnd)
+                if (e.last && text.isBlank()) c.voiceFinish(VoiceFormat.stop(language))
+                voicePieceOpen = false
+                voicePartial = ""
+                if (text.isNotBlank()) voiceLastFinalAt = e.at
+                if (e.last) voiceLastFinalAt = 0L
+            }
         }
     }
+
+    private fun onVoiceProblem(p: LiveTranscriber.Problem) {
+        _message.value = UserMessage(
+            when (p) {
+                LiveTranscriber.Problem.AUDIO -> R.string.voice_problem_audio
+                LiveTranscriber.Problem.MODEL -> {
+                    // A damaged download: remove it, so the next tap downloads it again.
+                    VoicePacks.delete(appContext, _voice.value.language.pack)
+                    _packsChanged.value++
+                    R.string.voice_problem_model
+                }
+                LiveTranscriber.Problem.SILENT_PHONE_AUDIO -> R.string.voice_problem_silent
+                LiveTranscriber.Problem.STOPPED -> R.string.voice_problem_stopped
+            },
+        )
+    }
+
+    fun packReady(language: VoiceLanguage) = VoicePacks.installed(appContext, language.pack)
+
+    /** The mic is tapped and the language's pack is missing (or no language was ever chosen): ask first. */
+    fun voiceNeedsChoice(): Boolean = !voiceLanguageSaved || !packReady(_voice.value.language)
 
     /** Starts listening (microphone permission already granted; [projection] = phone-audio permission). */
     fun startVoice(projection: Pair<Int, android.content.Intent>? = null) {
-        val bar = _voice.value ?: return
-        if (_readOnly.value != null || !packReady(bar.language)) return
+        val choice = _voice.value
+        if (_readOnly.value != null || !packReady(choice.language)) return
         voiceOwner = true
-        LiveTranscriber.start(appContext, bar.language.pack, if (projection != null) VoiceSource.PHONE_AUDIO else VoiceSource.MICROPHONE, projection)
+        voicePieceOpen = false
+        voiceLastFinalAt = 0L
+        LiveTranscriber.start(appContext, choice.language.pack, if (projection != null) VoiceSource.PHONE_AUDIO else VoiceSource.MICROPHONE, projection)
     }
 
-    fun pauseVoice() {
+    fun stopVoice() {
         LiveTranscriber.stop(appContext)
     }
 
-    fun setVoiceLanguage(language: VoiceLanguage) {
-        val bar = _voice.value ?: return
-        if (bar.language == language) return
-        // A new language needs its own model: stop; Resume starts with it.
-        pauseVoice()
-        _voice.value = bar.copy(language = language)
+    /** A language picked (menu or first-use dialog); remembered for next time. Returns whether to restart. */
+    fun setVoiceLanguage(language: VoiceLanguage): Boolean {
+        voiceLanguageSaved = true
         viewModelScope.launch { settings.setVoiceLanguage(language.key) }
+        if (_voice.value.language == language) return false
+        val wasOn = LiveTranscriber.status.value != LiveTranscriber.Status.IDLE
+        // A new language needs its own model: stop; the screen starts again with it.
+        stopVoice()
+        _voice.value = _voice.value.copy(language = language)
+        return wasOn
     }
 
-    fun setVoiceSource(source: VoiceSource) {
-        val bar = _voice.value ?: return
-        if (bar.source == source) return
-        pauseVoice()
-        _voice.value = bar.copy(source = source)
+    /** A sound source picked; returns whether listening was on (the screen then starts again with it). */
+    fun setVoiceSource(source: VoiceSource): Boolean {
+        if (_voice.value.source == source) return false
+        val wasOn = LiveTranscriber.status.value != LiveTranscriber.Status.IDLE
+        stopVoice()
+        _voice.value = _voice.value.copy(source = source)
+        return wasOn
     }
 
-    /** One-time download of the offline model for [language] (runs on even if the note is closed). */
+    /**
+     * One-time download of the offline model for [language] (runs on even if the note is closed); listening starts
+     * by itself when it is done and the microphone may be used.
+     */
     fun downloadVoicePack(language: VoiceLanguage) {
+        if (voiceDownloads.value.containsKey(language.pack)) return
         appScope.launch {
             val ok = VoicePacks.download(appContext, language.pack)
             _packsChanged.value++
@@ -563,29 +628,15 @@ class NoteEditorViewModel @AssistedInject constructor(
                 _message.value = UserMessage(R.string.voice_download_failed)
                 return@launch
             }
-            // Ready: start listening right away if the bar is still open for this language (microphone only; phone
-            // audio needs the user's go-ahead on the system screen).
-            val bar = _voice.value
+            val choice = _voice.value
             val micAllowed = androidx.core.content.ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.RECORD_AUDIO) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!cleared && bar != null && bar.language.pack == language.pack && bar.source == VoiceSource.MICROPHONE && micAllowed &&
+            if (!cleared && choice.language.pack == language.pack && choice.source == VoiceSource.MICROPHONE && micAllowed &&
                 LiveTranscriber.status.value == LiveTranscriber.Status.IDLE
             ) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { startVoice() }
             }
         }
-    }
-
-    /** The pack failed to load: remove it and fetch it again. */
-    fun redownloadVoicePack(language: VoiceLanguage) {
-        VoicePacks.delete(appContext, language.pack)
-        _packsChanged.value++
-        downloadVoicePack(language)
-    }
-
-    fun closeVoiceTyping() {
-        pauseVoice()
-        _voice.value = null
     }
 
     fun voicePermissionDenied() {

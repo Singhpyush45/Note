@@ -8,10 +8,22 @@ import org.junit.Test
 class VoiceTypingTest {
 
     @Test
-    fun `a finished sentence gets a full stop and English I`() {
-        assertThat(VoiceFormat.final("i think i'm ready", VoiceLanguage.ENGLISH_INDIA)).isEqualTo("I think I'm ready.")
-        assertThat(VoiceFormat.final("is it ready?", VoiceLanguage.ENGLISH_US)).isEqualTo("is it ready?")
-        assertThat(VoiceFormat.final("  ", VoiceLanguage.ENGLISH_US)).isEmpty()
+    fun `English I, and a full stop only when listening ends`() {
+        assertThat(VoiceFormat.final("i think i'm ready", VoiceLanguage.ENGLISH_INDIA)).isEqualTo("I think I'm ready")
+        assertThat(VoiceFormat.final("i think i'm ready", VoiceLanguage.ENGLISH_INDIA, end = true)).isEqualTo("I think I'm ready.")
+        assertThat(VoiceFormat.final("is it ready?", VoiceLanguage.ENGLISH_US, end = true)).isEqualTo("is it ready?")
+        assertThat(VoiceFormat.final("  ", VoiceLanguage.ENGLISH_US, end = true)).isEmpty()
+    }
+
+    @Test
+    fun `a word or two heard with low confidence is noise, longer speech is kept`() {
+        val noise = """{"result":[{"conf":0.42,"word":"no"}],"text":"no"}"""
+        val sure = """{"result":[{"conf":1.0,"word":"hello"}],"text":"hello"}"""
+        val long = """{"result":[{"conf":0.5,"word":"this"},{"conf":0.6,"word":"is"},{"conf":0.7,"word":"physics"}],"text":"this is physics"}"""
+        assertThat(LiveTranscriber.confidentText(noise)).isEmpty()
+        assertThat(LiveTranscriber.confidentText(sure)).isEqualTo("hello")
+        assertThat(LiveTranscriber.confidentText(long)).isEqualTo("this is physics")
+        assertThat(LiveTranscriber.confidentText("""{"text":""}""")).isEmpty()
     }
 
     @Test
@@ -21,9 +33,11 @@ class VoiceTypingTest {
 
     @Test
     fun `Hindi ends with a danda, Hinglish is written in English letters`() {
-        assertThat(VoiceFormat.final("मैं घर जा रहा हूँ", VoiceLanguage.HINDI)).isEqualTo("मैं घर जा रहा हूँ।")
+        assertThat(VoiceFormat.final("मैं घर जा रहा हूँ", VoiceLanguage.HINDI, end = true)).isEqualTo("मैं घर जा रहा हूँ।")
+        assertThat(VoiceFormat.stop(VoiceLanguage.HINDI)).isEqualTo("।")
         assertThat(VoiceFormat.partial("मैं घर", VoiceLanguage.HINGLISH)).isEqualTo("main ghar")
-        assertThat(VoiceFormat.final("मैं घर जा रहा हूँ", VoiceLanguage.HINGLISH)).isEqualTo("main ghar ja raha hun.")
+        assertThat(VoiceFormat.final("मैं घर जा रहा हूँ", VoiceLanguage.HINGLISH, end = true)).isEqualTo("main ghar ja raha hun.")
+        assertThat(VoiceFormat.stop(VoiceLanguage.HINGLISH)).isEqualTo(".")
     }
 
     @Test

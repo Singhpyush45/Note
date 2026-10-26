@@ -74,7 +74,12 @@ fun NotesApp(
     }
     val currentTopLevel = backStack.currentTopLevel()
     val adaptiveInfo = currentWindowAdaptiveInfoV2()
-    val isWide = adaptiveInfo.windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
+    val sizes = adaptiveInfo.windowSizeClass
+    // List and note side by side only on big screens (tablets); a phone turned sideways is wide but short, and
+    // there the note gets the whole screen too (owner request: no bottom bar over the editor in landscape).
+    val isWide = sizes.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) &&
+        sizes.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND)
+    val shortScreen = !sizes.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND)
     // Phones: editors get the whole screen. Handwriting gets it on every device.
     val editingFullScreen = (!isWide && backStack.lastOrNull() !in topLevelKeys) || backStack.lastOrNull() is InkEditorKey
 
@@ -93,7 +98,8 @@ fun NotesApp(
         layoutType = if (editingFullScreen) {
             NavigationSuiteType.None
         } else {
-            NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo)
+            // Sideways phone: a slim rail at the side instead of a bar eating the short height.
+            if (shortScreen) NavigationSuiteType.NavigationRail else NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo)
         },
         navigationSuiteItems = {
             TopLevelDestination.entries.forEach { destination ->

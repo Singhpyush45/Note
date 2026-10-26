@@ -118,7 +118,12 @@ class PdfAnnotationWriter(context: Context) {
         val p = item.place
         val px = (maxOf(p.width, p.height) * PX_PER_UNIT).toInt().coerceIn(64, MAX_IMAGE_PX)
         val bmp = com.appname.notes.feature.ink.InkImages.sync(item.fileName, px) ?: return
-        val img = com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory.createFromImage(doc, bmp, JPEG_QUALITY)
+        // A cut-out (transparent background) keeps its transparency; JPEG has none.
+        val img = if (bmp.hasAlpha()) {
+            com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory.createFromImage(doc, bmp)
+        } else {
+            com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory.createFromImage(doc, bmp, JPEG_QUALITY)
+        }
         draw(cs, img, p, mirrored = item.flipped)
     }
 
