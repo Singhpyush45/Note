@@ -66,6 +66,8 @@ data class BackupUi(
     val busy: Int? = null, // string res of what is running
     val progress: Float? = null,
     @param:StringRes val message: Int? = null,
+    /** Technical detail under the message (e.g. Google's error code), to tell support what happened. */
+    val detail: String? = null,
     val ready: BackupArchive.Manifest? = null, // a checked backup waiting for "Restore and restart"
     val driveFiles: List<DriveFile>? = null,
     val consent: PendingIntent? = null,
@@ -97,7 +99,7 @@ class BackupViewModel @Inject constructor(
 
     private fun work(@StringRes label: Int, block: suspend () -> Unit) {
         if (_ui.value.busy != null) return
-        _ui.update { it.copy(busy = label, progress = null, message = null) }
+        _ui.update { it.copy(busy = label, progress = null, message = null, detail = null) }
         viewModelScope.launch {
             try {
                 block()
@@ -169,7 +171,7 @@ class BackupViewModel @Inject constructor(
         if (_ui.value.busy != null) return
         this.afterPick = afterPick
         viewModelScope.launch {
-            _ui.update { it.copy(message = null) }
+            _ui.update { it.copy(message = null, detail = null) }
             when (val r = DriveAuth.authorize(context)) {
                 is DriveAuth.Result.Token -> run(action, r.accessToken)
                 is DriveAuth.Result.NeedsConsent -> {
@@ -183,9 +185,15 @@ class BackupViewModel @Inject constructor(
 
     fun consentLaunched() = _ui.update { it.copy(consent = null) }
 
-    fun onConsent(data: Intent?) {
+    fun onConsent(resultCode: Int, data: Intent?) {
         val action = pending ?: return
         pending = null
+        if (resultCode != android.app.Activity.RESULT_OK && data == null) {
+            // Google closed its screen without an answer: after picking an account this usually means the app isn't
+            // registered with Google (OAuth client) for this package and signing key.
+            _ui.update { it.copy(message = R.string.backup_drive_not_finished, detail = "result $resultCode") }
+            return
+        }
         when (val r = DriveAuth.fromIntent(context, data)) {
             is DriveAuth.Result.Token -> run(action, r.accessToken)
             else -> authFailed(r, action)
@@ -199,8 +207,10 @@ class BackupViewModel @Inject constructor(
                 message = when (r) {
                     DriveAuth.Result.NotRegistered -> R.string.backup_drive_not_registered
                     DriveAuth.Result.NoPlayServices -> R.string.backup_drive_no_play
-                    else -> R.string.backup_drive_cancelled
+                    is DriveAuth.Result.Failed -> R.string.backup_drive_not_finished
+                    else -> R.string.backup_drive_not_finished
                 },
+                detail = (r as? DriveAuth.Result.Failed)?.message,
             )
         }
     }
@@ -252,7 +262,7 @@ fun BackupCard(viewModel: BackupViewModel = hiltViewModel()) {
         if (uri != null) viewModel.restoreFrom(uri)
     }
     val consent: ActivityResultLauncher<IntentSenderRequest> =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r -> viewModel.onConsent(r.data) }
+        rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r -> viewModel.onConsent(r.resultCode, r.data) }
     LaunchedEffect(ui.consent) {
         val pi = ui.consent ?: return@LaunchedEffect
         viewModel.consentLaunched()
@@ -339,6 +349,14 @@ fun BackupCard(viewModel: BackupViewModel = hiltViewModel()) {
             }
         }
         ui.message?.let { StatusText(stringResource(it)) }
+        ui.detail?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
     }
 
     ui.ready?.let { m ->

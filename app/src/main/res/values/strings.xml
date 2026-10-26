@@ -238,6 +238,7 @@
     <string name="backup_drive_not_registered">This build isn\'t registered with Google yet, so Drive backup can\'t sign in. Back up to a file meanwhile.</string>
     <string name="backup_drive_no_play">Google Play services are needed for Drive backup. Back up to a file instead.</string>
     <string name="backup_drive_cancelled">Sign-in was cancelled.</string>
+    <string name="backup_drive_not_finished">Google didn\'t finish the sign-in. If you picked an account, this app isn\'t registered with Google for Drive yet (one-time Google Cloud setup). Back up to a file meanwhile.</string>
     <string name="library_view">Note size</string>
     <string name="library_view_small">Small</string>
     <string name="library_view_big">Big</string>

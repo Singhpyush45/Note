@@ -76,7 +76,7 @@ object DriveAuth {
                 CommonStatusCodes.DEVELOPER_ERROR -> Result.NotRegistered
                 CommonStatusCodes.API_NOT_CONNECTED, CommonStatusCodes.SERVICE_DISABLED, CommonStatusCodes.SERVICE_VERSION_UPDATE_REQUIRED -> Result.NoPlayServices
                 CommonStatusCodes.CANCELED -> Result.Failed("cancelled")
-                else -> Result.Failed("code ${e.statusCode}")
+                else -> Result.Failed("Google code ${e.statusCode}")
             }
         }
         return Result.Failed(e.message ?: e.javaClass.simpleName)
