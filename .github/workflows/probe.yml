@@ -6,14 +6,14 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Vosk
+      - name: Segmentation
         run: |
           exec > >(tee /tmp/out.txt) 2>&1
-          for m in vosk-model-small-en-in-0.4 vosk-model-small-en-us-0.15 vosk-model-small-hi-0.22; do
-            echo "$m $(curl -sIL https://alphacephei.com/vosk/models/$m.zip | grep -iE '^(HTTP|content-length)' | tr '\r\n' '  ')"
-          done
-          curl -fsSL https://repo1.maven.org/maven2/com/alphacephei/vosk-android/0.3.75/vosk-android-0.3.75.pom
-          mkdir x && cd x && curl -fsSLO https://repo1.maven.org/maven2/com/alphacephei/vosk-android/0.3.75/vosk-android-0.3.75.aar && unzip -l vosk-android-0.3.75.aar | head -30
-          unzip -o -q vosk-android-0.3.75.aar classes.jar && unzip -l classes.jar | grep -i "vosk/" | head -30
-          for m in vosk-model-small-en-in-0.4 vosk-model-small-hi-0.22; do curl -fsSL -o $m.zip https://alphacephei.com/vosk/models/$m.zip && unzip -l $m.zip | head -25 && sha256sum $m.zip; done
-          sleep 1; msg=$(sed -e ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' /tmp/out.txt); echo "::notice title=vosk::$msg"
+          G=https://dl.google.com/dl/android/maven2
+          curl -fsSL "$G/com/google/android/gms/play-services-mlkit-subject-segmentation/maven-metadata.xml" | grep -o '<version>[^<]*' | tail -5
+          V=$(curl -fsSL "$G/com/google/android/gms/play-services-mlkit-subject-segmentation/maven-metadata.xml" | grep -o '<version>[^<]*' | tail -1 | sed 's/<version>//')
+          echo "V=$V"
+          curl -fsSL "$G/com/google/android/gms/play-services-mlkit-subject-segmentation/$V/play-services-mlkit-subject-segmentation-$V.pom" | grep -A2 artifactId | head -40
+          mkdir x && cd x && curl -fsSLo s.aar "$G/com/google/android/gms/play-services-mlkit-subject-segmentation/$V/play-services-mlkit-subject-segmentation-$V.aar" && unzip -o -q s.aar classes.jar && unzip -l classes.jar | grep -i "segmentation/subject" | head -30
+          javap -cp classes.jar com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions\$Builder com.google.mlkit.vision.segmentation.subject.SubjectSegmentationResult com.google.mlkit.vision.segmentation.subject.SubjectSegmentation 2>&1 | head -40
+          sleep 1; msg=$(sed -e ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' /tmp/out.txt); echo "::notice title=seg::$msg"
