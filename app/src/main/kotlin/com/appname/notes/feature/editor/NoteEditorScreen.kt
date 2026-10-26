@@ -173,7 +173,7 @@ fun NoteEditorRoute(
     // Leaving the app (home button, app switcher, screen off): save now — the process may be killed next.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         viewModel.flush()
-        viewModel.voice.value?.pause() // never keep the microphone on in the background
+        // Live transcription keeps going in the background (its notification has Stop), e.g. while a video plays.
     }
 
     var showMove by remember { mutableStateOf(false) }
@@ -266,14 +266,37 @@ fun NoteEditorRoute(
     )
     var exportWarning by remember { mutableStateOf<ExportResult?>(null) }
 
-    // Voice typing (§11): the microphone is asked for when the user taps Start.
-    val voiceSession by viewModel.voice.collectAsStateWithLifecycle()
+    // Live transcription (owner request): the microphone is asked for on first use; "Phone audio" asks Android's
+    // permission to hear other apps each time it starts.
+    val voiceBar by viewModel.voice.collectAsStateWithLifecycle()
+    val projection = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val data = r.data
+        if (r.resultCode == android.app.Activity.RESULT_OK && data != null) viewModel.startVoice(r.resultCode to data) else viewModel.voiceProjectionDenied()
+    }
+    val beginVoice = {
+        val bar = viewModel.voice.value
+        if (bar != null && viewModel.packReady(bar.language)) {
+            if (bar.source == com.appname.notes.feature.voice.VoiceSource.PHONE_AUDIO && com.appname.notes.feature.voice.LiveTranscriber.phoneAudioSupported) {
+                val mpm = context.getSystemService(android.media.projection.MediaProjectionManager::class.java)
+                runCatching { projection.launch(mpm.createScreenCaptureIntent()) }
+            } else {
+                viewModel.startVoice()
+            }
+        }
+    }
     val voicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) viewModel.startVoiceTyping() else viewModel.voicePermissionDenied()
+        if (granted) beginVoice() else viewModel.voicePermissionDenied()
     }
     val startVoice = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            viewModel.startVoiceTyping()
+            beginVoice()
+        } else {
+            voicePermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    val openVoice = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            viewModel.openVoiceTyping(start = true)
         } else {
             viewModel.openVoiceTyping()
             voicePermission.launch(Manifest.permission.RECORD_AUDIO)
@@ -319,20 +342,36 @@ fun NoteEditorRoute(
         onRemind = { reminderUi.add() },
     )
 
-    val session = voiceSession
-    val voicePanel: (@Composable (Modifier) -> Unit)? = if (session == null) {
+    val bar = voiceBar
+    val voicePanel: (@Composable (Modifier) -> Unit)? = if (bar == null) {
         null
     } else {
         { panelModifier ->
-            val voiceState by session.state.collectAsStateWithLifecycle()
+            val status by viewModel.voiceStatus.collectAsStateWithLifecycle()
+            val problem by viewModel.voiceProblem.collectAsStateWithLifecycle()
+            val level by viewModel.voiceLevel.collectAsStateWithLifecycle()
+            val downloads by viewModel.voiceDownloads.collectAsStateWithLifecycle()
+            val packs by viewModel.packsChanged.collectAsStateWithLifecycle()
+            val ready = remember(bar.language, packs, downloads) { viewModel.packReady(bar.language) }
             VoiceTypingBar(
                 modifier = panelModifier,
-                state = voiceState,
+                state = com.appname.notes.feature.voice.VoiceBarState(
+                    language = bar.language,
+                    source = bar.source,
+                    packReady = ready,
+                    download = downloads[bar.language.pack],
+                    status = status,
+                    problem = problem,
+                    level = level,
+                    phoneAudioSupported = com.appname.notes.feature.voice.LiveTranscriber.phoneAudioSupported,
+                ),
                 actions = VoiceTypingActions(
                     start = startVoice,
-                    pause = session::pause,
+                    pause = viewModel::pauseVoice,
                     language = viewModel::setVoiceLanguage,
-                    useOnline = { session.useOnlineService(); session.start() },
+                    source = viewModel::setVoiceSource,
+                    download = { viewModel.downloadVoicePack(bar.language) },
+                    redownload = { viewModel.redownloadVoicePack(bar.language) },
                     done = viewModel::closeVoiceTyping,
                 ),
             )
@@ -365,7 +404,7 @@ fun NoteEditorRoute(
                 onFixAlerts = reminderUi::fixAlerts,
             )
         },
-        onVoiceTyping = if (editable) startVoice else null,
+        onVoiceTyping = if (editable) openVoice else null,
         onClipLink = if (editable) viewModel::clipLink else null,
         voicePanel = voicePanel,
         onRemindTask = if (editable) {

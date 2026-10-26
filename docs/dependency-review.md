@@ -34,6 +34,8 @@ unless stated otherwise.
 | WorkManager (`androidx.work:work-runtime-ktx`) | 2.12.0 | Background document indexing | Added Phase 5. |
 | PdfBox-Android (`com.tom-roush:pdfbox-android`) | 2.0.27.0 | Read page boxes; write the annotated export copy | Added Phase 4 (ADR-0009 Part B). Apache-2.0, a port of Apache PDFBox **maintained by one person** (not Google): kept behind `PdfAnnotationWriter` so it can be swapped. Display uses the platform `PdfRenderer` instead. |
 | Play services auth (`com.google.android.gms:play-services-auth`) | 21.4.0 | Google sign-in for Drive backup (Phase 9, ADR-0015) | Google, Android SDK licence. Only `Identity.getAuthorizationClient` with the `drive.appdata` scope is used; no Drive library: the few REST calls are made with `HttpURLConnection`. Needs Google Play services on the phone; file backup works without it. |
+| Vosk (`com.alphacephei:vosk-android`) | 0.3.75 | Built-in live transcription (voice typing), fully offline | Apache-2.0, Alpha Cephei. Native Kaldi recogniser; the models (36–44 MB each, Apache-2.0) are **not** in the APK — downloaded once over HTTPS from alphacephei.com when the user picks a language, unzipped with a zip-slip check, deletable. Audio never leaves the phone. Adds native .so files (~+20 MB per ABI in the universal APK). |
+| JNA (`net.java.dev.jna:jna`, aar) | 5.18.1 | Required by Vosk to call its native library | Apache-2.0 / LGPL-2.1 dual licence (used under Apache-2.0). Kept by R8 rules. |
 
 ## Watch list (later phases)
 - Room 3 — revisit in Phase 6 (ADR-0008).

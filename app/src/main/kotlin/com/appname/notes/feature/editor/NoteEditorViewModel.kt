@@ -19,9 +19,11 @@ import com.appname.notes.core.domain.model.AudioMarker
 import com.appname.notes.core.domain.document.BlockKind
 import com.appname.notes.feature.reminders.NoteReminders
 import com.appname.notes.core.settings.SettingsRepository
-import com.appname.notes.feature.voice.SpeechEngineFactory
+import com.appname.notes.feature.voice.LiveTranscriber
+import com.appname.notes.feature.voice.VoiceFormat
 import com.appname.notes.feature.voice.VoiceLanguage
-import com.appname.notes.feature.voice.VoiceTyping
+import com.appname.notes.feature.voice.VoicePacks
+import com.appname.notes.feature.voice.VoiceSource
 import com.appname.notes.feature.audio.AudioPlayback
 import com.appname.notes.feature.audio.RecordingController
 import com.appname.notes.feature.audio.RecordingError
@@ -118,7 +120,7 @@ class NoteEditorViewModel @AssistedInject constructor(
     val attachmentIntents: AttachmentIntents,
     private val recordings: RecordingController,
     reminderFactory: NoteReminders.Factory,
-    private val speechEngines: SpeechEngineFactory,
+    @param:dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val settings: SettingsRepository,
 ) : ViewModel() {
 
@@ -268,8 +270,9 @@ class NoteEditorViewModel @AssistedInject constructor(
     }
 
     override fun onCleared() {
+        cleared = true
         playback.release()
-        _voice.value?.release()
+        if (voiceOwner) LiveTranscriber.stop(appContext)
         val snap = if (_readOnly.value == null) snapshot() else null
         appScope.launch {
             if (snap != null) saveSnapshot(snap)
@@ -349,7 +352,7 @@ class NoteEditorViewModel @AssistedInject constructor(
             _message.value = UserMessage(R.string.clip_done)
             val image = clip.imageUrl ?: return@launch
             val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                runCatching { WebClipper.download(image, File(System.getProperty("java.io.tmpdir") ?: "/tmp", "clips"), clip.title) }.getOrNull()
+                runCatching { WebClipper.download(image, File(appContext.cacheDir, "clips"), clip.title) }.getOrNull()
             } ?: return@launch
             val outcome = attacher.attach(noteId, listOf(Uri.fromFile(file)))
             file.delete()
@@ -472,61 +475,125 @@ class NoteEditorViewModel @AssistedInject constructor(
         controller?.links.orEmpty().mapNotNull { AudioMarker.parse(it) }.filter { it.attachmentId == attachment.id }
             .distinct().sortedBy { it.positionMs }
 
-    // ------------------------------------------------------------------ voice typing (owner brief §11)
+    // ------------------------------------------------------------------ live transcription (owner request)
 
-    private val _voice = MutableStateFlow<VoiceTyping?>(null)
+    /** The voice bar, when open: chosen language and sound source. */
+    data class VoiceBar(val language: VoiceLanguage, val source: VoiceSource)
 
-    /** The open voice-typing session, or null when the panel is closed. */
-    val voice: StateFlow<VoiceTyping?> = _voice.asStateFlow()
+    private val _voice = MutableStateFlow<VoiceBar?>(null)
+    val voice: StateFlow<VoiceBar?> = _voice.asStateFlow()
 
-    /**
-     * Starts voice typing straight into the note (owner request: no pop-up, no Insert): opens the voice bar with the
-     * language used last time and starts listening at once. Call after the microphone permission is granted.
-     */
-    fun startVoiceTyping() {
-        if (_readOnly.value != null) return
-        _voice.value?.let { it.start(); return }
-        viewModelScope.launch {
-            val language = VoiceLanguage.fromTag(settings.voiceLanguage.first()) ?: VoiceLanguage.defaultFor(java.util.Locale.getDefault())
-            if (_voice.value == null) {
-                val session = VoiceTyping(speechEngines.create(), language, write = ::writeVoice)
-                _voice.value = session
-                session.start()
+    val voiceStatus = LiveTranscriber.status
+    val voiceProblem = LiveTranscriber.problem
+    val voiceLevel = LiveTranscriber.level
+    val voiceDownloads = VoicePacks.progress
+
+    /** Bumped when a voice pack finishes downloading, so the bar re-checks what is installed. */
+    private val _packsChanged = MutableStateFlow(0)
+    val packsChanged: StateFlow<Int> = _packsChanged.asStateFlow()
+
+    /** This note started the transcriber (its words go into this note). */
+    private var voiceOwner = false
+    @Volatile private var cleared = false
+
+    private val voiceEvents = viewModelScope.launch {
+        LiveTranscriber.events.collect { e ->
+            if (!voiceOwner) return@collect
+            val c = controller ?: return@collect
+            if (_readOnly.value != null) return@collect
+            val language = _voice.value?.language ?: return@collect
+            when (e) {
+                is LiveTranscriber.Event.Partial -> c.voiceLive(VoiceFormat.partial(e.text, language))
+                is LiveTranscriber.Event.Final -> c.voiceCommit(VoiceFormat.final(e.text, language))
             }
         }
     }
 
-    /** Opens the voice bar without listening yet (e.g. while the microphone permission is asked). */
-    fun openVoiceTyping() {
-        if (_readOnly.value != null || _voice.value != null) return
+    fun packReady(language: VoiceLanguage) = VoicePacks.installed(appContext, language.pack)
+
+    /** Opens the voice bar with the language used last time (or the phone's English). */
+    fun openVoiceTyping(start: Boolean = false) {
+        if (_readOnly.value != null) return
+        if (_voice.value != null) {
+            if (start) startVoice()
+            return
+        }
         viewModelScope.launch {
             val language = VoiceLanguage.fromTag(settings.voiceLanguage.first()) ?: VoiceLanguage.defaultFor(java.util.Locale.getDefault())
-            if (_voice.value == null) _voice.value = VoiceTyping(speechEngines.create(), language, write = ::writeVoice)
+            if (_voice.value == null) _voice.value = VoiceBar(language, VoiceSource.MICROPHONE)
+            // Straight into listening when the language's pack is there (otherwise the bar offers the download).
+            if (start) startVoice()
         }
     }
 
+    /** Starts listening (microphone permission already granted; [projection] = phone-audio permission). */
+    fun startVoice(projection: Pair<Int, android.content.Intent>? = null) {
+        val bar = _voice.value ?: return
+        if (_readOnly.value != null || !packReady(bar.language)) return
+        voiceOwner = true
+        LiveTranscriber.start(appContext, bar.language.pack, if (projection != null) VoiceSource.PHONE_AUDIO else VoiceSource.MICROPHONE, projection)
+    }
+
+    fun pauseVoice() {
+        LiveTranscriber.stop(appContext)
+    }
+
     fun setVoiceLanguage(language: VoiceLanguage) {
-        _voice.value?.setLanguage(language)
+        val bar = _voice.value ?: return
+        if (bar.language == language) return
+        // A new language needs its own model: stop; Resume starts with it.
+        pauseVoice()
+        _voice.value = bar.copy(language = language)
         viewModelScope.launch { settings.setVoiceLanguage(language.key) }
     }
 
-    /** One recognised sentence goes in at the cursor; a new sentence starts with a capital. */
-    private fun writeVoice(piece: String) {
-        val c = controller ?: return
-        if (_readOnly.value != null) return
-        val before = c.state.text.substring(0, c.state.selection.min).trimEnd(' ')
-        val newSentence = before.isEmpty() || before.last() in ".!?\n।"
-        c.insertText(if (newSentence) piece.replaceFirstChar { it.titlecase(java.util.Locale.ROOT) } else piece)
+    fun setVoiceSource(source: VoiceSource) {
+        val bar = _voice.value ?: return
+        if (bar.source == source) return
+        pauseVoice()
+        _voice.value = bar.copy(source = source)
+    }
+
+    /** One-time download of the offline model for [language] (runs on even if the note is closed). */
+    fun downloadVoicePack(language: VoiceLanguage) {
+        appScope.launch {
+            val ok = VoicePacks.download(appContext, language.pack)
+            _packsChanged.value++
+            if (!ok) {
+                _message.value = UserMessage(R.string.voice_download_failed)
+                return@launch
+            }
+            // Ready: start listening right away if the bar is still open for this language (microphone only; phone
+            // audio needs the user's go-ahead on the system screen).
+            val bar = _voice.value
+            val micAllowed = androidx.core.content.ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!cleared && bar != null && bar.language.pack == language.pack && bar.source == VoiceSource.MICROPHONE && micAllowed &&
+                LiveTranscriber.status.value == LiveTranscriber.Status.IDLE
+            ) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { startVoice() }
+            }
+        }
+    }
+
+    /** The pack failed to load: remove it and fetch it again. */
+    fun redownloadVoicePack(language: VoiceLanguage) {
+        VoicePacks.delete(appContext, language.pack)
+        _packsChanged.value++
+        downloadVoicePack(language)
     }
 
     fun closeVoiceTyping() {
-        _voice.value?.release()
+        pauseVoice()
         _voice.value = null
     }
 
     fun voicePermissionDenied() {
-        _voice.value?.pause()
         _message.value = UserMessage(R.string.voice_mic_denied)
+    }
+
+    fun voiceProjectionDenied() {
+        _message.value = UserMessage(R.string.voice_phone_audio_denied)
     }
 
     // ------------------------------------------------------------------ reminders (FR-010)

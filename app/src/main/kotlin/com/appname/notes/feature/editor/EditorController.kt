@@ -157,6 +157,55 @@ class EditorController(
         onValueChange(TextFieldValue(before + inserted + after, TextRange(cursor)))
     }
 
+    // ------------------------------------------------------------ live transcription (owner request)
+
+    /** Where the words being transcribed right now sit in the text, and what was put there; -1 when none. */
+    private var liveStart = -1
+    private var liveText = ""
+    private var liveBase: EditorState? = null
+
+    /**
+     * Words being heard right now, written straight into the note at the cursor and replaced as they firm up
+     * (word by word, like live captions). Not an undo step on its own; [voiceCommit] makes the sentence one.
+     */
+    fun voiceLive(text: String) = voiceWrite(text, commit = false)
+
+    /** The finished sentence: replaces the live words and becomes one undo step. Empty text removes them. */
+    fun voiceCommit(text: String) = voiceWrite(text, commit = true)
+
+    private fun voiceWrite(raw: String, commit: Boolean) {
+        val s = state
+        // The user typed or moved things meanwhile: leave what is there and start again at the cursor.
+        if (liveStart >= 0 && (liveStart + liveText.length > s.text.length || !s.text.regionMatches(liveStart, liveText, 0, liveText.length))) {
+            liveStart = -1
+        }
+        if (liveStart < 0) {
+            if (raw.isBlank()) return
+            liveBase = s
+            liveStart = s.selection.max
+            liveText = ""
+        }
+        val before = s.text.substring(0, liveStart)
+        val after = s.text.substring(liveStart + liveText.length)
+        val prefix = if (before.isNotEmpty() && !before.last().isWhitespace()) " " else ""
+        val sentenceStart = before.trimEnd(' ').let { it.isEmpty() || it.last() in ".!?\n।:" }
+        val body = raw.trim().let { if (sentenceStart) it.replaceFirstChar { ch -> ch.titlecase(java.util.Locale.ROOT) } else it }
+        val content = if (body.isEmpty()) "" else prefix + body
+        val newText = before + content + after
+        val result = s.applyTextChange(newText, Selection(liveStart + content.length), null, newId)
+        if (commit) {
+            liveBase?.let { history.record(it, EditKind.FORMAT) }
+            liveStart = -1
+            liveText = ""
+            liveBase = null
+        } else {
+            liveText = content
+        }
+        state = result.state
+        version++
+        refreshHistoryFlags()
+    }
+
     /** Links in the note, e.g. to find the markers of a recording. */
     val links: List<String> get() = state.spans.mapNotNull { it.url }
 

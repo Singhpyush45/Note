@@ -210,9 +210,9 @@ class AttachmentFlowRobolectricTest {
     }
 
     /**
-     * Voice typing starts straight away in a bar in place of the toolbar (owner request: no pop-up, no Insert).
-     * Whether a speech service exists depends on the environment: without one the bar says so; with one it is
-     * listening, with the language and Done. Done closes it and the toolbar returns.
+     * Voice typing opens straight away in a bar in place of the toolbar (owner request: no pop-up, no Insert). On a
+     * fresh install the offline voice pack isn't there yet, so the bar offers the download; the language can be
+     * changed; Done closes it and the toolbar returns.
      */
     @Test
     fun voiceTypingStartsAtOnceInABar() {
@@ -221,12 +221,9 @@ class AttachmentFlowRobolectricTest {
         composeRule.onNodeWithTag(EditorTestTags.VOICE).performClick()
         waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET)) }
         assertThat(exists(hasTestTag(EditorTestTags.TOOLBAR))).isFalse()
-        if (exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.UNAVAILABLE))) {
-            composeRule.onNodeWithText(string(R.string.action_close)).performClick()
-        } else {
-            assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.LANGUAGE))).isTrue()
-            composeRule.onNodeWithTag(com.appname.notes.feature.voice.VoiceTestTags.STOP).performClick()
-        }
+        assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.LANGUAGE))).isTrue()
+        assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.DOWNLOAD))).isTrue()
+        composeRule.onNodeWithTag(com.appname.notes.feature.voice.VoiceTestTags.STOP).performClick()
         waitAdvancing { exists(hasTestTag(EditorTestTags.TOOLBAR)) }
         assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET))).isFalse()
     }

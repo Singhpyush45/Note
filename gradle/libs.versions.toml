@@ -34,8 +34,12 @@ ink = "1.1.0-alpha09"
 pdfboxAndroid = "2.0.27.0"
 playServicesAuth = "21.4.0"
 biometric = "1.1.0"
+vosk = "0.3.75"
+jna = "5.18.1"
 
 [libraries]
+vosk-android = { module = "com.alphacephei:vosk-android", version.ref = "vosk" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 pdfbox-android = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfboxAndroid" }

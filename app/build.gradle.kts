@@ -124,6 +124,9 @@ dependencies {
     implementation(libs.androidx.ink.strokes)
     // PDF export (ADR-0009 Part B): writes annotations into a copy. Apache-2.0. Display uses Android's PdfRenderer.
     implementation(libs.pdfbox.android)
+    // Built-in offline live transcription (Apache-2.0). JNA is its native bridge (the Android .aar build).
+    implementation(libs.vosk.android)
+    implementation(libs.jna) { artifact { type = "aar" } }
     implementation(libs.androidx.biometric) // app lock (fingerprint / face / screen lock), SRS 13.1
     implementation(libs.play.services.auth) // Google sign-in for Drive backup (Phase 9), only the drive.appdata scope
 

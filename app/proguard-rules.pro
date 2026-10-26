@@ -11,3 +11,9 @@
 -keep class com.tom_roush.pdfbox.** { *; }
 -keep class com.tom_roush.fontbox.** { *; }
 -keep class com.tom_roush.harmony.** { *; }
+
+# Vosk (offline transcription) talks to its native library through JNA, which finds classes and fields by name.
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { public *; }
+-keep class org.vosk.** { *; }
+-dontwarn java.awt.**

@@ -15,6 +15,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Live transcription of sound playing on the phone (a video in another app), only after the user allows it. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- The "Recording" notification (Android 13+); recording works without it. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!--
@@ -89,6 +91,12 @@
             android:name=".feature.audio.AudioRecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- Built-in live transcription (offline Vosk): microphone, or phone audio with the user's permission. -->
+        <service
+            android:name=".feature.voice.TranscribeService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaProjection" />
 
         <!-- Hands annotated PDF copies to the app the user picks in the share sheet (read-only, that file only). -->
         <provider

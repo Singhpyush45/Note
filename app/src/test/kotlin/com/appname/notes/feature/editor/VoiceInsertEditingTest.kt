@@ -56,4 +56,33 @@ class VoiceInsertEditingTest {
         assertThat(c.state.paragraphs).hasSize(2)
         assertThat(c.state.lineText(1)).isEqualTo("Second line")
     }
+
+    @Test
+    fun `live words appear and are replaced as they firm up, then settle as one undo step`() {
+        val c = controller("Notes:")
+        c.voiceLive("chapter")
+        assertThat(c.state.text).isEqualTo("Notes: Chapter")
+        c.voiceLive("chapter four is")
+        assertThat(c.state.text).isEqualTo("Notes: Chapter four is")
+        c.voiceCommit("chapter four is on the exam.")
+        assertThat(c.state.text).isEqualTo("Notes: Chapter four is on the exam.")
+        c.voiceLive("next")
+        assertThat(c.state.text).isEqualTo("Notes: Chapter four is on the exam. Next")
+        c.voiceCommit("next week.")
+        assertThat(c.state.text).isEqualTo("Notes: Chapter four is on the exam. Next week.")
+        c.undo()
+        assertThat(c.state.text).isEqualTo("Notes: Chapter four is on the exam.")
+        c.undo()
+        assertThat(c.state.text).isEqualTo("Notes:")
+    }
+
+    @Test
+    fun `live words go in at the cursor, before the text after it`() {
+        val c = controller("Start end", cursor = 5)
+        c.voiceLive("middle")
+        assertThat(c.state.text).isEqualTo("Start middle end")
+        c.voiceCommit("middle part")
+        assertThat(c.state.text).isEqualTo("Start middle part end")
+        assertThat(c.state.selection.start).isEqualTo("Start middle part".length)
+    }
 }
