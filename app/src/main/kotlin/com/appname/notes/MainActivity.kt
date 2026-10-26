@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -37,7 +38,7 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @OptIn(ExperimentalComposeUiApi::class)
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     private val viewModel: MainActivityViewModel by viewModels()
 
@@ -47,6 +48,9 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { viewModel.uiState.value is MainUiState.Loading }
         // Only a fresh start: after rotation or process death the intent was already handled.
         if (savedInstanceState == null) handleIncoming(intent)
+        // App lock and "hide in recent apps" (Settings › Security).
+        com.appname.notes.feature.lock.AppLock.init(this)
+        applySecureFlag(com.appname.notes.feature.lock.AppLock.settings.value.hideInRecents)
 
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -54,6 +58,9 @@ class MainActivity : ComponentActivity() {
             val appearance = (uiState as? MainUiState.Ready)?.appearance ?: AppearanceSettings()
             val wallpaper by viewModel.wallpaper.collectAsStateWithLifecycle()
             val darkPaper by viewModel.darkPaper.collectAsStateWithLifecycle()
+            val locked by com.appname.notes.feature.lock.AppLock.locked.collectAsStateWithLifecycle()
+            val lockSettings by com.appname.notes.feature.lock.AppLock.settings.collectAsStateWithLifecycle()
+            LaunchedEffect(lockSettings.hideInRecents) { applySecureFlag(lockSettings.hideInRecents) }
 
             // Draw behind system bars; flip status/nav bar icon colours with the app's theme,
             // which can differ from the system theme when the user forces Light or Dark.
@@ -94,13 +101,25 @@ class MainActivity : ComponentActivity() {
                         }
                         val opened = shared as? SharedImport.Opened
                         NotesApp(
-                            Modifier.semantics { testTagsAsResourceId = true },
+                            Modifier
+                                .semantics { testTagsAsResourceId = true }
+                                // While locked, TalkBack doesn't read the notes under the lock screen either.
+                                .then(if (locked) Modifier.clearAndSetSemantics { } else Modifier),
                             openNoteRequest = opened?.let { it.noteId to it.type },
                             onOpenNoteRequestHandled = viewModel::sharedHandled,
                         )
+                        if (locked) com.appname.notes.feature.lock.LockScreen(this@MainActivity)
                     }
                 }
             }
+        }
+    }
+
+    private fun applySecureFlag(on: Boolean) {
+        if (on) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 

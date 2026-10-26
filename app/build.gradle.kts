@@ -124,6 +124,7 @@ dependencies {
     implementation(libs.androidx.ink.strokes)
     // PDF export (ADR-0009 Part B): writes annotations into a copy. Apache-2.0. Display uses Android's PdfRenderer.
     implementation(libs.pdfbox.android)
+    implementation(libs.androidx.biometric) // app lock (fingerprint / face / screen lock), SRS 13.1
     implementation(libs.play.services.auth) // Google sign-in for Drive backup (Phase 9), only the drive.appdata scope
 
     implementation(libs.hilt.android)

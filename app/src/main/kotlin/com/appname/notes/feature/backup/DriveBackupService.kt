@@ -122,6 +122,13 @@ class DriveBackupService @Inject constructor(
 
     suspend fun list(token: String): List<DriveFile> = withContext(Dispatchers.IO) { DriveClient(token).list() }
 
+    /** Deletes every backup of this app from the user's Drive. */
+    suspend fun deleteAll(token: String) = withContext(Dispatchers.IO) {
+        val client = DriveClient(token)
+        client.list().forEach { client.delete(it.id) }
+        save { it.copy(lastBackupAt = 0L) }
+    }
+
     /** Downloads [file] and checks it; on Ready the app restarts to finish. */
     suspend fun prepareRestore(token: String, file: DriveFile, onProgress: (Float) -> Unit = {}): BackupManager.Prepared =
         withContext(Dispatchers.IO) {

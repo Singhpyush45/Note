@@ -72,7 +72,8 @@ object WebClipper {
 
     /** GET with up to 5 redirects; returns the final URL, at most [limit] bytes and the content type. */
     private fun get(url: String, limit: Int): Triple<String, ByteArray, String?>? {
-        var current = url
+        // HTTPS only (network security config): plain-http links are tried over HTTPS.
+        var current = if (url.startsWith("http://")) "https://" + url.removePrefix("http://") else url
         repeat(MAX_REDIRECTS) {
             if (!current.startsWith("https://") && !current.startsWith("http://")) return null
             val c = (URL(current).openConnection() as HttpURLConnection).apply {
@@ -85,7 +86,7 @@ object WebClipper {
             try {
                 val code = c.responseCode
                 if (code in 300..399) {
-                    current = c.getHeaderField("Location")?.let { resolve(current, it) } ?: return null
+                    current = c.getHeaderField("Location")?.let { resolve(current, it) }?.let { if (it.startsWith("http://")) "https://" + it.removePrefix("http://") else it } ?: return null
                     return@repeat
                 }
                 if (code !in 200..299) return null

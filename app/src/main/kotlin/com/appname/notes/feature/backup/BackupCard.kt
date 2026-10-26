@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -56,6 +57,7 @@ object BackupTestTags {
     const val DRIVE_RESTORE = "backup_drive_restore"
     const val DRIVE_AUTO = "backup_drive_auto"
     const val DRIVE_DISCONNECT = "backup_drive_disconnect"
+    const val DRIVE_DELETE = "backup_drive_delete"
     const val STATUS = "backup_status"
     const val CONFIRM_RESTORE = "backup_confirm_restore"
 }
@@ -79,7 +81,7 @@ class BackupViewModel @Inject constructor(
     val ui: StateFlow<BackupUi> = _ui.asStateFlow()
     val driveState = drive.state
 
-    private enum class Action { CONNECT, BACKUP, LIST, DISCONNECT, AUTO_ON }
+    private enum class Action { CONNECT, BACKUP, LIST, DISCONNECT, AUTO_ON, DELETE_ALL }
 
     private var pending: Action? = null
     private var chosen: DriveFile? = null
@@ -149,6 +151,9 @@ class BackupViewModel @Inject constructor(
     fun backupToDrive() = withToken(Action.BACKUP)
     fun restoreFromDrive() = withToken(Action.LIST)
     fun disconnect() = withToken(Action.DISCONNECT)
+
+    /** Removes every backup this app put in the user's Drive (data deletion, SRS 13.2). */
+    fun deleteDriveBackups() = withToken(Action.DELETE_ALL)
     fun setAuto(on: Boolean) = if (on) withToken(Action.AUTO_ON) else viewModelScope.launch { drive.setAuto(false) }.let { }
 
     fun pick(file: DriveFile?) {
@@ -204,6 +209,10 @@ class BackupViewModel @Inject constructor(
         when (action) {
             Action.CONNECT -> work(R.string.backup_drive_connecting) { drive.connected(token) }
             Action.DISCONNECT -> work(R.string.backup_drive_disconnecting) { drive.disconnect(token) }
+            Action.DELETE_ALL -> work(R.string.backup_drive_deleting) {
+                drive.deleteAll(token)
+                _ui.update { it.copy(message = R.string.backup_drive_deleted) }
+            }
             Action.AUTO_ON -> work(R.string.backup_drive_connecting) {
                 if (!drive.state.value.connected) drive.connected(token)
                 drive.setAuto(true)
@@ -296,6 +305,20 @@ fun BackupCard(viewModel: BackupViewModel = hiltViewModel()) {
             )
             if (drive.needsSignIn) {
                 StatusText(stringResource(R.string.backup_drive_sign_in_again))
+            }
+            var confirmDelete by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+            SettingsActionRow(
+                title = stringResource(R.string.backup_drive_delete_all),
+                onClick = { confirmDelete = true },
+                modifier = Modifier.testTag(BackupTestTags.DRIVE_DELETE),
+            )
+            if (confirmDelete) {
+                AlertDialog(
+                    onDismissRequest = { confirmDelete = false },
+                    text = { Text(stringResource(R.string.backup_drive_delete_confirm)) },
+                    confirmButton = { TextButton(onClick = { confirmDelete = false; viewModel.deleteDriveBackups() }) { Text(stringResource(R.string.action_delete)) } },
+                    dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.action_cancel)) } },
+                )
             }
             SettingsActionRow(
                 title = stringResource(R.string.backup_drive_disconnect),
