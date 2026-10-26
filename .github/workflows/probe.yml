@@ -6,19 +6,14 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Speech libs
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Vosk
         run: |
           exec > >(tee /tmp/out.txt) 2>&1
-          latest() { url="$1/$(echo $2 | tr . /)/$3/maven-metadata.xml"; xml=$(curl -fsSL "$url" || echo ""); echo "$2:$3 => $(echo "$xml" | grep -o '<version>[^<]*' | sed 's/<version>//' | tail -6 | tr '\n' ' ')"; }
-          C=https://repo1.maven.org/maven2
-          latest $C com.k2fsa.sherpa.onnx sherpa-onnx-android
-          latest $C com.k2fsa.sherpa.onnx sherpa-onnx
-          latest $C com.alphacephei vosk-android
-          latest $C net.java.dev.jna jna
-          echo "--- sherpa-onnx latest release"
-          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/latest | jq -r '.tag_name, (.assets[].name | select(test("android|aar";"i")))' | head -30
-          echo "--- asr-models (streaming / hindi / en)"
-          for p in 1 2 3 4; do curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/tags/asr-models" | jq -r '.assets[] | "\(.name) \(.size)"' ; break; done | grep -iE "streaming|hindi|-hi-|indian|en-20" | head -60
-          sleep 1; msg=$(sed -e ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' /tmp/out.txt); echo "::notice title=speech::$msg"
+          for m in vosk-model-small-en-in-0.4 vosk-model-small-en-us-0.15 vosk-model-small-hi-0.22; do
+            echo "$m $(curl -sIL https://alphacephei.com/vosk/models/$m.zip | grep -iE '^(HTTP|content-length)' | tr '\r\n' '  ')"
+          done
+          curl -fsSL https://repo1.maven.org/maven2/com/alphacephei/vosk-android/0.3.75/vosk-android-0.3.75.pom
+          mkdir x && cd x && curl -fsSLO https://repo1.maven.org/maven2/com/alphacephei/vosk-android/0.3.75/vosk-android-0.3.75.aar && unzip -l vosk-android-0.3.75.aar | head -30
+          unzip -o -q vosk-android-0.3.75.aar classes.jar && unzip -l classes.jar | grep -i "vosk/" | head -30
+          for m in vosk-model-small-en-in-0.4 vosk-model-small-hi-0.22; do curl -fsSL -o $m.zip https://alphacephei.com/vosk/models/$m.zip && unzip -l $m.zip | head -25 && sha256sum $m.zip; done
+          sleep 1; msg=$(sed -e ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' /tmp/out.txt); echo "::notice title=vosk::$msg"
