@@ -345,4 +345,23 @@ class InkInputControllerTest {
         assertTrue(c.select("p1", setOf("img")))
         assertEquals(setOf("img"), c.selection?.ids)
     }
+
+    @Test
+    fun `selection dragged onto the next page moves there and one undo brings it back`() {
+        draw(line(Vec(100.0, 1000.0), Vec(300.0, 1000.0), n = 20))
+        val id = items().single().id
+        c.tools = c.tools.copy(tool = EditorTool.LASSO)
+        assertTrue(c.select("p1", setOf(id)))
+        // Page 2 starts 1123 + gap below page 1: an offset of (0, -1123 - 16) maps page-1 points onto page 2.
+        assertTrue(c.moveSelectionToPage("p2", 0.0, -1000.0))
+        assertTrue(items("p1").isEmpty())
+        assertEquals(1, items("p2").size)
+        assertEquals(0.0, items("p2").single().bounds().top, 2.0)
+        assertEquals("p2", c.selection?.pageId)
+        assertTrue(session.undo())
+        assertEquals(1, items("p1").size)
+        assertTrue(items("p2").isEmpty())
+        assertTrue(session.redo())
+        assertEquals(1, items("p2").size)
+    }
 }

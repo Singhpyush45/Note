@@ -232,6 +232,7 @@ class InkInputController(
 
     fun down(pageId: String, s: Sample, source: PointerSource, unitsPerDp: Double): Response {
         cancel()
+        selectionMoved = false
         if (readOnly || session.page(pageId) == null) return Response.NONE
         this.unitsPerDp = unitsPerDp
         val p = Vec(s.x, s.y)
@@ -405,6 +406,7 @@ class InkInputController(
                 selectionTransform = null
                 val selected = selectedItems()
                 val moved = t != null && (Vec(t.dx, t.dy).length >= 2 * unitsPerDp || kotlin.math.abs(t.scale - 1) >= 0.01 || kotlin.math.abs(t.rotationDeg) >= 0.5)
+                selectionMoved = moved && selected.isNotEmpty()
                 if (moved && selected.isNotEmpty()) {
                     val edit = Lasso.transform(selected, t)
                     session.apply(g.pageId, InkEdit(edit.removed, edit.added.map { InkCodec.quantize(it) }))
@@ -528,6 +530,33 @@ class InkInputController(
 
     fun clearSelection() {
         selection = null
+    }
+
+    /** The last gesture moved, resized or turned the selection (the view then checks which page it landed on). */
+    var selectionMoved: Boolean = false
+        private set
+
+    /**
+     * Moves the selection from its page to [targetPageId], shifted by [dx], [dy] (page units: the offset between the
+     * two pages' coordinates). One undo step puts it back.
+     */
+    fun moveSelectionToPage(targetPageId: String, dx: Double, dy: Double): Boolean {
+        val sel = selection ?: return false
+        if (sel.pageId == targetPageId) return false
+        val target = session.page(targetPageId) ?: return false
+        val items = selectedItems().sortedWith(com.appname.notes.core.ink.model.PaintOrder)
+        if (items.isEmpty()) return false
+        val t = Similarity.translate(dx, dy)
+        val moved = items.mapIndexed { k, it -> InkCodec.quantize(it.transformed(t).withZ(target.items.nextZ + k)) }
+        val ok = session.applyAll(
+            listOf(
+                com.appname.notes.core.ink.edit.PageEdit(sel.pageId, InkEdit.remove(items)),
+                com.appname.notes.core.ink.edit.PageEdit(targetPageId, InkEdit(emptyList(), moved)),
+            ),
+        )
+        selectionMoved = false
+        if (ok) selection = selectionOf(targetPageId, moved)
+        return ok
     }
 
     /** Selects [ids] on [pageId] (e.g. a photo just placed, or "Select" in the press-and-hold menu). */

@@ -254,9 +254,11 @@ internal class InkRenderer {
         hidden: Set<String> = emptySet(),
         transformed: Set<String> = emptySet(),
         itemTransform: Matrix? = null,
+        /** False for ink being dragged: it may be carried past the page's edge onto another page. */
+        clip: Boolean = true,
     ) {
         canvas.withMatrix(pageToScreen) {
-            clipRect(0f, 0f, width, height)
+            if (clip) clipRect(0f, 0f, width, height)
             // Photos first, then highlighter, then writing, so writing stays crisp on top.
             for (pass in InkLayers.PASSES) {
                 for (item in items) {

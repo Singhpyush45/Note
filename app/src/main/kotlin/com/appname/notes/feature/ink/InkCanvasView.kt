@@ -770,6 +770,28 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         }
         handle(response.copy(live = LiveStroke.NONE), e)
         inkPage = -1
+        if (c.selectionMoved) carrySelectionToPageUnder()
+    }
+
+    /**
+     * Ink dragged past its page's edge goes onto the page it was dropped on (owner report: it used to stay cut off
+     * at the bottom of its own page). Decided by where the middle of the selection ended up.
+     */
+    private fun carrySelectionToPageUnder() {
+        val c = controller ?: return
+        val s = session ?: return
+        val sel = c.selection ?: return
+        val i = s.pageIndex(sel.pageId)
+        if (i < 0) return
+        val center = sel.bounds.center
+        val world = stack.toWorld(i, center)
+        val j = stack.pageAt(world)
+        if (j < 0 || j == i) return
+        val q = stack.toPage(j, world)
+        if (c.moveSelectionToPage(s.pages[j].id, q.x - center.x, q.y - center.y)) {
+            surface.invalidate()
+            listener?.onInteraction()
+        }
     }
 
     private fun cancelGesture(e: MotionEvent?) {
@@ -1037,8 +1059,8 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     page.width,
                     page.height,
                     m,
-                    transformed = if (editing) selection.ids else emptySet(),
-                    itemTransform = if (editing) liveMatrix else null,
+                    // Ink being dragged is drawn after all pages, unclipped, so it can be carried onto another page.
+                    hidden = if (editing) selection.ids else emptySet(),
                 )
                 if (c.activePageId == page.id) {
                     c.shapePreview?.let { renderer.drawInk(canvas, listOf(it), page.width, page.height, m) }
@@ -1064,6 +1086,25 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     renderer.drawSelection(canvas, selectionOutline, density)
                     renderer.drawHandle(canvas, r.right, r.bottom, density)
                     renderer.drawRotateHandle(canvas, r.centerX(), selectionOutline.top, r.top - (InkInputController.ROTATE_HANDLE_DP * density).toFloat(), density)
+                }
+            }
+            // The selection while it is moved, resized or turned: on top, not cut off at its page's edge.
+            if (selection != null && liveMatrix != null) {
+                val i = s.pageIndex(selection.pageId)
+                val page = s.pages.getOrNull(i)
+                if (page != null) {
+                    val layer = if (darkPaper) canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), darkLayer) else -1
+                    renderer.drawInk(
+                        canvas,
+                        page.items.items.filter { it.id in selection.ids },
+                        page.width,
+                        page.height,
+                        pageToScreen(i, v),
+                        transformed = selection.ids,
+                        itemTransform = liveMatrix,
+                        clip = false,
+                    )
+                    if (layer >= 0) canvas.restoreToCount(layer)
                 }
             }
             activeRuler()?.let { rulerPainter.draw(canvas, it) }

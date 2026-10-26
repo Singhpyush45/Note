@@ -40,7 +40,10 @@ class InkSession(pages: List<Page>, historyLimit: Int = UndoHistory.DEFAULT_LIMI
     var version: Long = 0
         private set
 
-    private val history = UndoHistory.forPages(historyLimit)
+    /** Each undo step is one or more page edits (moving ink to another page changes two pages at once). */
+    private val history = UndoHistory<List<PageEdit>>(historyLimit, { it.all { e -> e.edit.isEmpty } }) { steps ->
+        steps.asReversed().map { it.inverse() }
+    }
 
     val canUndo: Boolean get() = history.canUndo && transaction == null
     val canRedo: Boolean get() = history.canRedo && transaction == null
@@ -55,8 +58,30 @@ class InkSession(pages: List<Page>, historyLimit: Int = UndoHistory.DEFAULT_LIMI
         if (edit.isEmpty) return true
         if (!replaceItems(pageId, edit)) return false
         val pe = PageEdit(pageId, edit)
-        history.record(pe)
+        history.record(listOf(pe))
         changed(pe)
+        return true
+    }
+
+    /**
+     * Applies changes to several pages as one undoable step (e.g. ink moved from one page to the next). All or
+     * nothing: if one doesn't fit, the pages are left as they were.
+     */
+    fun applyAll(edits: List<PageEdit>): Boolean {
+        check(transaction == null) { "finish the gesture first" }
+        val steps = edits.filterNot { it.edit.isEmpty }
+        if (steps.isEmpty()) return true
+        val before = pages
+        for (pe in steps) {
+            if (!replaceItems(pe.pageId, pe.edit)) {
+                pages = before
+                return false
+            }
+        }
+        history.record(steps)
+        version++
+        steps.forEach { onEdit?.invoke(it) }
+        notifyChanged()
         return true
     }
 
@@ -64,15 +89,21 @@ class InkSession(pages: List<Page>, historyLimit: Int = UndoHistory.DEFAULT_LIMI
 
     fun redo(): Boolean = step(history.redo())
 
-    private fun step(pe: PageEdit?): Boolean {
-        if (pe == null || transaction != null) return false
-        if (!replaceItems(pe.pageId, pe.edit)) {
-            // Can't happen unless the page changed outside the history; drop the history instead of guessing.
-            history.clear()
-            notifyChanged()
-            return false
+    private fun step(steps: List<PageEdit>?): Boolean {
+        if (steps == null || transaction != null) return false
+        val before = pages
+        for (pe in steps) {
+            if (!replaceItems(pe.pageId, pe.edit)) {
+                // Can't happen unless the page changed outside the history; drop the history instead of guessing.
+                pages = before
+                history.clear()
+                notifyChanged()
+                return false
+            }
         }
-        changed(pe)
+        version++
+        steps.forEach { onEdit?.invoke(it) }
+        notifyChanged()
         return true
     }
 
@@ -117,7 +148,7 @@ class InkSession(pages: List<Page>, historyLimit: Int = UndoHistory.DEFAULT_LIMI
             return null
         }
         val pe = PageEdit(tx.pageId, edit)
-        history.record(pe)
+        history.record(listOf(pe))
         version++
         onEdit?.invoke(pe)
         notifyChanged()
