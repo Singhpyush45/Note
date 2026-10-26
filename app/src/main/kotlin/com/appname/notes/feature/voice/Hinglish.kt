@@ -61,7 +61,7 @@ object Hinglish {
         return out.toString()
     }
 
-    private fun isDevanagari(c: Char) = c in 'ऀ'..'ॿ'
+    private fun isDevanagari(c: Char) = c in '\u0900'..'\u097F' && c != '\u0964' && c != '\u0965'
 
     /** One syllable: a consonant (with its vowel or none), or a vowel letter. */
     private class Syllable(val consonant: String?, var vowel: String?, val inherent: Boolean, var nasal: Boolean = false)
