@@ -479,26 +479,44 @@ class NoteEditorViewModel @AssistedInject constructor(
     /** The open voice-typing session, or null when the panel is closed. */
     val voice: StateFlow<VoiceTyping?> = _voice.asStateFlow()
 
-    /** Opens the voice-typing panel with the language used last time (or the phone's English). */
+    /**
+     * Starts voice typing straight into the note (owner request: no pop-up, no Insert): opens the voice bar with the
+     * language used last time and starts listening at once. Call after the microphone permission is granted.
+     */
+    fun startVoiceTyping() {
+        if (_readOnly.value != null) return
+        _voice.value?.let { it.start(); return }
+        viewModelScope.launch {
+            val language = VoiceLanguage.fromTag(settings.voiceLanguage.first()) ?: VoiceLanguage.defaultFor(java.util.Locale.getDefault())
+            if (_voice.value == null) {
+                val session = VoiceTyping(speechEngines.create(), language, write = ::writeVoice)
+                _voice.value = session
+                session.start()
+            }
+        }
+    }
+
+    /** Opens the voice bar without listening yet (e.g. while the microphone permission is asked). */
     fun openVoiceTyping() {
         if (_readOnly.value != null || _voice.value != null) return
         viewModelScope.launch {
             val language = VoiceLanguage.fromTag(settings.voiceLanguage.first()) ?: VoiceLanguage.defaultFor(java.util.Locale.getDefault())
-            if (_voice.value == null) _voice.value = VoiceTyping(speechEngines.create(), language)
+            if (_voice.value == null) _voice.value = VoiceTyping(speechEngines.create(), language, write = ::writeVoice)
         }
     }
 
     fun setVoiceLanguage(language: VoiceLanguage) {
         _voice.value?.setLanguage(language)
-        viewModelScope.launch { settings.setVoiceLanguage(language.tag) }
+        viewModelScope.launch { settings.setVoiceLanguage(language.key) }
     }
 
-    /** Puts the recognised text at the cursor as normal text and closes the panel. */
-    fun insertVoiceText() {
-        val v = _voice.value ?: return
-        val text = v.finish()
-        closeVoiceTyping()
-        if (text.isNotEmpty()) controller?.insertText(text)
+    /** One recognised sentence goes in at the cursor; a new sentence starts with a capital. */
+    private fun writeVoice(piece: String) {
+        val c = controller ?: return
+        if (_readOnly.value != null) return
+        val before = c.state.text.substring(0, c.state.selection.min).trimEnd(' ')
+        val newSentence = before.isEmpty() || before.last() in ".!?\n।"
+        c.insertText(if (newSentence) piece.replaceFirstChar { it.titlecase(java.util.Locale.ROOT) } else piece)
     }
 
     fun closeVoiceTyping() {

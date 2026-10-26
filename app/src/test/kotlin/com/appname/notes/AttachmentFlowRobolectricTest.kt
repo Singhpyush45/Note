@@ -210,12 +210,13 @@ class AttachmentFlowRobolectricTest {
     }
 
     /**
-     * Voice typing opens as a panel in place of the toolbar (owner brief §11). Whether a speech service exists depends
-     * on the environment: without one the panel says so; with one it offers the English variants and says where speech
-     * is processed before anything is recorded. Cancel closes it and the toolbar returns.
+     * Voice typing starts straight away in a bar in place of the toolbar (owner request: no pop-up, no Insert).
+     * Whether a speech service exists depends on the environment: without one the bar says so; with one it is
+     * listening, with the language and Done. Done closes it and the toolbar returns.
      */
     @Test
-    fun voiceTypingOpensAPanelThatExplainsItselfBeforeListening() {
+    fun voiceTypingStartsAtOnceInABar() {
+        org.robolectric.Shadows.shadowOf(composeRule.activity.application).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
         openNote(noteWithAttachments())
         composeRule.onNodeWithTag(EditorTestTags.VOICE).performClick()
         waitAdvancing { exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET)) }
@@ -223,11 +224,8 @@ class AttachmentFlowRobolectricTest {
         if (exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.UNAVAILABLE))) {
             composeRule.onNodeWithText(string(R.string.action_close)).performClick()
         } else {
-            assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.START))).isTrue()
-            assertThat(exists(hasText(string(R.string.voice_lang_in)))).isTrue()
-            assertThat(exists(hasText(string(R.string.voice_on_device)) or hasText(string(R.string.voice_online)))).isTrue()
-            assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.INSERT))).isTrue()
-            composeRule.onNodeWithText(string(R.string.action_cancel)).performClick()
+            assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.LANGUAGE))).isTrue()
+            composeRule.onNodeWithTag(com.appname.notes.feature.voice.VoiceTestTags.STOP).performClick()
         }
         waitAdvancing { exists(hasTestTag(EditorTestTags.TOOLBAR)) }
         assertThat(exists(hasTestTag(com.appname.notes.feature.voice.VoiceTestTags.SHEET))).isFalse()

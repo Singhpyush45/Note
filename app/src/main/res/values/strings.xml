@@ -545,6 +545,9 @@
     <string name="voice_lang_in">English (India)</string>
     <string name="voice_lang_us">English (US)</string>
     <string name="voice_lang_uk">English (UK)</string>
+    <string name="voice_lang_hi">हिन्दी (Hindi)</string>
+    <string name="voice_lang_hinglish">Hinglish (Hindi in English letters)</string>
+    <string name="voice_done">Done</string>
     <string name="voice_on_device">Recognised on this phone. Nothing is sent over the internet.</string>
     <string name="voice_online">Uses your phone\'s speech service, which may send your voice over the internet to recognise it.</string>
     <string name="voice_hint">Tap Start and speak. The text goes where your cursor is.</string>
@@ -561,8 +564,8 @@
     <string name="voice_unavailable">Voice typing isn\'t available on this phone: it has no speech recognition service.</string>
     <string name="voice_error_network">No internet connection for speech recognition. Check the connection and tap Resume.</string>
     <string name="voice_error_permission">Microphone permission is needed for voice typing.</string>
-    <string name="voice_error_busy">The speech service is being used by another app. Try again in a moment.</string>
-    <string name="voice_error_language">This English variant isn\'t installed for on-phone recognition.</string>
+    <string name="voice_error_busy">The speech service stayed busy (another app may be using the microphone). Tap Resume.</string>
+    <string name="voice_error_language">This language isn\'t installed for on-phone recognition (phone Settings › Speech recognition can download it).</string>
     <string name="voice_error_other">Speech recognition stopped. Tap Resume to try again.</string>
     <string name="voice_mic_denied">Voice typing needs the microphone. You can allow it in Settings.</string>
 

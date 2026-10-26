@@ -59,6 +59,12 @@ interface SpeechEngine {
         fun onPartial(text: String)
         fun onFinal(text: String)
         fun onError(error: SpeechError)
+
+        /** A finished piece of a long (segmented) session; listening goes on by itself (Android 13+). */
+        fun onSegment(text: String) = onFinal(text)
+
+        /** A long session ended (its time ran out): start again to keep listening. */
+        fun onSessionEnd() = onError(SpeechError.SILENCE)
     }
 }
 
@@ -100,9 +106,16 @@ class AndroidSpeechEngine(private val context: Context) : SpeechEngine {
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
         if (onDevice) intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        // Longer pauses (a lecturer thinking) don't end the sentence too early.
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2_500L)
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2_000L)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // Punctuation and capitals where the recogniser supports it.
             intent.putExtra(RecognizerIntent.EXTRA_ENABLE_FORMATTING, RecognizerIntent.FORMATTING_OPTIMIZE_QUALITY)
+            // One long session that hands back each sentence as it goes, instead of stopping after each one (no
+            // words lost while restarting). Recognisers that don't support it just ignore it.
+            intent.putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS)
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, SESSION_MILLIS)
         }
         try {
             r.startListening(intent)
@@ -120,8 +133,13 @@ class AndroidSpeechEngine(private val context: Context) : SpeechEngine {
     }
 
     override fun release() {
-        recognizer?.destroy()
+        runCatching { recognizer?.destroy() }
         recognizer = null
+    }
+
+    private companion object {
+        /** A long session lasts this long, then starts again. */
+        const val SESSION_MILLIS = 30L * 60 * 1000
     }
 
     private fun recognizerFor(onDevice: Boolean): SpeechRecognizer? {
@@ -161,6 +179,12 @@ class AndroidSpeechEngine(private val context: Context) : SpeechEngine {
         override fun onBufferReceived(buffer: ByteArray?) = Unit
         override fun onEndOfSpeech() = Unit
         override fun onEvent(eventType: Int, params: Bundle?) = Unit
+
+        override fun onSegmentResults(segmentResults: Bundle) {
+            first(segmentResults)?.takeIf { it.isNotBlank() }?.let(listener::onSegment)
+        }
+
+        override fun onEndOfSegmentedSession() = listener.onSessionEnd()
 
         private fun first(bundle: Bundle?): String? =
             bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()

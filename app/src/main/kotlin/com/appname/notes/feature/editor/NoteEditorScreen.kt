@@ -118,7 +118,7 @@ import androidx.compose.material.icons.outlined.AlarmAdd
 import androidx.compose.material.icons.outlined.AudioFile
 import com.appname.notes.feature.reminders.RemindersRow
 import com.appname.notes.feature.voice.VoiceTypingActions
-import com.appname.notes.feature.voice.VoiceTypingPanel
+import com.appname.notes.feature.voice.VoiceTypingBar
 import com.appname.notes.feature.reminders.rememberReminderUi
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
@@ -269,7 +269,15 @@ fun NoteEditorRoute(
     // Voice typing (§11): the microphone is asked for when the user taps Start.
     val voiceSession by viewModel.voice.collectAsStateWithLifecycle()
     val voicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) viewModel.voice.value?.start() else viewModel.voicePermissionDenied()
+        if (granted) viewModel.startVoiceTyping() else viewModel.voicePermissionDenied()
+    }
+    val startVoice = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            viewModel.startVoiceTyping()
+        } else {
+            viewModel.openVoiceTyping()
+            voicePermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
 
     // Reminders (FR-010): the dialog, and asking for notifications when one is set.
@@ -317,24 +325,15 @@ fun NoteEditorRoute(
     } else {
         { panelModifier ->
             val voiceState by session.state.collectAsStateWithLifecycle()
-            VoiceTypingPanel(
+            VoiceTypingBar(
                 modifier = panelModifier,
                 state = voiceState,
                 actions = VoiceTypingActions(
-                    start = {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            session.start()
-                        } else {
-                            voicePermission.launch(Manifest.permission.RECORD_AUDIO)
-                        }
-                    },
+                    start = startVoice,
                     pause = session::pause,
-                    stop = session::stop,
-                    edit = session::edit,
-                    insert = viewModel::insertVoiceText,
                     language = viewModel::setVoiceLanguage,
                     useOnline = { session.useOnlineService(); session.start() },
-                    dismiss = viewModel::closeVoiceTyping,
+                    done = viewModel::closeVoiceTyping,
                 ),
             )
         }
@@ -366,7 +365,7 @@ fun NoteEditorRoute(
                 onFixAlerts = reminderUi::fixAlerts,
             )
         },
-        onVoiceTyping = if (editable) viewModel::openVoiceTyping else null,
+        onVoiceTyping = if (editable) startVoice else null,
         onClipLink = if (editable) viewModel::clipLink else null,
         voicePanel = voicePanel,
         onRemindTask = if (editable) {

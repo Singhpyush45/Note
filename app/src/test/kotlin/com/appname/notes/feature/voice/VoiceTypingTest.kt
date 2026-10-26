@@ -5,14 +5,14 @@ import com.google.common.truth.Truth.assertThat
 import java.util.Locale
 import org.junit.Test
 
-/** Dictation logic on top of a one-sentence-at-a-time recogniser (owner brief §11), with a fake recogniser. */
+/** Voice typing straight into the note (owner request), with a fake recogniser and an immediate scheduler. */
 class VoiceTypingTest {
 
     private class FakeEngine(var available: Boolean = true, var onDevice: Boolean = false) : SpeechEngine {
         var listener: SpeechEngine.Listener? = null
         val starts = mutableListOf<Pair<String, Boolean>>()
         var cancels = 0
-        var released = false
+        var releases = 0
 
         override fun isAvailable() = available
         override fun canRunOnDevice() = onDevice
@@ -22,139 +22,87 @@ class VoiceTypingTest {
         }
         override fun stop() = Unit
         override fun cancel() { cancels++ }
-        override fun release() { released = true }
+        override fun release() { releases++ }
 
         fun partial(t: String) = listener!!.onPartial(t)
         fun final(t: String) = listener!!.onFinal(t)
+        fun segment(t: String) = listener!!.onSegment(t)
         fun error(e: SpeechError) = listener!!.onError(e)
     }
 
     private val engine = FakeEngine()
-    private val voice = VoiceTyping(engine, VoiceLanguage.ENGLISH_INDIA)
+    private val written = mutableListOf<String>()
+    private val voice = VoiceTyping(engine, VoiceLanguage.ENGLISH_INDIA, write = { written += it }, later = { _, block -> block() })
     private val state get() = voice.state.value
 
     @Test
-    fun `dictation keeps listening across sentences and joins them`() {
-        assertThat(state.status).isEqualTo(Status.READY)
+    fun `each sentence goes straight into the note and listening goes on`() {
         voice.start()
         assertThat(engine.starts.single()).isEqualTo("en-IN" to false)
         engine.partial("hello")
         assertThat(state.partial).isEqualTo("hello")
+        assertThat(written).isEmpty()
         engine.final("hello world.")
-        // The next sentence starts listening again by itself.
+        assertThat(written).containsExactly("hello world.")
+        assertThat(engine.starts).hasSize(2) // listening again by itself
+        engine.segment("next part") // a long session hands back pieces without restarting
+        assertThat(written).containsExactly("hello world.", "next part").inOrder()
         assertThat(engine.starts).hasSize(2)
-        engine.final("this is a note")
-        assertThat(state.text).isEqualTo("Hello world. This is a note")
-        assertThat(state.partial).isEmpty()
         assertThat(state.status).isEqualTo(Status.LISTENING)
     }
 
     @Test
-    fun `pause keeps the half-recognised words, resume continues, stop allows editing`() {
+    fun `pause writes the half-heard words, late results are ignored`() {
         voice.start()
-        engine.final("first part")
-        engine.partial("second")
+        engine.partial("half a sentence")
         voice.pause()
+        assertThat(written).containsExactly("half a sentence")
+        engine.final("too late")
+        assertThat(written).containsExactly("half a sentence")
         assertThat(state.status).isEqualTo(Status.PAUSED)
-        assertThat(state.text).isEqualTo("First part second")
-        // A late result after pausing is ignored (the recogniser was cancelled).
-        engine.partial("ignored")
-        assertThat(state.partial).isEmpty()
-
-        voice.start()
-        engine.final("third")
-        voice.stop()
-        assertThat(state.status).isEqualTo(Status.REVIEW)
-        voice.edit("First part, second, third.")
-        assertThat(voice.finish()).isEqualTo("First part, second, third.")
     }
 
     @Test
-    fun `silence restarts a few times, then pauses so the microphone isn't left on`() {
+    fun `silence keeps listening for a lecture, busy is retried, then it pauses`() {
         voice.start()
-        repeat(VoiceTyping.MAX_SILENT_RESTARTS) { engine.error(SpeechError.SILENCE) }
+        repeat(50) { engine.error(SpeechError.SILENCE) }
         assertThat(state.status).isEqualTo(Status.LISTENING)
-        assertThat(engine.starts).hasSize(1 + VoiceTyping.MAX_SILENT_RESTARTS)
-        engine.error(SpeechError.NO_MATCH)
-        assertThat(state.status).isEqualTo(Status.PAUSED)
-        assertThat(state.error).isNull() // just silence: no error message
-    }
-
-    @Test
-    fun `speech resets the silence count`() {
-        voice.start()
-        repeat(VoiceTyping.MAX_SILENT_RESTARTS) { engine.error(SpeechError.SILENCE) }
-        engine.final("still here")
-        repeat(VoiceTyping.MAX_SILENT_RESTARTS) { engine.error(SpeechError.SILENCE) }
+        repeat(VoiceTyping.MAX_BUSY_RETRIES) { engine.error(SpeechError.BUSY) }
         assertThat(state.status).isEqualTo(Status.LISTENING)
-    }
-
-    @Test
-    fun `a network error pauses with the reason and keeps the text`() {
-        voice.start()
-        engine.final("keep this")
-        engine.partial("and this")
-        engine.error(SpeechError.NETWORK)
+        assertThat(engine.releases).isEqualTo(VoiceTyping.MAX_BUSY_RETRIES) // a fresh recogniser each time
+        engine.error(SpeechError.BUSY)
         assertThat(state.status).isEqualTo(Status.PAUSED)
-        assertThat(state.error).isEqualTo(SpeechError.NETWORK)
-        assertThat(state.text).isEqualTo("Keep this and this")
-        voice.start()
-        assertThat(state.error).isNull()
+        assertThat(state.error).isEqualTo(SpeechError.BUSY)
     }
 
     @Test
-    fun `on-device recognition is used when available, with a switch to the online service`() {
-        val e = FakeEngine(onDevice = true)
-        val v = VoiceTyping(e, VoiceLanguage.ENGLISH_US)
-        assertThat(v.state.value.onDevice).isTrue()
+    fun `Hinglish recognises Hindi and writes it in English letters`() {
+        val v = VoiceTyping(engine, VoiceLanguage.HINGLISH, write = { written += it }, later = { _, block -> block() })
         v.start()
-        assertThat(e.starts.single()).isEqualTo("en-US" to true)
-        e.error(SpeechError.LANGUAGE_UNAVAILABLE)
-        assertThat(v.state.value.error).isEqualTo(SpeechError.LANGUAGE_UNAVAILABLE)
-        v.useOnlineService()
-        v.start()
-        assertThat(e.starts.last()).isEqualTo("en-US" to false)
-        assertThat(v.state.value.onDevice).isFalse()
-    }
-
-    @Test
-    fun `changing language while listening restarts in the new language`() {
-        voice.start()
-        voice.setLanguage(VoiceLanguage.ENGLISH_UK)
-        assertThat(engine.cancels).isEqualTo(1)
-        assertThat(engine.starts.last().first).isEqualTo("en-GB")
+        assertThat(engine.starts.last().first).isEqualTo("hi-IN")
+        engine.partial("मैं घर")
+        assertThat(v.state.value.partial).isEqualTo("main ghar")
+        engine.final("मैं घर जा रहा हूँ")
+        assertThat(written).containsExactly("main ghar ja raha hun")
     }
 
     @Test
     fun `no recogniser on the phone`() {
-        val v = VoiceTyping(FakeEngine(available = false), VoiceLanguage.ENGLISH_US)
-        assertThat(v.state.value.status).isEqualTo(Status.UNAVAILABLE)
-        v.start()
+        val v = VoiceTyping(FakeEngine(available = false), VoiceLanguage.HINDI)
         assertThat(v.state.value.status).isEqualTo(Status.UNAVAILABLE)
     }
 
     @Test
-    fun `release frees the recogniser`() {
-        voice.start()
-        voice.release()
-        assertThat(engine.released).isTrue()
-    }
-
-    @Test
-    fun `joining text`() {
-        assertThat(VoiceTyping.join("", "  hello  ")).isEqualTo("Hello")
-        assertThat(VoiceTyping.join("Hello", "there")).isEqualTo("Hello there")
-        assertThat(VoiceTyping.join("Done!", "next one")).isEqualTo("Done! Next one")
-        assertThat(VoiceTyping.join("Keep  ", "")).isEqualTo("Keep  ")
+    fun `romanizing common Hindi words`() {
+        assertThat(Hinglish.romanize("नमस्ते भारत")).isEqualTo("namaste bharat")
+        assertThat(Hinglish.romanize("वह रहता है, समझना कमरा नहीं।")).isEqualTo("vah rahta hai, samajhna kamra nahin.")
+        assertThat(Hinglish.romanize("क्या notes 123")).isEqualTo("kya notes 123")
     }
 
     @Test
     fun `default language follows the phone's country`() {
         assertThat(VoiceLanguage.defaultFor(Locale("en", "IN"))).isEqualTo(VoiceLanguage.ENGLISH_INDIA)
-        assertThat(VoiceLanguage.defaultFor(Locale("hi", "IN"))).isEqualTo(VoiceLanguage.ENGLISH_INDIA)
-        assertThat(VoiceLanguage.defaultFor(Locale.UK)).isEqualTo(VoiceLanguage.ENGLISH_UK)
-        assertThat(VoiceLanguage.defaultFor(Locale.GERMANY)).isEqualTo(VoiceLanguage.ENGLISH_US)
-        assertThat(VoiceLanguage.fromTag("en-IN")).isEqualTo(VoiceLanguage.ENGLISH_INDIA)
-        assertThat(VoiceLanguage.fromTag("fr-FR")).isNull()
+        assertThat(VoiceLanguage.defaultFor(Locale.US)).isEqualTo(VoiceLanguage.ENGLISH_US)
+        assertThat(VoiceLanguage.fromTag("hi-Latn-IN")).isEqualTo(VoiceLanguage.HINGLISH)
     }
 }
