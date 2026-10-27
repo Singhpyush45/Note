@@ -17,7 +17,15 @@ import com.appname.notes.core.ink.model.StrokeItem
 object Lasso {
 
     /** Share of an item's points that must be inside the lasso for it to be selected. */
-    const val MIN_INSIDE = 0.6
+    const val MIN_INSIDE = 0.15
+
+    /** Select the topmost item near a tap, using a screen-sized target in page units. */
+    fun selectAtPoint(items: List<InkItem>, point: Vec, tolerance: Double): List<InkItem> =
+        items.asSequence()
+            .filter { it.bounds().inflate(tolerance).contains(point) }
+            .maxWithOrNull(com.appname.notes.core.ink.model.PaintOrder)
+            ?.let(::listOf)
+            .orEmpty()
 
     /** Items mostly inside the closed [lasso] polygon (page units). */
     fun select(items: List<InkItem>, lasso: List<Vec>, minInside: Double = MIN_INSIDE): List<InkItem> {

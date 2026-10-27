@@ -84,6 +84,7 @@ fun FloatingInkToolbar(
         fun currentY() = if (posY.isNaN()) ((maxH - barSize.height) / 2).coerceAtLeast(margin) else clampY(posY)
 
         val showOptions = optionsOpen || (ui.tools.tool == EditorTool.LASSO && ui.hasSelection)
+        val bottomClearance = if (vertical && showOptions) 88.dp else 16.dp
         if (showOptions) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
@@ -151,7 +152,7 @@ fun FloatingInkToolbar(
             if (vertical) {
                 Column(
                     Modifier
-                        .heightIn(max = maxHeightDp - 16.dp)
+                        .heightIn(max = maxHeightDp - bottomClearance)
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 4.dp, horizontal = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,

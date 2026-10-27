@@ -1084,6 +1084,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     selectionOutline.set(r)
                     selectionOutline.inset(-4 * density, -4 * density)
                     renderer.drawSelection(canvas, selectionOutline, density)
+                    renderer.drawHandle(canvas, r.left, r.top, density)
+                    renderer.drawHandle(canvas, r.right, r.top, density)
+                    renderer.drawHandle(canvas, r.left, r.bottom, density)
                     renderer.drawHandle(canvas, r.right, r.bottom, density)
                     renderer.drawRotateHandle(canvas, r.centerX(), selectionOutline.top, r.top - (InkInputController.ROTATE_HANDLE_DP * density).toFloat(), density)
                 }

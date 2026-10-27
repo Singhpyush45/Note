@@ -19,6 +19,7 @@ import com.appname.notes.feature.reminders.rememberReminderUi
 import android.content.ClipData
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.aspectRatio
@@ -60,6 +61,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -164,6 +166,10 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     var colorPicker by rememberSaveable { mutableStateOf(false) }
     // Full screen (owner request): no title bar or system bars, a small floating tool bar.
     var fullScreen by rememberSaveable { mutableStateOf(false) }
+    val orientation = LocalConfiguration.current.orientation
+    LaunchedEffect(orientation) {
+        fullScreen = orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    }
     val toolActions = remember(viewModel) {
         InkToolActions(
             onTool = { tool -> viewModel.selectTool(tool); panelOpen = false },
@@ -676,6 +682,11 @@ private fun InkTopBar(
         },
         actions = {
             if (editable && insert != null) InsertButton(insert)
+            if (editable) {
+                IconButton(onClick = onAddPage, modifier = Modifier.testTag("ink_add_page_direct")) {
+                    Icon(Icons.Outlined.NoteAdd, stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add))
+                }
+            }
             reminderButton()
             if (ready) {
                 Box {

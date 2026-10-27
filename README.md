@@ -45,7 +45,7 @@ docs/                Plan, ADRs (docs/adr), test strategy, dependency review
 ./gradlew :e2e:connectedCheck            # process-death / force-stop tests
 ```
 
-**Without building:** open the latest green run under the *Actions* tab and download the `apks` artifact.
+**Download the latest test APK:** [Phone/tablet APK (64-bit ARM)](https://github.com/Singhpyush45/Note/releases/download/test-build/APP_NAME-test.apk) · [Universal APK (all device types)](https://github.com/Singhpyush45/Note/releases/download/test-build/APP_NAME-test-universal.apk). Builds run automatically on every push to `main`; the [Actions tab](https://github.com/Singhpyush45/Note/actions) also keeps an `apks` artifact for each successful run.
 Screenshots of every build: the `ci-output` branch, folder `screenshots/`.
 
 ## Requirements source

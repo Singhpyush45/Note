@@ -172,8 +172,17 @@ class InkInputController(
     var selectionTransform: Similarity? = null
         private set
 
-    /** Where the resize handle is (bottom-right corner of the selection), in page units. */
-    val resizeHandle: Vec? get() = selection?.let { Vec(it.bounds.right, it.bounds.bottom) }
+    /** Resize handles at all four corners, each anchored at the opposite corner. */
+    private data class ResizeHandle(val point: Vec, val anchor: Vec)
+    private val resizeHandles: List<ResizeHandle>
+        get() = selection?.bounds?.let { b ->
+            listOf(
+                ResizeHandle(Vec(b.left, b.top), Vec(b.right, b.bottom)),
+                ResizeHandle(Vec(b.right, b.top), Vec(b.left, b.bottom)),
+                ResizeHandle(Vec(b.left, b.bottom), Vec(b.right, b.top)),
+                ResizeHandle(Vec(b.right, b.bottom), Vec(b.left, b.top)),
+            )
+        }.orEmpty()
 
     /** Where the rotate handle is: centred above the selection, [ROTATE_HANDLE_DP] away. */
     val rotateHandle: Vec? get() = selection?.let { Vec((it.bounds.left + it.bounds.right) / 2, it.bounds.top - ROTATE_HANDLE_DP * unitsPerDp) }
@@ -270,14 +279,13 @@ class InkInputController(
             }
             EditorTool.LASSO -> {
                 val sel = selection
-                val handle = resizeHandle
+                val handle = resizeHandles.minByOrNull { dist(it.point, p) }
                 val turn = rotateHandle
                 if (sel != null && sel.pageId == pageId && turn != null && dist(turn, p) <= HANDLE_DP * unitsPerDp) {
                     val c = Vec((sel.bounds.left + sel.bounds.right) / 2, (sel.bounds.top + sel.bounds.bottom) / 2)
                     gesture = Gesture.RotateSelection(pageId, c, angle(c, p))
-                } else if (sel != null && sel.pageId == pageId && handle != null && dist(handle, p) <= HANDLE_DP * unitsPerDp) {
-                    val anchor = Vec(sel.bounds.left, sel.bounds.top)
-                    gesture = Gesture.ResizeSelection(pageId, anchor, dist(anchor, p).coerceAtLeast(1e-6))
+                } else if (sel != null && sel.pageId == pageId && handle != null && dist(handle.point, p) <= HANDLE_DP * unitsPerDp) {
+                    gesture = Gesture.ResizeSelection(pageId, handle.anchor, dist(handle.anchor, p).coerceAtLeast(1e-6))
                 } else if (sel != null && sel.pageId == pageId && sel.bounds.inflate(8 * unitsPerDp).contains(p)) {
                     gesture = Gesture.MoveSelection(pageId, p)
                 } else {
@@ -386,7 +394,8 @@ class InkInputController(
                 lassoPath = emptyList()
                 val items = session.items(g.pageId)
                 selection = if (path.size < 3 || bounds(path).diagonal < 6 * unitsPerDp) {
-                    null // a tap: clears the selection
+                    path.firstOrNull()?.let { Lasso.selectAtPoint(items, it, HANDLE_DP * unitsPerDp) }
+                        ?.let { selectionOf(g.pageId, it) }
                 } else {
                     selectionOf(g.pageId, Lasso.select(items, path))
                 }
@@ -688,7 +697,7 @@ class InkInputController(
         const val PREVIEW_ID = "shape-preview"
 
         /** Touch radius of the resize handle, in dp. */
-        const val HANDLE_DP = 20.0
+        const val HANDLE_DP = 28.0
 
         /** How far above the selection the rotate handle sits, in dp. */
         const val ROTATE_HANDLE_DP = 28.0
