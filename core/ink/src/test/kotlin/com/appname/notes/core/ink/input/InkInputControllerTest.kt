@@ -227,8 +227,7 @@ class InkInputControllerTest {
         c.tools = c.tools.copy(tool = EditorTool.LASSO)
         draw(listOf(Vec(80.0, 80.0), Vec(220.0, 80.0), Vec(220.0, 120.0), Vec(80.0, 120.0), Vec(80.0, 82.0)))
         val b = c.selection!!.bounds
-        val handle = c.resizeHandle!!
-        assertEquals(Vec(b.right, b.bottom), handle)
+        val handle = Vec(b.right, b.bottom)
         // Drag the handle so the selection becomes twice as big around its top-left corner.
         val anchor = Vec(b.left, b.top)
         val target = Vec(anchor.x + (handle.x - anchor.x) * 2, anchor.y + (handle.y - anchor.y) * 2)

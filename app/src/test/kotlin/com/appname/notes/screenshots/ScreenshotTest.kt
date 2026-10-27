@@ -223,6 +223,7 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithText("Physics — waves").performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
         snap("ink_light")
+        exitFullScreenIfNeeded()
         composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.ERASER)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
         snap("ink_eraser_tools_light")
         // Page settings (owner brief §5).
@@ -271,13 +272,11 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithText("All brushes").performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
         snap("brushes_light")
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PENCIL)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PENCIL)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
+        selectToolAndOpenPanel(EditorTool.PENCIL)
         waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
         snap("tool_panel_pencil_light")
         composeRule.onNodeWithTag(InkToolTags.PANEL_CLOSE).performClick()
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.BRUSH)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
-        composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
+        selectToolAndOpenPanel(EditorTool.BRUSH)
         waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
         snap("tool_panel_brush_light")
         composeRule.onNodeWithTag(InkToolTags.PANEL_CLOSE).performClick()
@@ -343,8 +342,28 @@ abstract class ScreenshotTestBase(private val device: String) {
     }
 
     protected fun pressBack() {
+        exitFullScreenIfNeeded()
         composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SCREEN)) }
+    }
+
+    private fun exitFullScreenIfNeeded() {
+        if (exists(hasTestTag(InkToolTags.EXIT_FULL_SCREEN))) {
+            composeRule.onNodeWithTag(InkToolTags.EXIT_FULL_SCREEN).performClick()
+            waitAdvancing { !exists(hasTestTag(InkToolTags.EXIT_FULL_SCREEN)) }
+        }
+    }
+
+    private fun selectToolAndOpenPanel(tool: EditorTool) {
+        val tag = InkTestTags.tool(tool)
+        if (!exists(hasTestTag(tag) and isSelected())) {
+            composeRule.onNodeWithTag(tag).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
+        }
+        // Landscape's floating toolbar hides the options row until the selected tool is tapped again.
+        if (exists(hasTestTag(InkToolTags.FLOATING_BAR)) && !exists(hasTestTag(InkToolTags.VARIANT_CHIP))) {
+            composeRule.onNodeWithTag(tag).performClick()
+        }
+        composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
     }
 
     protected fun setTheme(id: Int) {
