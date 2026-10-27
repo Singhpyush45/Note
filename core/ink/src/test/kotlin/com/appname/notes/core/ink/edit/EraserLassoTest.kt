@@ -73,9 +73,9 @@ class EraserLassoTest {
     fun `lasso selects items mostly inside`() {
         val box = listOf(Vec(-10.0, 50.0), Vec(310.0, 50.0), Vec(310.0, 150.0), Vec(-10.0, 150.0))
         assertEquals(listOf(horizontal), Lasso.select(all, box))
-        // Only half of the stroke inside: below the 60 % rule.
-        val half = listOf(Vec(-10.0, 50.0), Vec(150.0, 50.0), Vec(150.0, 150.0), Vec(-10.0, 150.0))
-        assertEquals(emptyList<InkItem>(), Lasso.select(listOf(TestInk.stroke(TestInk.line(Vec(0.0, 100.0), Vec(300.0, 100.0), 41))), half))
+        // A small fraction of the stroke inside: below the 15 % rule.
+        val sliver = listOf(Vec(-10.0, 50.0), Vec(35.0, 50.0), Vec(35.0, 150.0), Vec(-10.0, 150.0))
+        assertEquals(emptyList<InkItem>(), Lasso.select(listOf(TestInk.stroke(TestInk.line(Vec(0.0, 100.0), Vec(300.0, 100.0), 41))), sliver))
         assertEquals(emptyList<InkItem>(), Lasso.select(all, listOf(Vec(0.0, 0.0), Vec(1.0, 1.0))))
     }
 
