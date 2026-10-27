@@ -361,7 +361,8 @@ abstract class ScreenshotTestBase(private val device: String) {
         }
         // Landscape's floating toolbar hides the options row until the selected tool is tapped again.
         if (exists(hasTestTag(InkToolTags.FLOATING_BAR)) && !exists(hasTestTag(InkToolTags.VARIANT_CHIP))) {
-            composeRule.onNodeWithTag(tag).performClick()
+            composeRule.onNodeWithContentDescription(string(R.string.ink_bar_options)).performClick()
+            waitAdvancing { exists(hasTestTag(InkToolTags.VARIANT_CHIP)) }
         }
         composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
     }
