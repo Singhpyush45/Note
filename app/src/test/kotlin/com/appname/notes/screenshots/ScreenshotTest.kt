@@ -300,8 +300,7 @@ abstract class ScreenshotTestBase(private val device: String) {
         setTheme(R.string.settings_theme_dark)
         composeRule.onNodeWithText("All brushes").performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
-        composeRule.onNodeWithTag(InkTestTags.tool(EditorTool.PEN)).let { n -> runCatching { n.performScrollTo() }; n.performClick() }
-        composeRule.onNodeWithTag(InkToolTags.VARIANT_CHIP).performClick()
+        selectToolAndOpenPanel(EditorTool.PEN)
         waitAdvancing { exists(hasTestTag(InkToolTags.PANEL)) }
         snap("tool_panel_pen_dark")
     }
