@@ -1038,24 +1038,38 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             for (i in stack.visible(v.visibleWorld(width.toDouble(), height.toDouble()))) {
                 val page = s.pages.getOrNull(i) ?: continue
                 val m = pageToScreen(i, v)
-                // Dark paper: the page (paper, PDF, ink) is drawn through the colour filter; selection marks are not.
-                val layer = if (darkPaper) {
+                // Dark paper transforms the page and PDF, while embedded photos retain their original colours.
+                val edge = if (arrangement.mode == PageMode.INFINITE) shadow * 0.5f else shadow
+                val pageLayer = if (darkPaper) {
                     layerRect.set(0f, 0f, page.width, page.height)
                     m.mapRect(layerRect)
                     layerRect.inset(-shadow * 2, -shadow * 2)
                     canvas.saveLayer(layerRect, darkLayer)
-                } else {
-                    -1
-                }
-                // Infinite mode: no paper edge shadow, so the joined pages read as one surface.
-                val edge = if (arrangement.mode == PageMode.INFINITE) shadow * 0.5f else shadow
+                } else -1
                 renderer.drawPaper(canvas, page.width, page.height, page.template, m, edge, page.layout)
                 drawPdfPage(canvas, page, m, v.scale.toFloat())
+                if (pageLayer >= 0) canvas.restoreToCount(pageLayer)
+
                 val editing = selection != null && selection.pageId == page.id && liveMatrix != null
                 val hidden = hiddenItemId
+                val visibleItems = if (hidden == null) page.items.items else page.items.items.filter { it.id != hidden }
+                // Images are the bottom ink pass. Draw them outside DarkPaper's filter so their colours are unchanged.
                 renderer.drawInk(
                     canvas,
-                    if (hidden == null) page.items.items else page.items.items.filter { it.id != hidden },
+                    visibleItems.filterIsInstance<com.appname.notes.core.ink.model.ImageItem>(),
+                    page.width,
+                    page.height,
+                    m,
+                )
+                val inkLayer = if (darkPaper) {
+                    layerRect.set(0f, 0f, page.width, page.height)
+                    m.mapRect(layerRect)
+                    layerRect.inset(-shadow * 2, -shadow * 2)
+                    canvas.saveLayer(layerRect, darkLayer)
+                } else -1
+                renderer.drawInk(
+                    canvas,
+                    visibleItems.filterNot { it is com.appname.notes.core.ink.model.ImageItem },
                     page.width,
                     page.height,
                     m,
@@ -1068,7 +1082,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                         if (this@InkCanvasView.liveStroke == null) renderer.drawLive(canvas, brush, points, m)
                     }
                 }
-                if (layer >= 0) canvas.restoreToCount(layer)
+                if (inkLayer >= 0) canvas.restoreToCount(inkLayer)
                 if (c.activePageId == page.id) {
                     if (c.lassoPath.isNotEmpty()) {
                         renderer.drawLasso(canvas, c.lassoPath.map { toScreen(i, v, it) }, density)
@@ -1096,13 +1110,25 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                 val i = s.pageIndex(selection.pageId)
                 val page = s.pages.getOrNull(i)
                 if (page != null) {
+                    val selectedItems = page.items.items.filter { it.id in selection.ids }
+                    val pageToScreen = pageToScreen(i, v)
+                    renderer.drawInk(
+                        canvas,
+                        selectedItems.filterIsInstance<com.appname.notes.core.ink.model.ImageItem>(),
+                        page.width,
+                        page.height,
+                        pageToScreen,
+                        transformed = selection.ids,
+                        itemTransform = liveMatrix,
+                        clip = false,
+                    )
                     val layer = if (darkPaper) canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), darkLayer) else -1
                     renderer.drawInk(
                         canvas,
-                        page.items.items.filter { it.id in selection.ids },
+                        selectedItems.filterNot { it is com.appname.notes.core.ink.model.ImageItem },
                         page.width,
                         page.height,
-                        pageToScreen(i, v),
+                        pageToScreen,
                         transformed = selection.ids,
                         itemTransform = liveMatrix,
                         clip = false,
