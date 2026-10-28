@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelected
@@ -22,8 +23,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performLongClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appname.notes.MainActivity
@@ -345,7 +345,12 @@ abstract class ScreenshotTestBase(private val device: String) {
 
     protected fun pressBack() {
         exitFullScreenIfNeeded()
-        composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        val back = string(R.string.action_back)
+        if (exists(hasContentDescription(back))) {
+            composeRule.onNodeWithContentDescription(back).performClick()
+        } else {
+            composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        }
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SCREEN)) }
     }
 
@@ -456,7 +461,7 @@ abstract class ScreenshotTestBase(private val device: String) {
         waitAdvancing { !exists(hasTestTag(LibraryTestTags.NEW_NOTE)) }
 
         // Long-press selects; the header becomes the selection bar.
-        composeRule.onNodeWithTag("note_card_${requireNotNull(seededGroceriesId)}").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("note_card_${requireNotNull(seededGroceriesId)}").performLongClick()
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SELECTION_BAR)) }
         composeRule.onNodeWithText("Project meeting").performClick()
         snap("library_selecting_light")

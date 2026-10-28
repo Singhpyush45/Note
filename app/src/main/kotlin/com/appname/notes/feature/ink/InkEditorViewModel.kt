@@ -574,7 +574,11 @@ class InkEditorViewModel @AssistedInject constructor(
     /** Page navigation (SRS 7.1): jump to page [index] (0-based). */
     fun goToPage(index: Int) {
         val count = session()?.pages?.size ?: return
-        if (index in 0 until count) _ui.update { it.copy(scrollRequest = ScrollRequest(index)) }
+        if (index in 0 until count) {
+            // Keep the indicator in sync with the page the user selected while the canvas
+            // animates to it. The viewport callback will reconcile this with the visible page.
+            _ui.update { it.copy(currentPage = index, scrollRequest = ScrollRequest(index)) }
+        }
     }
 
     fun fit(mode: FitMode) {
@@ -857,7 +861,9 @@ class InkEditorViewModel @AssistedInject constructor(
                 is AppResult.Success -> {
                     val info = r.value
                     s.insertPage(info.index, InkSession.Page(info.id, info.template, info.width, info.height, PageItems.EMPTY, layout = info.layout))
-                    if (scroll) _ui.update { it.copy(scrollRequest = ScrollRequest(info.index)) }
+                    if (scroll) _ui.update {
+                        it.copy(currentPage = info.index, scrollRequest = ScrollRequest(info.index))
+                    }
                     refresh()
                 }
                 is AppResult.Failure -> Unit // message already shown by the queue
