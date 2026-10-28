@@ -982,6 +982,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         flingY = y
         if (next == v && scroller.isFinished) {
             scroller.forceFinished(true)
+            reportPage()
         } else {
             viewport = next
             surface.invalidate()
@@ -1034,10 +1035,10 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         val spanChanged = abs(span - initialPinchSpan) > 10.0 * density
         if (lastSpan > 0 && span > 0 && spanChanged) {
             next = rules.zoom(next, span / lastSpan, fx, fy, w, h, stack)
+            lastSpan = span
         }
         next = rules.pan(next, dfx, dfy, w, h, stack)
         viewport = next
-        lastSpan = span
         lastFocusX = fx
         lastFocusY = fy
         lastPinchTime = e.eventTime

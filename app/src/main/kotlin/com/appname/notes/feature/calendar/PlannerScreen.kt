@@ -81,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -120,7 +121,6 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.format.TextStyle
-import java.util.Locale
 
 object PlannerTestTags {
     const val SCREEN = "screen_planner"
@@ -637,7 +637,8 @@ private fun MonthHeaderRow(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
 ) {
-    val formatter = remember { DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()) }
+    val locale = LocalLocale.current.platformLocale
+    val formatter = remember(locale) { DateTimeFormatter.ofPattern("MMMM yyyy", locale) }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -661,6 +662,7 @@ private fun MonthHeaderRow(
 
 @Composable
 private fun WeekdayHeaderRow() {
+    val locale = LocalLocale.current.platformLocale
     val days = remember {
         listOf(
             DayOfWeek.MONDAY,
@@ -675,7 +677,7 @@ private fun WeekdayHeaderRow() {
     Row(Modifier.fillMaxWidth()) {
         days.forEach { day ->
             Text(
-                text = day.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                text = day.getDisplayName(TextStyle.SHORT, locale),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

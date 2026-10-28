@@ -19,7 +19,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,13 +40,19 @@ class RoomPlannerRepository(
     private val logger: AppLogger,
 ) : PlannerRepository {
 
-    private val schemaReady = AtomicBoolean(false)
+    private val schemaLock = Any()
+    @Volatile private var schemaReady = false
     private val changes = MutableStateFlow(0L)
 
     private fun writableDb(): SupportSQLiteDatabase {
         val sdb = db.openHelper.writableDatabase
-        if (schemaReady.compareAndSet(false, true)) {
-            ensureTables(sdb)
+        if (!schemaReady) synchronized(schemaLock) {
+            if (!schemaReady) {
+                ensureTables(sdb)
+                // Publish readiness only after both planner tables and indexes exist. Setting this
+                // before DDL let another concurrent first read query a table that was not created yet.
+                schemaReady = true
+            }
         }
         return sdb
     }

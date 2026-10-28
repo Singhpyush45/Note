@@ -83,6 +83,7 @@ abstract class ScreenshotTestBase(private val device: String) {
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     private val data by lazy { EntryPointAccessors.fromApplication(composeRule.activity.application, AppDataEntryPoint::class.java) }
+    private var seededGroceriesId: String? = null
 
     protected fun string(id: Int) = composeRule.activity.getString(id)
 
@@ -136,11 +137,13 @@ abstract class ScreenshotTestBase(private val device: String) {
         notes.setTags(lecture, setOf(exam.id))
         notes.setPinned(setOf(lecture), true)
 
-        notes.createNote(
+        val groceries = notes.createNote(
             "Groceries",
             NoteDocument(blocks = listOf("Milk", "Eggs", "Rice").map { block(BlockKind.CHECKLIST, it) }),
             null,
-        ).getOrNull()!!.also { notes.setFavourite(setOf(it), true) }
+        ).getOrNull()!!
+        seededGroceriesId = groceries.value
+        notes.setFavourite(setOf(groceries), true)
         notes.createNote(
             "",
             NoteDocument(blocks = listOf(block(BlockKind.PARAGRAPH, "Idea: a study timer that blocks distracting apps."))),
@@ -453,7 +456,7 @@ abstract class ScreenshotTestBase(private val device: String) {
         waitAdvancing { !exists(hasTestTag(LibraryTestTags.NEW_NOTE)) }
 
         // Long-press selects; the header becomes the selection bar.
-        composeRule.onNodeWithText("Groceries").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("note_card_${requireNotNull(seededGroceriesId)}").performTouchInput { longClick() }
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SELECTION_BAR)) }
         composeRule.onNodeWithText("Project meeting").performClick()
         snap("library_selecting_light")

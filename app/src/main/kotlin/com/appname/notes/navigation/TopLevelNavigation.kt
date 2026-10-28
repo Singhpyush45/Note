@@ -20,7 +20,10 @@ fun topLevelStackFor(destination: TopLevelDestination): List<NavKey> =
 
 /** Which tab to highlight: the nearest top-level key from the top of the stack. */
 fun List<NavKey>.currentTopLevel(): TopLevelDestination =
-    asReversed().firstNotNullOfOrNull { key -> TopLevelDestination.entries.firstOrNull { it.key == key } }
+    asReversed().firstNotNullOfOrNull { key ->
+        if (key == TasksKey) TopLevelDestination.CALENDAR
+        else TopLevelDestination.entries.firstOrNull { it.key == key }
+    }
         ?: TopLevelDestination.HOME
 
 /**
