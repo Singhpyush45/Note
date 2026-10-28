@@ -23,7 +23,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performLongClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appname.notes.MainActivity
@@ -460,8 +459,9 @@ abstract class ScreenshotTestBase(private val device: String) {
         composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
         waitAdvancing { !exists(hasTestTag(LibraryTestTags.NEW_NOTE)) }
 
-        // Long-press selects; the header becomes the selection bar.
-        composeRule.onNodeWithTag("note_card_${requireNotNull(seededGroceriesId)}").performLongClick()
+        // Use the card's accessible selection action instead of relying on injected hold timing.
+        composeRule.onNodeWithTag("note_more_${requireNotNull(seededGroceriesId)}").performClick()
+        composeRule.onNodeWithText(string(R.string.note_select)).performClick()
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SELECTION_BAR)) }
         composeRule.onNodeWithText("Project meeting").performClick()
         snap("library_selecting_light")
