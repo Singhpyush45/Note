@@ -893,4 +893,3 @@
     <string name="calendar_delete_confirm_title">Delete event?</string>
     <string name="calendar_delete_confirm_body">“%1$s” will be removed from the calendar.</string>
 </resources>
-

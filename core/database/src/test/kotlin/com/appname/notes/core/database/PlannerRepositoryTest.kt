@@ -12,6 +12,7 @@ import com.google.common.truth.Truth.assertThat
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.ZoneId
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -42,7 +43,8 @@ class PlannerRepositoryTest {
             dueDate = due,
             dueTime = LocalTime.of(18, 0),
             reminderAt = null,
-            noteId = NoteId("note-1"),
+            sourceNoteId = NoteId("note-1"),
+            sourceNoteTitle = "Chemistry",
         ).ok()
         val t2 = planner.createTask(
             title = "Submit assignment",
@@ -50,7 +52,8 @@ class PlannerRepositoryTest {
             dueDate = null,
             dueTime = null,
             reminderAt = null,
-            noteId = null,
+            sourceNoteId = null,
+            sourceNoteTitle = null,
         ).ok()
 
         assertThat(planner.observeTasks(TaskFilter.PENDING).first().map { it.id })
@@ -72,10 +75,11 @@ class PlannerRepositoryTest {
             dueDate = due,
             dueTime = LocalTime.of(9, 30),
             reminderAt = null,
-            noteId = NoteId("note-2"),
+            sourceNoteId = NoteId("note-2"),
+            sourceNoteTitle = "Physics",
         ).ok()
         assertThat(updated.title).isEqualTo("Submit physics lab report")
-        assertThat(updated.noteId).isEqualTo(NoteId("note-2"))
+        assertThat(updated.sourceNoteId).isEqualTo(NoteId("note-2"))
 
         // Delete t1
         planner.deleteTask(t1.id).ok()
@@ -83,39 +87,34 @@ class PlannerRepositoryTest {
     }
 
     @Test
-    fun `calendar events support create, range query, date query, update, and validation`() = runTest {
+    fun `calendar events support create, month query, date query, update, and validation`() = runTest {
         val date = LocalDate.of(2026, 10, 29)
         val event = planner.createEvent(
             title = "Study group",
-            notes = "Library room 3B",
             date = date,
             startTime = LocalTime.of(14, 0),
             endTime = LocalTime.of(15, 30),
-            taskId = null,
-            noteId = null,
+            notes = "Library room 3B",
+            linkedTaskId = null,
+            sourceNoteId = null,
         ).ok()
 
         assertThat(planner.observeEventsForDate(date).first()).containsExactly(event)
-        assertThat(
-            planner.observeEventsInRange(
-                LocalDate.of(2026, 10, 1),
-                LocalDate.of(2026, 10, 31),
-            ).first(),
-        ).containsExactly(event)
+        assertThat(planner.observeEventsForMonth(YearMonth.of(2026, 10)).first()).containsExactly(event)
 
         // Blank title is rejected
-        val blankTitle = planner.createEvent("", "", date, null, null, null, null)
+        val blankTitle = planner.createEvent("", date, null, null, "", null, null)
         assertThat(blankTitle).isInstanceOf(AppResult.Failure::class.java)
 
         // End time before start time is rejected
         val badTime = planner.createEvent(
             title = "Invalid slot",
-            notes = "",
             date = date,
             startTime = LocalTime.of(16, 0),
             endTime = LocalTime.of(15, 0),
-            taskId = null,
-            noteId = null,
+            notes = "",
+            linkedTaskId = null,
+            sourceNoteId = null,
         )
         assertThat(badTime).isInstanceOf(AppResult.Failure::class.java)
 
@@ -123,12 +122,12 @@ class PlannerRepositoryTest {
         val edited = planner.updateEvent(
             id = event.id,
             title = "Calculus study group",
-            notes = "Bring past papers",
             date = date.plusDays(1),
             startTime = LocalTime.of(16, 0),
             endTime = LocalTime.of(17, 0),
-            taskId = null,
-            noteId = null,
+            notes = "Bring past papers",
+            linkedTaskId = null,
+            sourceNoteId = null,
         ).ok()
         assertThat(edited.title).isEqualTo("Calculus study group")
         assertThat(planner.observeEventsForDate(date).first()).isEmpty()

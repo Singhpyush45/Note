@@ -692,7 +692,8 @@ class NoteEditorViewModel @AssistedInject constructor(
                 dueDate = null,
                 dueTime = null,
                 reminderAt = null,
-                noteId = noteId,
+                sourceNoteId = noteId,
+                sourceNoteTitle = noteTitle.ifEmpty { null },
             )
         }
     }

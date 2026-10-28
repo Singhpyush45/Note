@@ -145,7 +145,8 @@ class RoomPlannerRepository(
                 put("isCompleted", 0)
                 put("dueDate", task.dueDate?.toString())
                 put("dueTime", task.dueTime?.toString())
-                if (task.reminderAt != null) put("reminderAt", task.reminderAt.toEpochMilli()) else putNull("reminderAt")
+                val rem = task.reminderAt
+                if (rem != null) put("reminderAt", rem.toEpochMilli()) else putNull("reminderAt")
                 put("sourceNoteId", task.sourceNoteId?.value)
                 put("sourceNoteTitle", task.sourceNoteTitle)
                 put("createdAt", nowMs)
@@ -189,7 +190,8 @@ class RoomPlannerRepository(
                 put("description", updated.description)
                 put("dueDate", updated.dueDate?.toString())
                 put("dueTime", updated.dueTime?.toString())
-                if (updated.reminderAt != null) put("reminderAt", updated.reminderAt.toEpochMilli()) else putNull("reminderAt")
+                val rem = updated.reminderAt
+                if (rem != null) put("reminderAt", rem.toEpochMilli()) else putNull("reminderAt")
                 put("sourceNoteId", updated.sourceNoteId?.value)
                 put("sourceNoteTitle", updated.sourceNoteTitle)
                 put("updatedAt", now.toEpochMilli())

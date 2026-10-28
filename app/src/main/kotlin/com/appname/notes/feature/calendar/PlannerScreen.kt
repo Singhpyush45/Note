@@ -968,10 +968,12 @@ private fun CalendarEventCard(
     onOpenSourceNote: (() -> Unit)? = null,
 ) {
     val timeFormatter = remember { DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT) }
+    val start = event.startTime
+    val end = event.endTime
     val timeText = when {
-        event.startTime != null && event.endTime != null ->
-            "${event.startTime.format(timeFormatter)} – ${event.endTime.format(timeFormatter)}"
-        event.startTime != null -> event.startTime.format(timeFormatter)
+        start != null && end != null ->
+            "${start.format(timeFormatter)} – ${end.format(timeFormatter)}"
+        start != null -> start.format(timeFormatter)
         else -> stringResource(R.string.calendar_all_day)
     }
     GlassSurface(

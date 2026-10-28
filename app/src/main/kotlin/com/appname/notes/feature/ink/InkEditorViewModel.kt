@@ -1522,7 +1522,8 @@ class InkEditorViewModel @AssistedInject constructor(
                 dueDate = null,
                 dueTime = null,
                 reminderAt = null,
-                noteId = noteId,
+                sourceNoteId = noteId,
+                sourceNoteTitle = noteTitle.ifEmpty { null },
             )) {
                 is AppResult.Success -> _message.value = UserMessage(R.string.todo_msg_created)
                 is AppResult.Failure -> _message.value = r.error.toUserMessage()
