@@ -222,6 +222,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     private val renderer = InkRenderer()
     private val surface = Surface(context)
+    private val scroller = OverScroller(context)
     /**
      * Jetpack Ink's live-stroke layer. Replaced with a fresh one each time the window becomes visible
      * again: Ink 1.0's render thread can die when the app is backgrounded right after a stroke (see
@@ -443,7 +444,6 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     private var lastX = 0f
     private var lastY = 0f
     private var velocity: VelocityTracker? = null
-    private val scroller = OverScroller(context)
     private var flingX = 0
     private var flingY = 0
 
