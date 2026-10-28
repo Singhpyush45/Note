@@ -683,7 +683,7 @@ class NoteEditorViewModel @AssistedInject constructor(
         val noteTitle = c.title.trim()
         val taskTitle = selectedText
             ?: cursorLineText
-            ?: noteTitle.ifEmpty { appContext.getString(R.string.note_untitled) }
+            ?: noteTitle.ifEmpty { appContext.getString(R.string.untitled) }
         val taskDescription = if (noteTitle.isNotEmpty() && noteTitle != taskTitle) noteTitle else ""
         act(UserMessage(R.string.todo_msg_created)) {
             planner.createTask(
