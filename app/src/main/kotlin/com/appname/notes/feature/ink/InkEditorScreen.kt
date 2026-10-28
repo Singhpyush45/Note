@@ -1,94 +1,74 @@
 package com.appname.notes.feature.ink
 
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.semantics.setProgress
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.draganddrop.toAndroidDragEvent
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
-import com.appname.notes.feature.reminders.ReminderMenuButton
-import com.appname.notes.feature.reminders.rememberReminderUi
 import android.content.ClipData
 import android.content.Intent
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.Redo
-import androidx.compose.material.icons.automirrored.outlined.Undo
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.BorderColor
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import com.appname.notes.feature.pdf.PdfPageRenderer
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,32 +76,60 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
 import com.appname.notes.core.designsystem.component.EmptyState
+import com.appname.notes.core.designsystem.theme.LocalDarkTheme
 import com.appname.notes.core.ink.edit.InkSession
+import com.appname.notes.core.ink.geometry.Vec
 import com.appname.notes.core.ink.input.EditorTool
-import com.appname.notes.core.ink.input.EraserMode
 import com.appname.notes.core.ink.input.InkInputController
-import com.appname.notes.core.ink.model.InkTool
+import com.appname.notes.core.ink.model.AudioItem
 import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.core.ink.model.TextItem
+import com.appname.notes.feature.audio.AudioControls
+import com.appname.notes.feature.audio.AudioPlayerRow
+import com.appname.notes.feature.audio.RecordingBar
 import com.appname.notes.feature.editor.ReadOnlyReason
 import com.appname.notes.feature.editor.SaveStatusLabel
 import com.appname.notes.feature.library.ConfirmDialog
+import com.appname.notes.feature.pdf.PdfPageRenderer
+import com.appname.notes.feature.reminders.ReminderMenuButton
+import com.appname.notes.feature.reminders.rememberReminderUi
 import com.appname.notes.ui.common.MessageEffect
+import java.io.File
 import kotlinx.coroutines.launch
 
 object InkTestTags {
@@ -135,6 +143,8 @@ object InkTestTags {
     const val PRESS_COPY = "ink_press_copy"
     const val PRESS_DELETE = "ink_press_delete"
     const val PAGE_INDICATOR = "ink_page_indicator"
+    const val PAGE_PREV = "ink_page_prev"
+    const val PAGE_NEXT = "ink_page_next"
     const val EXPORT_PDF = "ink_export_pdf"
     const val SHARE_PDF = "ink_share_pdf"
     const val GO_TO_PAGE = "ink_go_to_page"
@@ -164,12 +174,8 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     // Tool variation panel and colour picker (owner brief §13–14).
     var panelOpen by rememberSaveable { mutableStateOf(false) }
     var colorPicker by rememberSaveable { mutableStateOf(false) }
-    // Full screen (owner request): no title bar or system bars, a small floating tool bar.
+    // Distraction-free full-screen mode is controlled explicitly by the user via the Full screen toggle.
     var fullScreen by rememberSaveable { mutableStateOf(false) }
-    val orientation = LocalConfiguration.current.orientation
-    LaunchedEffect(orientation) {
-        fullScreen = orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    }
     val toolActions = remember(viewModel) {
         InkToolActions(
             onTool = { tool -> viewModel.selectTool(tool); panelOpen = false },
@@ -222,13 +228,13 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
         val path = cameraPath
         cameraPath = null
-        if (path != null && taken) viewModel.insertFiles(listOf(android.net.Uri.fromFile(java.io.File(path))))
+        if (path != null && taken) viewModel.insertFiles(listOf(android.net.Uri.fromFile(File(path))))
     }
     val hasCamera = remember { context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY) }
     val paste = { viewModel.pasteFrom(clipContent(context)) }
     // Settings › Handwriting › Ask before leaving with Back.
     var confirmLeave by rememberSaveable { mutableStateOf(false) }
-    androidx.activity.compose.BackHandler(enabled = ui.backGuard && load is InkLoad.Ready && !confirmLeave) { confirmLeave = true }
+    BackHandler(enabled = ui.backGuard && load is InkLoad.Ready && !confirmLeave) { confirmLeave = true }
     if (confirmLeave) {
         ConfirmDialog(
             title = stringResource(R.string.ink_leave_title),
@@ -238,16 +244,16 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onDismiss = { confirmLeave = false },
         )
     }
-    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
+    BackHandler(enabled = fullScreen) { fullScreen = false }
     LaunchedEffect(ui.readOnly) { if (ui.readOnly != null) fullScreen = false }
-    val window = androidx.activity.compose.LocalActivity.current?.window
-    androidx.compose.runtime.DisposableEffect(fullScreen, window) {
-        val bars = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
+    val window = LocalActivity.current?.window
+    DisposableEffect(fullScreen, window) {
+        val bars = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
         if (fullScreen && bars != null) {
-            bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            bars.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(WindowInsetsCompat.Type.systemBars())
         }
-        onDispose { if (fullScreen) bars?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars()) }
+        onDispose { if (fullScreen) bars?.show(WindowInsetsCompat.Type.systemBars()) }
     }
     var stickerPicker by rememberSaveable { mutableStateOf(false) }
     var tablePicker by rememberSaveable { mutableStateOf(false) }
@@ -258,13 +264,13 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         if (granted[android.Manifest.permission.RECORD_AUDIO] == true) viewModel.startRecording() else if (granted.containsKey(android.Manifest.permission.RECORD_AUDIO)) viewModel.microphoneDenied()
     }
     val insertActions = InsertActions(
-        photo = { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        photo = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         camera = if (hasCamera) {
             {
-                val dir = java.io.File(context.cacheDir, "camera").apply { mkdirs() }
-                val file = java.io.File(dir, "Photo ${System.currentTimeMillis()}.jpg")
+                val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+                val file = File(dir, "Photo ${System.currentTimeMillis()}.jpg")
                 runCatching {
-                    val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
                     cameraPath = file.path
                     camera.launch(uri)
                 }
@@ -276,9 +282,9 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         pdf = { pdfPicker.launch(arrayOf("application/pdf")) },
         paste = paste,
         record = {
-            val micGranted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val micGranted = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
             val needsNotify = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
             if (micGranted) {
                 viewModel.startRecording()
                 if (needsNotify) recordPermissions.launch(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS))
@@ -297,13 +303,15 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     val playbackState by viewModel.playback.state.collectAsStateWithLifecycle()
     val textEdit by viewModel.textEdit.collectAsStateWithLifecycle()
     // Typing on the page: Back finishes the text box (declared last, so it goes first).
-    androidx.activity.compose.BackHandler(enabled = textEdit != null) { viewModel.commitText() }
+    BackHandler(enabled = textEdit != null) { viewModel.commitText() }
     val pressMenu by viewModel.pressMenu.collectAsStateWithLifecycle()
     var canvasView by remember { mutableStateOf<InkCanvasView?>(null) }
-    var transformTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    androidx.compose.runtime.SideEffect {
+    var transformTick by remember { mutableIntStateOf(0) }
+    var scrollFraction by remember { mutableFloatStateOf(0f) }
+    SideEffect {
         canvasView?.hiddenItemId = textEdit?.existing?.id
         canvasView?.onTransform = if (textEdit != null) { { transformTick++ } } else null
+        canvasView?.onScrollChanged = { frac -> scrollFraction = frac }
     }
     val inserting by viewModel.inserting.collectAsStateWithLifecycle()
     // Reminders (FR-010).
@@ -312,6 +320,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
 
     Scaffold(
         modifier = Modifier.testTag(InkTestTags.SCREEN),
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
@@ -331,6 +340,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 onGoToPage = { showPages = true },
                 onFit = viewModel::fit,
                 onAddReminder = { reminderUi.add() },
+                onCreateTask = viewModel::createTaskFromNote,
                 reminderButton = { ReminderMenuButton(reminders.orEmpty(), reminderUi, editable = load is InkLoad.Ready && ui.readOnly == null) },
                 insert = insertActions,
             )
@@ -362,14 +372,14 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                     InkCanvas(l.session, l.controller, l.pdf, ui, viewModel, onPaste = paste, onView = { canvasView = it })
                     // Recording into this note, and the player for a chip that was tapped.
                     Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp)) {
-                        com.appname.notes.feature.audio.RecordingBar(recordingState, viewModel.noteId, onAddMarker = {}, onStop = viewModel::stopRecording)
+                        RecordingBar(recordingState, viewModel.noteId, onAddMarker = {}, onStop = viewModel::stopRecording)
                         val playing = playbackState.attachmentId?.let { viewModel.playingAttachment() }
                         if (playing != null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.weight(1f)) {
-                                    com.appname.notes.feature.audio.AudioPlayerRow(
+                                    AudioPlayerRow(
                                         playing,
-                                        com.appname.notes.feature.audio.AudioControls(
+                                        AudioControls(
                                             playback = playbackState,
                                             play = { viewModel.playback.play(it) },
                                             pause = viewModel.playback::pause,
@@ -452,7 +462,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                     pressMenu?.let { m ->
                         PressAndHoldMenu(
                             menu = m,
-                            onPaste = { viewModel.pasteFrom(clipContent(context), m.pageId, com.appname.notes.core.ink.geometry.Vec(m.x.toDouble(), m.y.toDouble())) },
+                            onPaste = { viewModel.pasteFrom(clipContent(context), m.pageId, Vec(m.x.toDouble(), m.y.toDouble())) },
                             onWriteText = viewModel::menuWriteText,
                             onSelect = viewModel::menuSelect,
                             onCopy = viewModel::menuCopy,
@@ -460,28 +470,65 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                             onDismiss = viewModel::dismissPressMenu,
                         )
                     }
-                    if (ui.scrollBar && ui.pageCount > 2) {
+                    if (ui.scrollBar && ui.pageCount > 1) {
                         PageScrollBar(
                             current = ui.currentPage,
                             count = ui.pageCount,
+                            fraction = scrollFraction,
+                            onFraction = { f -> canvasView?.scrollToFraction(f) },
                             onPage = viewModel::goToPage,
                             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp, top = 72.dp, bottom = 72.dp),
                         )
                     }
                     if (ui.pageCount > 1) {
-                        // Page count (SRS 7.1); tapping it opens the page grid to jump to a page.
+                        // Smooth page navigation capsule + page indicator (SRS 7.1).
                         Surface(
-                            onClick = { showPages = true },
-                            color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
                             shape = CircleShape,
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).testTag(InkTestTags.PAGE_INDICATOR),
+                            border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                            shadowElevation = 4.dp,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
                         ) {
-                            Text(
-                                stringResource(R.string.ink_page_indicator, ui.currentPage + 1, ui.pageCount),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.inverseOnSurface,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            ) {
+                                IconButton(
+                                    onClick = { if (ui.currentPage > 0) viewModel.goToPage(ui.currentPage - 1) },
+                                    enabled = ui.currentPage > 0,
+                                    modifier = Modifier.size(32.dp).testTag(InkTestTags.PAGE_PREV),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.KeyboardArrowUp,
+                                        contentDescription = "Previous page",
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .clickable { showPages = true }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .testTag(InkTestTags.PAGE_INDICATOR),
+                                ) {
+                                    Text(
+                                        stringResource(R.string.ink_page_indicator, ui.currentPage + 1, ui.pageCount),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { if (ui.currentPage + 1 < ui.pageCount) viewModel.goToPage(ui.currentPage + 1) },
+                                    enabled = ui.currentPage + 1 < ui.pageCount,
+                                    modifier = Modifier.size(32.dp).testTag(InkTestTags.PAGE_NEXT),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = "Next page",
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -568,17 +615,18 @@ private fun InkCanvas(
     onPaste: () -> Unit = {},
     onView: (InkCanvasView) -> Unit = {},
 ) {
-    val background = MaterialTheme.colorScheme.surfaceContainerHigh.toArgb()
+    val isDark = LocalDarkTheme.current
+    val background = if (isDark) DarkPaper.WORKSPACE_DARK else DarkPaper.WORKSPACE_LIGHT
     // Dark paper only in dark theme, and only if the user wants it (Settings / page settings).
-    val darkPaper = ui.darkPaper && com.appname.notes.core.designsystem.theme.LocalDarkTheme.current
+    val darkPaper = ui.darkPaper && isDark
     val description = stringResource(R.string.ink_canvas_description, ui.currentPage + 1, ui.pageCount.coerceAtLeast(1))
     // Drag and drop from other apps (gallery, browser, files — side by side or on a tablet): photos, PDFs, text.
     var canvasView by remember { mutableStateOf<InkCanvasView?>(null) }
-    var canvasOrigin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    val activity = androidx.activity.compose.LocalActivity.current
+    var canvasOrigin by remember { mutableStateOf(Offset.Zero) }
+    val activity = LocalActivity.current
     val dropTarget = remember(viewModel) {
-        object : androidx.compose.ui.draganddrop.DragAndDropTarget {
-            override fun onDrop(event: androidx.compose.ui.draganddrop.DragAndDropEvent): Boolean {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
                 val e = event.toAndroidDragEvent()
                 activity?.requestDragAndDropPermissions(e)
                 val clip = clipContent(activity ?: return false, e.clipData)
@@ -602,11 +650,11 @@ private fun InkCanvas(
                     override fun onPageChanged(index: Int) = viewModel.onPageChanged(index)
                     override fun onUndoRequested() = viewModel.undo()
                     override fun onRedoRequested() = viewModel.redo()
-                    override fun onTextTap(pageId: String, x: Double, y: Double, existing: com.appname.notes.core.ink.model.TextItem?) =
+                    override fun onTextTap(pageId: String, x: Double, y: Double, existing: TextItem?) =
                         viewModel.onTextTap(pageId, x, y, existing)
                     override fun onPasteRequested() = onPaste()
-                    override fun onAudioTap(item: com.appname.notes.core.ink.model.AudioItem) = viewModel.onAudioTap(item)
-                    override fun onLongPress(pageId: String, p: com.appname.notes.core.ink.geometry.Vec, x: Float, y: Float, unitsPerDp: Double) =
+                    override fun onAudioTap(item: AudioItem) = viewModel.onAudioTap(item)
+                    override fun onLongPress(pageId: String, p: Vec, x: Float, y: Float, unitsPerDp: Double) =
                         viewModel.onLongPress(pageId, p, x, y, unitsPerDp)
                     override fun onDrawStart() = viewModel.onDrawStart()
                 }
@@ -624,7 +672,7 @@ private fun InkCanvas(
             view.rulerVisible = ui.ruler && ui.readOnly == null
             view.bind(session, controller)
             ui.scrollRequest?.let {
-                view.scrollToPage(it.page)
+                view.scrollToPage(it.page, animate = true)
                 viewModel.consumeScrollRequest()
             }
             ui.fitRequest?.let {
@@ -643,6 +691,10 @@ private fun InkCanvas(
     )
 }
 
+/**
+ * Minimal, distraction-free top control bar inspired by the dark-mode reference editor:
+ * two compact floating pill clusters (left navigation/title pill and right actions pill) with subtle borders.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InkTopBar(
@@ -661,55 +713,98 @@ private fun InkTopBar(
     onGoToPage: () -> Unit,
     onFit: (FitMode) -> Unit,
     onAddReminder: () -> Unit = {},
+    onCreateTask: () -> Unit = {},
     reminderButton: @Composable () -> Unit = {},
     insert: InsertActions? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     val editable = ready && ui.readOnly == null
-    TopAppBar(
-        navigationIcon = {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back)) }
-        },
-        title = {
-            Column(Modifier.clickable(enabled = editable, onClick = onRename)) {
-                Text(
-                    ui.title.ifBlank { stringResource(R.string.ink_untitled) },
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                )
-                if (editable) SaveStatusLabel(ui.saveStatus)
-            }
-        },
-        actions = {
-            if (editable && insert != null) InsertButton(insert)
-            if (editable) {
-                IconButton(onClick = onAddPage, modifier = Modifier.testTag("ink_add_page_direct")) {
-                    Icon(Icons.Outlined.NoteAdd, stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add))
+    val isDark = LocalDarkTheme.current
+    val pillColor = if (isDark) Color(0xFF23252A).copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.95f)
+    val pillBorder = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.35f else 0.45f))
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(if (isDark) DarkPaper.WORKSPACE_DARK else DarkPaper.WORKSPACE_LIGHT))
+            .statusBarsPadding()
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        // Left compact pill: Back + Note Title & Save Status.
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = pillColor,
+            border = pillBorder,
+            shadowElevation = 2.dp,
+            modifier = Modifier.weight(1f, fill = false),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 14.dp),
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                }
+                Column(
+                    modifier = Modifier
+                        .clickable(enabled = editable, onClick = onRename)
+                        .padding(vertical = 4.dp),
+                ) {
+                    Text(
+                        ui.title.ifBlank { stringResource(R.string.ink_untitled) },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (editable) SaveStatusLabel(ui.saveStatus)
                 }
             }
-            reminderButton()
-            if (ready) {
-                Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.ink_more_options)) }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        if (editable) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.reminder_add)) }, onClick = { menu = false; onAddReminder() })
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        // Right compact pill: Insert, Add Page, Reminder, More Options.
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = pillColor,
+            border = pillBorder,
+            shadowElevation = 2.dp,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 2.dp),
+            ) {
+                if (editable && insert != null) InsertButton(insert)
+                if (editable) {
+                    IconButton(onClick = onAddPage, modifier = Modifier.testTag("ink_add_page_direct")) {
+                        Icon(Icons.Outlined.NoteAdd, stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add))
+                    }
+                }
+                reminderButton()
+                if (ready) {
+                    Box {
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Filled.MoreVert, stringResource(R.string.ink_more_options))
                         }
-                        // Viewing (works read-only too): page navigation and zoom presets (SRS 7.1).
-                        if (ui.pageCount > 1) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.ink_go_to_page)) },
-                                onClick = { menu = false; onGoToPage() },
-                                modifier = Modifier.testTag(InkTestTags.GO_TO_PAGE),
-                            )
-                        }
-                        DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_width)) }, onClick = { menu = false; onFit(FitMode.WIDTH) })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_page)) }, onClick = { menu = false; onFit(FitMode.PAGE) })
-                        HorizontalDivider()
-                        // Exporting only reads the note, so it works for read-only notes too. A PDF note exports an
-                        // annotated copy of the document; a handwritten note becomes a PDF with its pages as set.
-                        run {
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            if (editable) {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.reminder_add)) }, onClick = { menu = false; onAddReminder() })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.todo_create_from_note)) }, onClick = { menu = false; onCreateTask() })
+                            }
+                            if (ui.pageCount > 1) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.ink_go_to_page)) },
+                                    onClick = { menu = false; onGoToPage() },
+                                    modifier = Modifier.testTag(InkTestTags.GO_TO_PAGE),
+                                )
+                            }
+                            DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_width)) }, onClick = { menu = false; onFit(FitMode.WIDTH) })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_page)) }, onClick = { menu = false; onFit(FitMode.PAGE) })
+                            HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text(stringResource(if (ui.isPdf) R.string.pdf_export else R.string.ink_export_pdf)) },
                                 enabled = !ui.exporting && !ui.pdfFailed,
@@ -722,31 +817,33 @@ private fun InkTopBar(
                                 onClick = { menu = false; onSharePdf() },
                                 modifier = Modifier.testTag(InkTestTags.SHARE_PDF),
                             )
-                        }
-                        if (editable) {
-                            // In a PDF note, added pages go between the document's pages; only those can be deleted.
-                            DropdownMenuItem(text = { Text(stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add)) }, onClick = { menu = false; onAddPage() })
-                            if (ui.pageCount > 1 && !ui.shownPageFromPdf) {
-                                DropdownMenuItem(text = { Text(stringResource(R.string.ink_page_delete)) }, onClick = { menu = false; onDeletePage() })
+                            if (editable) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add)) },
+                                    onClick = { menu = false; onAddPage() },
+                                )
+                                if (ui.pageCount > 1 && !ui.shownPageFromPdf) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.ink_page_delete)) },
+                                        onClick = { menu = false; onDeletePage() },
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.page_settings_title)) },
+                                    onClick = { menu = false; onPageSettings() },
+                                    modifier = Modifier.testTag(InkTestTags.PAGE_SETTINGS),
+                                )
                             }
-                        }
-                        if (editable) {
-                            // Layout and scroll direction apply to PDF notes too; size and paper only to handwriting.
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.page_settings_title)) },
-                                onClick = { menu = false; onPageSettings() },
-                                modifier = Modifier.testTag(InkTestTags.PAGE_SETTINGS),
-                            )
-                        }
-                        if (editable || ui.isPdf) HorizontalDivider()
-                        if (ui.readOnly != ReadOnlyReason.IN_TRASH) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.note_trash)) }, onClick = { menu = false; onTrash() })
+                            if (editable || ui.isPdf) HorizontalDivider()
+                            if (ui.readOnly != ReadOnlyReason.IN_TRASH) {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.note_trash)) }, onClick = { menu = false; onTrash() })
+                            }
                         }
                     }
                 }
             }
-        },
-    )
+        }
+    }
 }
 
 // ---------------------------------------------------------------- dialogs
@@ -838,44 +935,54 @@ private fun PagesDialog(pages: List<InkSession.Page>, current: Int, onPick: (Int
 private const val MAX_INSERT = 10
 
 /**
- * Settings › Handwriting › Page scroll bar: a slim bar on the right; drag or tap it to jump to a page (owner brief
- * §18). TalkBack sees it as an adjustable control (swipe up/down to change the page).
+ * Continuous vertical page scroll bar on the right edge: dragging or tapping scrolls smoothly and continuously
+ * through the document without stepwise page jumps, while TalkBack can also step page-by-page.
  */
 @Composable
-private fun PageScrollBar(current: Int, count: Int, onPage: (Int) -> Unit, modifier: Modifier = Modifier) {
+private fun PageScrollBar(
+    current: Int,
+    count: Int,
+    fraction: Float,
+    onFraction: (Float) -> Unit,
+    onPage: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val label = stringResource(R.string.ink_scroll_bar)
     val pageText = stringResource(R.string.ink_page_indicator, current + 1, count)
-    var trackHeight by remember { mutableStateOf(1) }
-    fun pageAt(y: Float) = ((y / trackHeight.coerceAtLeast(1)) * count).toInt().coerceIn(0, count - 1)
+    var trackHeight by remember { mutableIntStateOf(1) }
+    val displayFraction = if (count <= 1) 0f else fraction.coerceIn(0f, 1f)
+    fun fractionAt(y: Float) = (y / trackHeight.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     Box(
         modifier
             .fillMaxHeight()
-            .width(28.dp)
+            .width(24.dp)
             .androidx_onSize { trackHeight = it }
             .pointerInput(count) {
-                detectTapGestures { onPage(pageAt(it.y)) }
+                detectTapGestures { offset -> onFraction(fractionAt(offset.y)) }
             }
             .pointerInput(count) {
-                detectVerticalDragGestures { change, _ -> onPage(pageAt(change.position.y)) }
+                detectVerticalDragGestures { change, _ ->
+                    change.consume()
+                    onFraction(fractionAt(change.position.y))
+                }
             }
             .semantics {
                 contentDescription = label
                 stateDescription = pageText
-                progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(current.toFloat(), 0f..(count - 1).toFloat(), steps = (count - 2).coerceAtLeast(0))
+                progressBarRangeInfo = ProgressBarRangeInfo(current.toFloat(), 0f..(count - 1).toFloat(), steps = (count - 2).coerceAtLeast(0))
                 setProgress { v -> onPage(v.toInt().coerceIn(0, count - 1)); true }
             }
             .testTag(InkTestTags.SCROLL_BAR),
         contentAlignment = Alignment.TopCenter,
     ) {
-        Box(Modifier.fillMaxHeight().width(3.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape))
-        val fraction = if (count <= 1) 0f else current.toFloat() / (count - 1)
+        Box(Modifier.fillMaxHeight().width(2.5.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), CircleShape))
         Box(
             Modifier
                 .layout { measurable, constraints ->
                     val p = measurable.measure(constraints)
-                    layout(p.width, p.height) { p.place(0, ((trackHeight - p.height) * fraction).toInt()) }
+                    layout(p.width, p.height) { p.place(0, ((trackHeight - p.height) * displayFraction).toInt()) }
                 }
-                .size(width = 10.dp, height = 40.dp)
+                .size(width = 8.dp, height = 38.dp)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f), CircleShape),
         )
     }
@@ -894,9 +1001,9 @@ private fun PressAndHoldMenu(
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val isText = menu.item is com.appname.notes.core.ink.model.TextItem
+    val isText = menu.item is TextItem
     val onSomething = menu.item != null || menu.inSelection
-    Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(menu.screenX.toInt(), menu.screenY.toInt()) }.size(1.dp)) {
+    Box(Modifier.offset { IntOffset(menu.screenX.toInt(), menu.screenY.toInt()) }.size(1.dp)) {
         DropdownMenu(expanded = true, onDismissRequest = onDismiss, modifier = Modifier.testTag(InkTestTags.PRESS_MENU)) {
             if (menu.editable) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.ink_menu_paste)) }, onClick = onPaste, modifier = Modifier.testTag(InkTestTags.PRESS_PASTE))

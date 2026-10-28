@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -13,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -56,9 +58,15 @@ import com.appname.notes.R
 import com.appname.notes.core.domain.model.NoteCollection
 import com.appname.notes.core.domain.model.Notebook
 
-/** Quick filters under the home header (owner brief §2): All, Favourites and each notebook. */
+/** Quick filters under the home header (owner brief §2): All, Favourites, optional To-do shortcut, and each notebook. */
 @Composable
-fun CollectionChips(current: NoteCollection, notebooks: List<Notebook>, onSelect: (NoteCollection) -> Unit, modifier: Modifier = Modifier) {
+fun CollectionChips(
+    current: NoteCollection,
+    notebooks: List<Notebook>,
+    onSelect: (NoteCollection) -> Unit,
+    modifier: Modifier = Modifier,
+    onOpenTodoList: (() -> Unit)? = null,
+) {
     LazyRow(
         modifier = modifier.fillMaxWidth().testTag(LibraryTestTags.CHIPS),
         contentPadding = PaddingValues(horizontal = 12.dp),
@@ -68,6 +76,22 @@ fun CollectionChips(current: NoteCollection, notebooks: List<Notebook>, onSelect
         item(key = "fav") {
             Chip(stringResource(R.string.collection_favourites), current == NoteCollection.Favourites, LibraryTestTags.CHIP_FAVOURITES) {
                 onSelect(NoteCollection.Favourites)
+            }
+        }
+        if (onOpenTodoList != null) {
+            item(key = "todo") {
+                FilterChip(
+                    selected = false,
+                    onClick = onOpenTodoList,
+                    label = { Text(stringResource(R.string.todo_title), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingIcon = { Icon(Icons.Outlined.Checklist, null, Modifier.size(18.dp)) },
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                    modifier = Modifier.testTag(LibraryTestTags.CHIP_TODO),
+                )
             }
         }
         items(notebooks, key = { "nb_" + it.id.value }) { nb ->

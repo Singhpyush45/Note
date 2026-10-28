@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.size
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -130,6 +132,7 @@ object LibraryTestTags {
     const val CHIPS = "collection_chips"
     const val CHIP_ALL = "chip_all"
     const val CHIP_FAVOURITES = "chip_favourites"
+    const val CHIP_TODO = "chip_todo"
     const val SELECTION_BAR = "selection_bar"
     const val SELECTION_COUNT = "selection_count"
     const val SELECTION_CLEAR = "selection_clear"
@@ -158,6 +161,8 @@ fun LibraryRoute(
     selectedNoteId: String?,
     /** Opens the Choose-template screen for the shown notebook/tag (null = none). */
     onChooseTemplate: (notebookId: String?, tagId: String?) -> Unit = { _, _ -> },
+    /** Opens the To-do List directly. */
+    onOpenTodoList: (() -> Unit)? = null,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -206,6 +211,7 @@ fun LibraryRoute(
         ),
         onManageNotebooks = onManageNotebooks,
         onManageTags = onManageTags,
+        onOpenTodoList = onOpenTodoList,
         actions = NoteActions(
             setPinned = viewModel::setPinned,
             setFavourite = viewModel::setFavourite,
@@ -284,6 +290,7 @@ fun LibraryScreen(
     importingPdf: Boolean = false,
     cover: (suspend (String) -> Bitmap?)? = null,
     folders: FolderActions? = null,
+    onOpenTodoList: (() -> Unit)? = null,
 ) {
     val snackbar = remember { SnackbarHostState() }
     // Folders inside folders: new / actions / rename / move / delete.
@@ -352,6 +359,7 @@ fun LibraryScreen(
                     expanded = createOpen,
                     onExpandedChange = { createOpen = it },
                     actions = if (folders != null && state.canCreate) create.copy(newFolder = { newFolder = true }) else create,
+                    modifier = Modifier.navigationBarsPadding().padding(bottom = 64.dp),
                 )
             }
         },
@@ -437,6 +445,7 @@ fun LibraryScreen(
                             onManageNotebooks = onManageNotebooks,
                             onManageTags = onManageTags,
                             onNewFolder = if (folders != null && state.canCreate) { { newFolder = true } } else null,
+                            onOpenTodoList = onOpenTodoList,
                         )
                         if (parentFolder != null) {
                             // Inside a folder that is inside another: one tap back up.
@@ -447,7 +456,13 @@ fun LibraryScreen(
                                 modifier = Modifier.padding(start = 12.dp).testTag(FolderTestTags.UP),
                             )
                         }
-                        CollectionChips(state.collection, FolderTree.children(state.notebooks, null), onSelectCollection, Modifier.padding(bottom = 6.dp))
+                        CollectionChips(
+                            current = state.collection,
+                            notebooks = FolderTree.children(state.notebooks, null),
+                            onSelect = onSelectCollection,
+                            modifier = Modifier.padding(bottom = 6.dp),
+                            onOpenTodoList = onOpenTodoList,
+                        )
                     }
                 }
             }
@@ -591,6 +606,7 @@ private fun HomeTopRow(
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
     onNewFolder: (() -> Unit)? = null,
+    onOpenTodoList: (() -> Unit)? = null,
 ) {
     Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         val description = stringResource(R.string.collection_choose, title)
@@ -622,7 +638,7 @@ private fun HomeTopRow(
             Icon(Icons.Outlined.Search, stringResource(R.string.library_search))
         }
         SortMenu(sort, onSort, cardSize, onCardSize)
-        OverflowMenu(inTrash, onEmptyTrash, onManageNotebooks, onManageTags, onNewFolder)
+        OverflowMenu(inTrash, onEmptyTrash, onManageNotebooks, onManageTags, onNewFolder, onOpenTodoList)
     }
 }
 
@@ -693,7 +709,7 @@ private fun NotesGrid(
                 com.appname.notes.core.settings.CardSize.LIST -> 480.dp
             },
         ),
-        contentPadding = PaddingValues(start = spacing.lg, end = spacing.lg, top = topPadding + spacing.xs, bottom = 112.dp),
+        contentPadding = PaddingValues(start = spacing.lg, end = spacing.lg, top = topPadding + spacing.xs, bottom = 148.dp),
         horizontalArrangement = Arrangement.spacedBy(if (state.cardSize == com.appname.notes.core.settings.CardSize.SMALL) spacing.sm else spacing.md),
         verticalItemSpacing = if (state.cardSize == com.appname.notes.core.settings.CardSize.LIST) spacing.xs else if (state.cardSize == com.appname.notes.core.settings.CardSize.SMALL) spacing.sm else spacing.md,
         modifier = Modifier.fillMaxSize().testTag(LibraryTestTags.GRID),
@@ -852,6 +868,7 @@ private fun OverflowMenu(
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
     onNewFolder: (() -> Unit)?,
+    onOpenTodoList: (() -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -862,6 +879,13 @@ private fun OverflowMenu(
                     text = { Text(stringResource(R.string.library_empty_trash)) },
                     leadingIcon = { Icon(Icons.Outlined.DeleteForever, null) },
                     onClick = { open = false; onEmptyTrash() },
+                )
+            }
+            if (onOpenTodoList != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.todo_title)) },
+                    leadingIcon = { Icon(Icons.Outlined.Checklist, null) },
+                    onClick = { open = false; onOpenTodoList() },
                 )
             }
             if (onNewFolder != null) {

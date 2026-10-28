@@ -9,223 +9,254 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import java.io.File
-import kotlin.math.max
-import kotlin.math.sqrt
+import java.util.ArrayDeque
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
+import kotlin.math.abs
+import kotlin.math.sqrt
 
 /**
- * Cuts the main subject out of a photo (owner request: remove the background of a pasted or dropped picture), on the
- * phone with ML Kit subject segmentation: people, pets, objects — whatever stands out in front. The result is a PNG
- * of the same size, transparent where the background was. Nothing is uploaded; Google Play services fetches the
- * segmentation model once (at install, or on first use — then this asks to try again in a moment).
- * Blocking: call off the main thread.
+ * Removes the background of a photo on the phone (owner request: "Selection › remove background").
+ *
+ * Uses ML Kit's on-device Subject Segmentation when Google Play services has the model ready; if Play
+ * services is unavailable, offline, or still downloading the model, falls back to an on-device border-connected
+ * flood-fill background remover that preserves 100% of interior foreground pixel colours and opacity.
+ *
+ * Blocking: call from an IO dispatcher.
  */
 object BackgroundRemover {
 
     sealed interface Result {
         data class Done(val file: File) : Result
 
-        /** Nothing stands out in the picture to keep. */
+        /** Nothing in the picture stood out as a subject, or the whole picture already was one. */
         data object NoSubject : Result
 
-        /** The model is still being downloaded by Google Play services. */
+        /** Google Play services is still downloading the subject-segmentation model (first use). */
         data object NotReady : Result
 
-        /** No Google Play services, or the picture can't be read. */
         data object Failed : Result
     }
 
-    fun cutOut(source: File, out: File): Result {
-        val bitmap = try {
-            decodeImage(source, MAX_PX)
-        } catch (e: OutOfMemoryError) {
-            null
-        } ?: return Result.Failed
-        val input = if (bitmap.config == Bitmap.Config.ARGB_8888) bitmap else bitmap.copy(Bitmap.Config.ARGB_8888, false)
-        val segmenter = try {
-            SubjectSegmentation.getClient(SubjectSegmenterOptions.Builder().enableForegroundBitmap().build())
-        } catch (e: Exception) {
-            return try { offlineFallback(input, out, Result.Failed) } finally { recycle(bitmap, input) }
-        } catch (e: LinkageError) {
-            return try { offlineFallback(input, out, Result.Failed) } finally { recycle(bitmap, input) }
-        }
+    fun cutOut(source: File, target: File): Result {
+        val bitmap = decodeImage(source, MAX_PX) ?: return Result.Failed
+        val segmenter = runCatching {
+            SubjectSegmentation.getClient(
+                SubjectSegmenterOptions.Builder()
+                    .enableForegroundBitmap()
+                    .build(),
+            )
+        }.getOrNull()
         try {
-            repeat(ATTEMPTS) { attempt ->
-                try {
-                    val result = Tasks.await(segmenter.process(InputImage.fromBitmap(input, 0)))
-                    val fg = result.foregroundBitmap
-                    if (fg == null || !hasSubject(fg)) {
-                        fg?.recycle()
-                        return offlineFallback(input, out, Result.NoSubject)
-                    }
-                    return try { saveCutout(fg, out) } finally { fg.recycle() }
-                } catch (e: ExecutionException) {
-                    val cause = e.cause
-                    // Give Play services a short chance to fetch the model, then use the offline cutout.
-                    if (cause is MlKitException && cause.errorCode == MlKitException.UNAVAILABLE) {
-                        if (attempt == 0) {
-                            Thread.sleep(WAIT_MS)
+            if (segmenter != null) {
+                val image = InputImage.fromBitmap(bitmap, 0)
+                var cut: Bitmap? = null
+                var unavailable = false
+                for (attempt in 0 until READY_TRIES) {
+                    try {
+                        cut = Tasks.await(segmenter.process(image), TIMEOUT_SECONDS, TimeUnit.SECONDS).foregroundBitmap
+                        break
+                    } catch (e: ExecutionException) {
+                        val ml = e.cause as? MlKitException
+                        if (ml?.errorCode == MlKitException.UNAVAILABLE && attempt + 1 < READY_TRIES) {
+                            unavailable = true
+                            Thread.sleep(READY_WAIT_MS)
                         } else {
-                            return offlineFallback(input, out, Result.NotReady)
+                            unavailable = true
+                            break
                         }
-                    } else {
-                        return offlineFallback(input, out, Result.Failed)
+                    } catch (e: Exception) {
+                        unavailable = true
+                        break
                     }
                 }
+                if (cut != null && hasCutout(cut)) {
+                    target.parentFile?.mkdirs()
+                    target.outputStream().use { out ->
+                        if (!cut.compress(Bitmap.CompressFormat.PNG, 100, out)) return Result.Failed
+                    }
+                    return Result.Done(target)
+                }
+                if (!unavailable && cut != null) {
+                    return Result.NoSubject
+                }
             }
-            return offlineFallback(input, out, Result.NotReady)
+            // Fallback when Google Play services is unavailable or model isn't ready: non-destructive border cutout.
+            val fallback = cutOutOnDeviceFallback(bitmap) ?: return Result.NoSubject
+            target.parentFile?.mkdirs()
+            target.outputStream().use { out ->
+                if (!fallback.compress(Bitmap.CompressFormat.PNG, 100, out)) return Result.Failed
+            }
+            return Result.Done(target)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
-            return offlineFallback(input, out, Result.Failed)
+            return Result.Failed
         } catch (e: Exception) {
-            return offlineFallback(input, out, Result.Failed)
-        } catch (e: LinkageError) {
-            return offlineFallback(input, out, Result.Failed)
+            return Result.Failed
         } finally {
-            runCatching { segmenter.close() }
-            recycle(bitmap, input)
+            runCatching { segmenter?.close() }
         }
     }
 
-    private fun recycle(bitmap: Bitmap, input: Bitmap) {
-        if (input !== bitmap) input.recycle()
-        bitmap.recycle()
-    }
+    /**
+     * On-device border flood-fill background removal fallback.
+     * Samples the outer border color and flood-fills inward from the edges to remove a connected background.
+     * Preserves 100% of interior subject RGB colors and full opacity; only 1px boundary pixels adjacent to
+     * the removed background are softened for anti-aliasing.
+     */
+    internal fun cutOutOnDeviceFallback(bitmap: Bitmap): Bitmap? {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w < 8 || h < 8) return null
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
 
-    private fun saveCutout(bitmap: Bitmap, out: File): Result {
-        if (!hasSubject(bitmap)) return Result.NoSubject
-        out.parentFile?.mkdirs()
-        val saved = out.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        return if (saved) Result.Done(out) else Result.Failed
-    }
-
-    private fun offlineFallback(source: Bitmap, out: File, ifUnavailable: Result): Result {
-        val cutout = try { cutOutOnDeviceFallback(source) } catch (_: OutOfMemoryError) { null } ?: return ifUnavailable
-        return try {
-            val result = saveCutout(cutout, out)
-            if (result == Result.NoSubject) ifUnavailable else result
-        } catch (_: Exception) {
-            ifUnavailable
-        } finally {
-            cutout.recycle()
-        }
-    }
-
-    /** Removes border-connected pixels similar to the sampled background, without Google Play services. */
-    private fun cutOutOnDeviceFallback(src: Bitmap): Bitmap? {
-        val w = src.width
-        val h = src.height
-        if (w < 4 || h < 4) return null
-        val count = w * h
-        val pixels = IntArray(count)
-        src.getPixels(pixels, 0, w, 0, 0, w, h)
-
+        // Sample border pixels to estimate the dominant background color.
         var rSum = 0L
         var gSum = 0L
         var bSum = 0L
-        var borderCount = 0
-        val stepX = max(1, w / 32)
-        val stepY = max(1, h / 32)
-        for (x in 0 until w step stepX) {
-            for (idx in intArrayOf(x, (h - 1) * w + x)) {
-                rSum += Color.red(pixels[idx]); gSum += Color.green(pixels[idx]); bSum += Color.blue(pixels[idx]); borderCount++
+        var count = 0
+        for (x in 0 until w) {
+            val top = pixels[x]
+            val bot = pixels[(h - 1) * w + x]
+            rSum += Color.red(top) + Color.red(bot)
+            gSum += Color.green(top) + Color.green(bot)
+            bSum += Color.blue(top) + Color.blue(bot)
+            count += 2
+        }
+        for (y in 1 until h - 1) {
+            val left = pixels[y * w]
+            val right = pixels[y * w + (w - 1)]
+            rSum += Color.red(left) + Color.red(right)
+            gSum += Color.green(left) + Color.green(right)
+            bSum += Color.blue(left) + Color.blue(right)
+            count += 2
+        }
+        if (count == 0) return null
+        val bgR = (rSum / count).toInt()
+        val bgG = (gSum / count).toInt()
+        val bgB = (bSum / count).toInt()
+
+        // Measure border variance to adapt threshold safely without eating into colorful subjects.
+        var varSum = 0.0
+        for (x in 0 until w step maxOf(1, w / 32)) {
+            varSum += colorDist(pixels[x], bgR, bgG, bgB)
+            varSum += colorDist(pixels[(h - 1) * w + x], bgR, bgG, bgB)
+        }
+        val avgBorderDist = (varSum / (2.0 * (w / maxOf(1, w / 32)).coerceAtLeast(1))).toFloat()
+        val threshold = (avgBorderDist * 1.6f + 22f).coerceIn(24f, 54f)
+
+        val visited = BooleanArray(w * h)
+        val queue = ArrayDeque<Int>(w * 2 + h * 2)
+
+        fun tryEnqueue(x: Int, y: Int) {
+            if (x !in 0 until w || y !in 0 until h) return
+            val idx = y * w + x
+            if (visited[idx]) return
+            val dist = colorDist(pixels[idx], bgR, bgG, bgB)
+            if (dist <= threshold) {
+                visited[idx] = true
+                queue.add(idx)
             }
         }
-        for (y in 0 until h step stepY) {
-            for (idx in intArrayOf(y * w, y * w + w - 1)) {
-                rSum += Color.red(pixels[idx]); gSum += Color.green(pixels[idx]); bSum += Color.blue(pixels[idx]); borderCount++
+
+        for (x in 0 until w) {
+            tryEnqueue(x, 0)
+            tryEnqueue(x, h - 1)
+        }
+        for (y in 1 until h - 1) {
+            tryEnqueue(0, y)
+            tryEnqueue(w - 1, y)
+        }
+
+        var removed = 0
+        while (queue.isNotEmpty()) {
+            val idx = queue.removeFirst()
+            removed++
+            val x = idx % w
+            val y = idx / w
+            tryEnqueue(x - 1, y)
+            tryEnqueue(x + 1, y)
+            tryEnqueue(x, y - 1)
+            tryEnqueue(x, y + 1)
+        }
+
+        val total = w * h
+        // Require both a meaningful background removal and an intact central subject.
+        if (removed < total / 12 || removed > total * 9 / 10) return null
+        var centerKept = 0
+        var centerTotal = 0
+        for (y in (h / 4) until (h * 3 / 4)) {
+            val row = y * w
+            for (x in (w / 4) until (w * 3 / 4)) {
+                centerTotal++
+                if (!visited[row + x]) centerKept++
             }
         }
-        if (borderCount == 0) return null
-        val bgR = (rSum / borderCount).toInt()
-        val bgG = (gSum / borderCount).toInt()
-        val bgB = (bSum / borderCount).toInt()
+        if (centerTotal > 0 && centerKept < centerTotal / 4) return null
 
-        var variation = 0.0
-        var samples = 0
-        for (x in 0 until w step stepX) {
-            val c = pixels[x]
-            val dr = Color.red(c) - bgR
-            val dg = Color.green(c) - bgG
-            val db = Color.blue(c) - bgB
-            variation += sqrt((dr * dr + dg * dg + db * db).toDouble())
-            samples++
-        }
-        val threshold = (variation / max(1, samples)).coerceIn(18.0, 52.0) + 28.0
-        val thresholdSq = (threshold * threshold).toInt()
-        val softThresholdSq = ((threshold + 18.0) * (threshold + 18.0)).toInt()
-        val visited = BooleanArray(count)
-        val background = BooleanArray(count)
-        val queue = IntArray(count)
-        var head = 0
-        var tail = 0
-
-        fun colorDistanceSq(index: Int): Int {
-            val c = pixels[index]
-            val dr = Color.red(c) - bgR
-            val dg = Color.green(c) - bgG
-            val db = Color.blue(c) - bgB
-            return dr * dr + dg * dg + db * db
-        }
-        fun enqueue(index: Int) {
-            if (!visited[index]) {
-                visited[index] = true
-                if (colorDistanceSq(index) <= thresholdSq) {
-                    background[index] = true
-                    queue[tail++] = index
+        val softThreshold = threshold * 1.25f
+        val outPixels = pixels.copyOf()
+        for (y in 0 until h) {
+            val row = y * w
+            for (x in 0 until w) {
+                val idx = row + x
+                if (visited[idx]) {
+                    outPixels[idx] = Color.TRANSPARENT
+                } else {
+                    // Only feather pixels on the 1px boundary directly adjacent to visited background.
+                    val onBoundary = (x > 0 && visited[idx - 1]) ||
+                        (x + 1 < w && visited[idx + 1]) ||
+                        (y > 0 && visited[idx - w]) ||
+                        (y + 1 < h && visited[idx + w])
+                    if (onBoundary) {
+                        val p = pixels[idx]
+                        val d = colorDist(p, bgR, bgG, bgB)
+                        if (d < softThreshold) {
+                            val factor = ((d - threshold * 0.8f) / (softThreshold - threshold * 0.8f)).coerceIn(0.35f, 1f)
+                            val newA = (Color.alpha(p) * factor).toInt().coerceIn(0, 255)
+                            outPixels[idx] = Color.argb(newA, Color.red(p), Color.green(p), Color.blue(p))
+                        }
+                    }
                 }
             }
         }
-        for (x in 0 until w) { enqueue(x); enqueue((h - 1) * w + x) }
-        for (y in 0 until h) { enqueue(y * w); enqueue(y * w + w - 1) }
-        while (head < tail) {
-            val index = queue[head++]
-            val x = index % w
-            val y = index / w
-            if (x > 0) enqueue(index - 1)
-            if (x + 1 < w) enqueue(index + 1)
-            if (y > 0) enqueue(index - w)
-            if (y + 1 < h) enqueue(index + w)
-        }
-        for (y in 0 until h) for (x in 0 until w) {
-            val index = y * w + x
-            if (background[index]) {
-                pixels[index] = Color.TRANSPARENT
-            } else {
-                val nearBackground = (x > 0 && background[index - 1]) ||
-                    (x + 1 < w && background[index + 1]) ||
-                    (y > 0 && background[index - w]) ||
-                    (y + 1 < h && background[index + w])
-                val distance = colorDistanceSq(index)
-                if (nearBackground && distance < softThresholdSq) {
-                    val alpha = ((distance - thresholdSq).toFloat() / max(1, softThresholdSq - thresholdSq)).coerceIn(0.15f, 1f)
-                    val c = pixels[index]
-                    pixels[index] = Color.argb((Color.alpha(c) * alpha).toInt().coerceIn(0, 255), Color.red(c), Color.green(c), Color.blue(c))
-                }
-            }
-        }
-        return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { it.setPixels(pixels, 0, w, 0, 0, w, h) }
+
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(outPixels, 0, w, 0, 0, w, h)
+        return out
     }
 
-    /** At least a few percent of the picture was kept. */
-    private fun hasSubject(b: Bitmap): Boolean {
-        val step = maxOf(1, maxOf(b.width, b.height) / 64)
+    private fun colorDist(c: Int, r: Int, g: Int, b: Int): Float {
+        val dr = (Color.red(c) - r).toFloat()
+        val dg = (Color.green(c) - g).toFloat()
+        val db = (Color.blue(c) - b).toFloat()
+        return sqrt(dr * dr * 0.30f + dg * dg * 0.59f + db * db * 0.11f)
+    }
+
+    /** True when the mask kept a subject and removed a background (neither all transparent nor all opaque). */
+    internal fun hasCutout(b: Bitmap): Boolean {
+        val stepX = (b.width / SAMPLE_GRID).coerceAtLeast(1)
+        val stepY = (b.height / SAMPLE_GRID).coerceAtLeast(1)
         var kept = 0
-        var total = 0
+        var clear = 0
         var y = 0
         while (y < b.height) {
             var x = 0
             while (x < b.width) {
-                total++
-                if ((b.getPixel(x, y) ushr 24) > 32) kept++
-                x += step
+                val a = Color.alpha(b.getPixel(x, y))
+                if (a >= 128) kept++ else if (a < 32) clear++
+                x += stepX
             }
-            y += step
+            y += stepY
         }
-        return total > 0 && kept * 50 >= total
+        val total = (kept + clear).coerceAtLeast(1)
+        return kept * 20 >= total && clear * 20 >= total // each at least 5 % of the picture
     }
 
-    private const val MAX_PX = 2048
-    private const val ATTEMPTS = 8
-    private const val WAIT_MS = 2_500L
+    private const val MAX_PX = 1600
+    private const val SAMPLE_GRID = 48
+    private const val TIMEOUT_SECONDS = 5L
+    private const val READY_TRIES = 8
+    private const val READY_WAIT_MS = 150L
 }

@@ -18,18 +18,31 @@ class TopLevelNavigationTest {
     }
 
     @Test
+    fun `top level destinations follow Notes Calendar Settings order`() {
+        assertThat(TopLevelDestination.entries).containsExactly(
+            TopLevelDestination.HOME,
+            TopLevelDestination.CALENDAR,
+            TopLevelDestination.SETTINGS,
+        ).inOrder()
+    }
+
+    @Test
     fun `home produces a single root entry`() {
         assertThat(topLevelStackFor(TopLevelDestination.HOME)).containsExactly(HomeKey)
     }
 
     @Test
     fun `other tabs sit on top of home so back returns home`() {
+        assertThat(topLevelStackFor(TopLevelDestination.CALENDAR)).containsExactly(HomeKey, CalendarKey).inOrder()
         assertThat(topLevelStackFor(TopLevelDestination.SETTINGS)).containsExactly(HomeKey, SettingsKey).inOrder()
     }
 
     @Test
-    fun `selecting settings from home pushes settings`() {
+    fun `selecting calendar or settings from home pushes the tab`() {
         val stack = mutableListOf<NavKey>(HomeKey)
+        stack.navigateToTopLevel(TopLevelDestination.CALENDAR)
+        assertThat(stack).containsExactly(HomeKey, CalendarKey).inOrder()
+
         stack.navigateToTopLevel(TopLevelDestination.SETTINGS)
         assertThat(stack).containsExactly(HomeKey, SettingsKey).inOrder()
     }
@@ -59,6 +72,8 @@ class TopLevelNavigationTest {
     @Test
     fun `current tab is found from the top of the stack`() {
         assertThat(listOf<NavKey>(HomeKey).currentTopLevel()).isEqualTo(TopLevelDestination.HOME)
+        assertThat(listOf(HomeKey, CalendarKey).currentTopLevel()).isEqualTo(TopLevelDestination.CALENDAR)
+        assertThat(listOf(HomeKey, TasksKey).currentTopLevel()).isEqualTo(TopLevelDestination.CALENDAR)
         assertThat(listOf(HomeKey, SettingsKey).currentTopLevel()).isEqualTo(TopLevelDestination.SETTINGS)
         assertThat(emptyList<NavKey>().currentTopLevel()).isEqualTo(TopLevelDestination.HOME)
     }

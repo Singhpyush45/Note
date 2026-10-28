@@ -115,6 +115,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.material.icons.outlined.AlarmAdd
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.AudioFile
 import com.appname.notes.feature.reminders.RemindersRow
 import com.appname.notes.feature.reminders.rememberReminderUi
@@ -382,6 +383,7 @@ fun NoteEditorRoute(
             }
         },
         onRemind = { reminderUi.add() },
+        onCreateTask = viewModel::createTaskFromNote,
     )
 
     NoteEditorScreen(
@@ -483,6 +485,7 @@ data class EditorMenuActions(
     val onShare: () -> Unit,
     val onExport: () -> Unit,
     val onRemind: () -> Unit = {},
+    val onCreateTask: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -760,6 +763,7 @@ private fun EditorOverflowMenu(meta: NoteMeta, actions: EditorMenuActions) {
                 item(R.string.note_delete_forever, Icons.Outlined.DeleteForever, actions.onDeleteForever)
             } else {
                 item(R.string.reminder_add, Icons.Outlined.AlarmAdd, actions.onRemind)
+                item(R.string.todo_create_from_note, Icons.Outlined.CheckCircle, actions.onCreateTask)
                 item(
                     if (meta.isFavourite) R.string.note_unfavourite else R.string.note_favourite,
                     if (meta.isFavourite) Icons.Filled.Star else Icons.Outlined.StarOutline,

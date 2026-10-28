@@ -19,6 +19,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.OverScroller
 import androidx.ink.authoring.InProgressStrokeId
@@ -40,7 +41,9 @@ import com.appname.notes.core.ink.layout.Viewport
 import com.appname.notes.core.ink.layout.ViewportRules
 import com.appname.notes.feature.pdf.PdfPageRenderer
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 /** Where the view was looking, to restore it after rotation: the world point at the centre and the zoom. */
 data class InkViewState(val centerX: Double, val centerY: Double, val zoom: Double)
@@ -51,7 +54,7 @@ data class InkViewState(val centerX: Double, val centerY: Double, val zoom: Doub
  *
  * Input routing (SRS 6.2, 8.1):
  * - stylus → current tool; the stylus eraser end → eraser;
- * - one finger → draws or scrolls (setting [fingerDraws]); two fingers → zoom and scroll;
+ * - one finger → draws or scrolls (setting [fingerDraws]); two fingers → zoom and scroll with inertia;
  * - mouse → current tool (right/middle button scrolls), wheel scrolls, Ctrl + wheel zooms;
  * - palm rejection: while a stylus draws, other touches are ignored; touches the system marks as
  *   accidental (FLAG_CANCELED) undo their stroke.
@@ -100,10 +103,22 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     /** Called after a frame where the zoom or scroll changed (things placed over the page follow it). */
     var onTransform: (() -> Unit)? = null
+
+    /** Called whenever continuous scroll progress (0..1) along the document changes. */
+    var onScrollChanged: ((Float) -> Unit)? = null
     private var lastDrawn: Viewport? = null
+    private var lastReportedFraction: Float = -1f
 
     /** Screen pixels per page unit at the current zoom. */
     val pxPerUnit: Float get() = viewport?.scale?.toFloat() ?: 1f
+
+    /** Current continuous scroll progress (0..1) along the document. */
+    val scrollFraction: Float
+        get() {
+            val v = viewport ?: return 0f
+            if (width == 0 || height == 0 || stack.count == 0) return 0f
+            return rules.scrollFraction(v, width.toDouble(), height.toDouble(), stack)
+        }
 
     /** Where page point [x], [y] of [pageId] is on screen (view pixels), or null. */
     fun screenPoint(pageId: String, x: Float, y: Float): android.graphics.PointF? {
@@ -118,7 +133,31 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     /** Scrolls the pages by [dx], [dy] screen pixels (e.g. to keep a text box above the keyboard). */
     fun panBy(dx: Float, dy: Float) {
         val v = viewport ?: return
+        scroller.forceFinished(true)
         viewport = rules.pan(v, dx.toDouble(), dy.toDouble(), width.toDouble(), height.toDouble(), stack)
+        surface.invalidate()
+        reportPage()
+    }
+
+    /** Smoothly animates a vertical/horizontal pan by [dx], [dy] screen pixels. */
+    fun smoothPanBy(dx: Float, dy: Float, durationMs: Int = 280) {
+        if (viewport == null) return
+        val ix = dx.roundToInt()
+        val iy = dy.roundToInt()
+        if (ix == 0 && iy == 0) return
+        scroller.forceFinished(true)
+        flingX = 0
+        flingY = 0
+        scroller.startScroll(0, 0, ix, iy, durationMs.coerceIn(120, 500))
+        postInvalidateOnAnimation()
+    }
+
+    /** Continuously scrolls the viewport to [fraction] (0..1) along the document without discrete jumps. */
+    fun scrollToFraction(fraction: Float) {
+        val v = viewport ?: return
+        if (width == 0 || height == 0 || stack.count == 0) return
+        scroller.forceFinished(true)
+        viewport = rules.scrollToFraction(v, fraction, width.toDouble(), height.toDouble(), stack)
         surface.invalidate()
         reportPage()
     }
@@ -162,7 +201,6 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             refresh()
         }
 
-    /** Pages shown as dark paper (dark theme, display only). */
     /** How the laser pointer looks (owner brief §17). The trail is screen-only and never saved. */
     var laser: LaserSettings = LaserSettings()
 
@@ -193,6 +231,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     private var inProgress: InProgressStrokesView? = null
 
     init {
+        scroller.setFriction(ViewConfiguration.getScrollFriction() * 0.65f)
         addView(surface, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         if (InkEngine.available) attachInkLayer()
         isFocusable = true
@@ -278,6 +317,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     fun fit(mode: FitMode) {
         val v = viewport ?: return
         if (stack.count == 0) return
+        scroller.forceFinished(true)
         val w = width.toDouble()
         val h = height.toDouble()
         val page = rules.currentPage(v, h, stack, w)
@@ -289,13 +329,31 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         reportPage()
     }
 
-    fun scrollToPage(index: Int) {
+    /**
+     * Scrolls to page [index]. When [animate] is true and the view is laid out, glides smoothly using
+     * [OverScroller] instead of jumping in a single discrete step.
+     */
+    fun scrollToPage(index: Int, animate: Boolean = true) {
         // Not laid out yet (e.g. opened from a search hit): apply once the size is known.
         val v = viewport ?: run { pendingPage = index; return }
         if (index !in 0 until stack.count) return
-        viewport = rules.scrollTo(v, index, width.toDouble(), height.toDouble(), stack)
-        surface.invalidate()
-        reportPage()
+        val target = rules.scrollTo(v, index, width.toDouble(), height.toDouble(), stack)
+        val ddx = (target.dx - v.dx).roundToInt()
+        val ddy = (target.dy - v.dy).roundToInt()
+        if (!animate || (abs(ddx) <= 2 && abs(ddy) <= 2)) {
+            scroller.forceFinished(true)
+            viewport = target
+            surface.invalidate()
+            reportPage()
+            return
+        }
+        scroller.forceFinished(true)
+        flingX = 0
+        flingY = 0
+        val dist = hypot(ddx.toDouble(), ddy.toDouble())
+        val duration = (220 + (dist / (height.coerceAtLeast(1)) * 110).toInt()).coerceIn(220, 440)
+        scroller.startScroll(0, 0, ddx, ddy, duration)
+        postInvalidateOnAnimation()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -330,6 +388,11 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         if (page != reportedPage) {
             reportedPage = page
             listener?.onPageChanged(page)
+        }
+        val frac = scrollFraction
+        if (abs(frac - lastReportedFraction) >= 0.001f) {
+            lastReportedFraction = frac
+            onScrollChanged?.invoke(frac)
         }
     }
 
@@ -387,8 +450,12 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     private var pinchA = -1
     private var pinchB = -1
     private var lastSpan = 0.0
+    private var initialPinchSpan = 0.0
     private var lastFocusX = 0.0
     private var lastFocusY = 0.0
+    private var lastPinchTime = 0L
+    private var pinchVelX = 0.0
+    private var pinchVelY = 0.0
 
     /** All touches come here: the children only draw. */
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = true
@@ -514,10 +581,10 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     private fun isTextTap(e: MotionEvent): Boolean {
         if (textTapX.isNaN() || controller?.tools?.tool != EditorTool.TEXT) return false
-        val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
-        val moved = kotlin.math.hypot(e.getX(0) - textTapX, e.getY(0) - textTapY)
+        val slop = ViewConfiguration.get(context).scaledTouchSlop
+        val moved = hypot(e.getX(0) - textTapX, e.getY(0) - textTapY)
         textTapX = Float.NaN
-        return moved <= slop && e.eventTime - e.downTime < android.view.ViewConfiguration.getLongPressTimeout() * 2
+        return moved <= slop && e.eventTime - e.downTime < ViewConfiguration.getLongPressTimeout() * 2
     }
 
     /** Text tool: the tap goes to the screen (edit the text box there, or start one). */
@@ -572,7 +639,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         longPressY = e.getY(index)
         longPressArmed = true
         removeCallbacks(longPressRunnable)
-        postDelayed(longPressRunnable, android.view.ViewConfiguration.getLongPressTimeout().toLong())
+        postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong())
     }
 
     private fun disarmLongPress() {
@@ -590,7 +657,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     cancelGesture(e)
                     startDrawing(e, index, source)
                 }
-                else -> { // second finger: it's a pinch, not a stroke
+                else -> { // second finger: it's a pinch/two-finger pan, not a stroke
                     cancelGesture(e)
                     startPinch(e, index)
                 }
@@ -648,6 +715,14 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     lastY = e.getY(otherIndex)
                     mode = Mode.PAN
                 } else {
+                    // Two-finger scroll when fingerDraws is true: carry momentum into a smooth inertia fling!
+                    val minVel = ViewConfiguration.get(context).scaledMinimumFlingVelocity
+                    if (hypot(pinchVelX, pinchVelY) >= minVel) {
+                        flingX = 0
+                        flingY = 0
+                        scroller.fling(0, 0, pinchVelX.toInt(), pinchVelY.toInt(), Int.MIN_VALUE, Int.MAX_VALUE, Int.MIN_VALUE, Int.MAX_VALUE)
+                        postInvalidateOnAnimation()
+                    }
                     mode = Mode.IGNORE
                 }
                 reportPage()
@@ -875,7 +950,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         if (index < 0) return
         val x = e.getX(index)
         val y = e.getY(index)
-        if (longPressArmed && hypot((x - longPressX).toDouble(), (y - longPressY).toDouble()) > android.view.ViewConfiguration.get(context).scaledTouchSlop) {
+        if (longPressArmed && hypot((x - longPressX).toDouble(), (y - longPressY).toDouble()) > ViewConfiguration.get(context).scaledTouchSlop) {
             disarmLongPress()
         }
         viewport = rules.pan(v, (x - lastX).toDouble(), (y - lastY).toDouble(), width.toDouble(), height.toDouble(), stack)
@@ -905,13 +980,13 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         val next = rules.pan(v, (x - flingX).toDouble(), (y - flingY).toDouble(), width.toDouble(), height.toDouble(), stack)
         flingX = x
         flingY = y
-        if (next == v) {
-            scroller.forceFinished(true) // hit the end
+        if (next == v && scroller.isFinished) {
+            scroller.forceFinished(true)
         } else {
             viewport = next
             surface.invalidate()
             reportPage()
-            postInvalidateOnAnimation()
+            if (!scroller.isFinished) postInvalidateOnAnimation()
         }
     }
 
@@ -922,8 +997,12 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         pinchB = e.getPointerId(secondIndex)
         val (span, fx, fy) = pinchGeometry(e) ?: return
         lastSpan = span
+        initialPinchSpan = span
         lastFocusX = fx
         lastFocusY = fy
+        lastPinchTime = e.eventTime
+        pinchVelX = 0.0
+        pinchVelY = 0.0
     }
 
     private fun pinchGeometry(e: MotionEvent): Triple<Double, Double, Double>? {
@@ -943,12 +1022,25 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         val w = width.toDouble()
         val h = height.toDouble()
         var next = v
-        if (lastSpan > 0 && span > 0) next = rules.zoom(next, span / lastSpan, fx, fy, w, h, stack)
-        next = rules.pan(next, fx - lastFocusX, fy - lastFocusY, w, h, stack)
+        val dfx = fx - lastFocusX
+        val dfy = fy - lastFocusY
+        val dt = (e.eventTime - lastPinchTime).coerceAtLeast(1L)
+        // Smooth exponential moving average of two-finger pan velocity for natural inertia on release.
+        val instVx = dfx * 1000.0 / dt
+        val instVy = dfy * 1000.0 / dt
+        pinchVelX = pinchVelX * 0.4 + instVx * 0.6
+        pinchVelY = pinchVelY * 0.4 + instVy * 0.6
+        // Avoid accidental micro-zoom jitter during pure two-finger vertical scrolling unless span changes meaningfully.
+        val spanChanged = abs(span - initialPinchSpan) > 10.0 * density
+        if (lastSpan > 0 && span > 0 && spanChanged) {
+            next = rules.zoom(next, span / lastSpan, fx, fy, w, h, stack)
+        }
+        next = rules.pan(next, dfx, dfy, w, h, stack)
         viewport = next
         lastSpan = span
         lastFocusX = fx
         lastFocusY = fy
+        lastPinchTime = e.eventTime
         surface.invalidate()
         reportPage()
     }
@@ -958,14 +1050,15 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         if (v != null && event.isFromSource(InputDevice.SOURCE_CLASS_POINTER) && event.actionMasked == MotionEvent.ACTION_SCROLL) {
             val wheel = event.getAxisValue(MotionEvent.AXIS_VSCROLL).toDouble()
             val hwheel = event.getAxisValue(MotionEvent.AXIS_HSCROLL).toDouble()
-            viewport = if (event.metaState and KeyEvent.META_CTRL_ON != 0) {
-                rules.zoom(v, Math.pow(1.1, wheel), event.x.toDouble(), event.y.toDouble(), width.toDouble(), height.toDouble(), stack)
+            if (event.metaState and KeyEvent.META_CTRL_ON != 0) {
+                scroller.forceFinished(true)
+                viewport = rules.zoom(v, Math.pow(1.1, wheel), event.x.toDouble(), event.y.toDouble(), width.toDouble(), height.toDouble(), stack)
+                surface.invalidate()
+                reportPage()
             } else {
-                val step = 64 * density.toDouble()
-                rules.pan(v, -hwheel * step, wheel * step, width.toDouble(), height.toDouble(), stack)
+                val step = 72 * density.toDouble()
+                smoothPanBy((-hwheel * step).toFloat(), (wheel * step).toFloat(), durationMs = 160)
             }
-            surface.invalidate()
-            reportPage()
             return true
         }
         return super.onGenericMotionEvent(event)
@@ -1060,6 +1153,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
                     page.width,
                     page.height,
                     m,
+                    hidden = if (editing) selection.ids else emptySet(),
                 )
                 val inkLayer = if (darkPaper) {
                     layerRect.set(0f, 0f, page.width, page.height)

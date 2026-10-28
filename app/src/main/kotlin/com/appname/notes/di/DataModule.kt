@@ -10,6 +10,7 @@ import com.appname.notes.core.database.RoomInkRepository
 import com.appname.notes.core.database.RoomNoteRepository
 import com.appname.notes.core.database.RoomPdfRepository
 import com.appname.notes.core.database.RoomNotebookRepository
+import com.appname.notes.core.database.RoomPlannerRepository
 import com.appname.notes.core.database.RoomTagRepository
 import com.appname.notes.core.database.RoomTextIndexRepository
 import com.appname.notes.core.database.RoomReminderRepository
@@ -19,6 +20,7 @@ import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.PdfRepository
+import com.appname.notes.core.domain.repository.PlannerRepository
 import com.appname.notes.core.domain.repository.TagRepository
 import com.appname.notes.core.domain.repository.TextIndexRepository
 import com.appname.notes.feature.settings.SearchIndexRebuilder
@@ -102,4 +104,9 @@ object DataModule {
     @Singleton
     fun provideTemplateRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): com.appname.notes.core.domain.repository.TemplateRepository =
         com.appname.notes.core.database.RoomTemplateRepository(db, clock, ids, logger)
+
+    @Provides
+    @Singleton
+    fun providePlannerRepository(db: NotesDatabase, clock: AppClock, ids: IdGenerator, logger: AppLogger): PlannerRepository =
+        RoomPlannerRepository(db, clock, ids, logger)
 }

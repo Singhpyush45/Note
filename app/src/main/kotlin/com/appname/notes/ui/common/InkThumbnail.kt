@@ -9,24 +9,29 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.withScale
 import com.appname.notes.core.domain.model.NoteSummary
+import com.appname.notes.core.ink.model.ImageItem
 import com.appname.notes.core.ink.model.InkItem
-import com.appname.notes.core.ink.model.InkTool
 import com.appname.notes.core.ink.model.PageTemplate
 import com.appname.notes.core.ink.template.TemplateLayout
-import com.appname.notes.feature.templates.TemplateRenderer
+import com.appname.notes.feature.ink.InkImages
 import com.appname.notes.feature.ink.InkPaints
 import com.appname.notes.feature.ink.InkPaths
+import com.appname.notes.feature.templates.TemplateRenderer
 
 /** What a library card needs to draw a handwritten note's first page. */
 class InkThumbnail(
@@ -52,15 +57,25 @@ class InkThumbnail(
     }
 }
 
-/** First-page preview for a handwritten note card. Reloads when the note changes. */
+/** First-page preview for a handwritten note card. Reloads when the note changes or async page photos finish decoding. */
 @Composable
 fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbnail?, modifier: Modifier = Modifier) {
-    val thumb by produceState<InkThumbnail?>(initialValue = null, note.id, note.updatedAt) { value = load(note) }
+    val context = LocalContext.current
+    remember(context) { InkImages.init(context); true }
+    var imageTick by remember { mutableIntStateOf(0) }
+    DisposableEffect(Unit) {
+        val listener: () -> Unit = { imageTick++ }
+        InkImages.addListener(listener)
+        onDispose { InkImages.removeListener(listener) }
+    }
+    val thumb by produceState<InkThumbnail?>(initialValue = null, note.id, note.updatedAt, note.attachmentCount) {
+        value = load(note)
+    }
     val t = thumb
     val ratio = if (t == null) 1.6f else (t.width / t.shownHeight).coerceIn(0.6f, 2.5f)
     val outline = MaterialTheme.colorScheme.outlineVariant
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
-    val bitmapPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
+    val bitmapPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG) }
     val templateRenderer = remember { TemplateRenderer() }
     val styled = remember { com.appname.notes.feature.ink.StyledInk() }
     val darkPaper = com.appname.notes.feature.ink.LocalDarkPaper.current
@@ -74,6 +89,9 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
             .border(1.dp, outline, MaterialTheme.shapes.small)
             .testTag("ink_thumbnail_${note.id.value}"),
     ) {
+        // Read imageTick so the thumbnail canvas redraws whenever an async photo finishes decoding.
+        @Suppress("UNUSED_EXPRESSION")
+        imageTick
         val thumbnail = t
         val paper = thumbnail?.design?.paperColor ?: InkPaints.PAPER
         drawRect(androidx.compose.ui.graphics.Color(if (darkPaper) com.appname.notes.feature.ink.DarkPaper.map(paper) else paper))
@@ -81,22 +99,42 @@ fun InkThumbnailView(note: NoteSummary, load: suspend (NoteSummary) -> InkThumbn
         val scale = size.width / thumbnail.width
         drawIntoCanvas { c ->
             val canvas = c.nativeCanvas
-            // Dark paper (dark theme): the page is drawn through the same colour mapping as in the editor.
-            val layer = if (darkPaper) canvas.saveLayer(0f, 0f, size.width, size.height, darkLayer) else -1
+            // 1. Paper template and PDF page: mapped through DarkPaper in dark mode.
+            val pageLayer = if (darkPaper) canvas.saveLayer(0f, 0f, size.width, size.height, darkLayer) else -1
             canvas.withScale(scale, scale) {
                 clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
                 thumbnail.design?.let { templateRenderer.drawDesign(this, it, pxPerUnit = scale) }
                 thumbnail.pdfPage?.let { pageRect.set(0f, 0f, thumbnail.width, thumbnail.height); drawBitmap(it, null, pageRect, bitmapPaint) }
-                for (pass in com.appname.notes.feature.ink.InkLayers.PASSES) {
-                    for (item in thumbnail.items) {
-                        if (com.appname.notes.feature.ink.InkLayers.of(item) != pass) continue
-                        paint.set(InkPaints.inkPaint(item.brush))
-                        // Main thread: photos come from the cache (a placeholder until decoded).
+            }
+            if (pageLayer >= 0) canvas.restoreToCount(pageLayer)
+
+            // 2. Embedded photos (pass 0): drawn outside DarkPaper's colour filter so their true colours are preserved.
+            val images = thumbnail.items.filterIsInstance<ImageItem>()
+            if (images.isNotEmpty()) {
+                canvas.withScale(scale, scale) {
+                    clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
+                    for (item in images) {
                         InkPaths.drawItem(this, item, paint, styled, syncImages = false)
                     }
                 }
             }
-            if (layer >= 0) canvas.restoreToCount(layer)
+
+            // 3. Ink strokes, highlighters, shapes, text and audio chips: mapped through DarkPaper in dark mode.
+            val nonImages = thumbnail.items.filterNot { it is ImageItem }
+            if (nonImages.isNotEmpty()) {
+                val inkLayer = if (darkPaper) canvas.saveLayer(0f, 0f, size.width, size.height, darkLayer) else -1
+                canvas.withScale(scale, scale) {
+                    clipRect(0f, 0f, thumbnail.width, thumbnail.shownHeight)
+                    for (pass in com.appname.notes.feature.ink.InkLayers.PASSES) {
+                        for (item in nonImages) {
+                            if (com.appname.notes.feature.ink.InkLayers.of(item) != pass) continue
+                            paint.set(InkPaints.inkPaint(item.brush))
+                            InkPaths.drawItem(this, item, paint, styled, syncImages = false)
+                        }
+                    }
+                }
+                if (inkLayer >= 0) canvas.restoreToCount(inkLayer)
+            }
         }
     }
 }

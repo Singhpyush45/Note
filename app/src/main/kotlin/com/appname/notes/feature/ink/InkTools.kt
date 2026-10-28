@@ -1,5 +1,6 @@
 package com.appname.notes.feature.ink
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.Fullscreen
@@ -42,6 +43,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,11 +55,8 @@ import androidx.compose.material.icons.outlined.Brush as BrushIcon
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,11 +78,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -97,7 +94,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.withSave
 import com.appname.notes.R
-import com.appname.notes.core.designsystem.component.GlassSurface
+import com.appname.notes.core.designsystem.theme.LocalDarkTheme
 import com.appname.notes.core.ink.input.EditorTool
 import com.appname.notes.core.ink.input.EraserMode
 import com.appname.notes.core.ink.model.BrushStyle
@@ -197,9 +194,9 @@ private val EraserSizes = listOf(10.0, 16.0, 28.0)
 private val SizeNames = listOf(R.string.ink_size_fine, R.string.ink_size_medium, R.string.ink_size_bold)
 
 /**
- * The drawing tool bar (owner brief §13): undo/redo pinned on the left, full screen on the right, the tools in
- * between (each drawing tool marked with its current colour) and below them the chosen tool's options. Tapping the
- * chosen tool again (or its options button) opens its variation panel ([VariationPanel]), shown above this bar.
+ * Compact, minimal floating editor toolbar inspired by the reference dark-mode editor:
+ * centered capsule with subtle borders, thin hairline divider, and compact visual indicators inside
+ * accessible 48 dp touch targets.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -213,35 +210,46 @@ fun InkToolbar(
     onRedo: () -> Unit = {},
     onFullScreen: (() -> Unit)? = null,
 ) {
-    // A floating, solid pill (no live blur here: drawing must stay smooth).
-    Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 2.dp,
-        shadowElevation = 8.dp,
-        modifier = modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag(InkTestTags.TOOLBAR),
+    val isDark = LocalDarkTheme.current
+    val surfaceColor = if (isDark) Color(0xFF23252A).copy(alpha = 0.96f) else MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.96f)
+    val borderStroke = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.35f else 0.45f))
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color(if (isDark) DarkPaper.WORKSPACE_DARK else DarkPaper.WORKSPACE_LIGHT))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                UndoRedoButtons(ui, onUndo, onRedo)
-                OptionDivider()
-                Row(
-                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ToolButtons(ui, actions) { tool -> if (tool.inkTool != null) onPanel(!panelOpen) }
+        Surface(
+            shape = RoundedCornerShape(26.dp),
+            color = surfaceColor,
+            border = borderStroke,
+            tonalElevation = 2.dp,
+            shadowElevation = 6.dp,
+            modifier = Modifier.widthIn(max = 680.dp).fillMaxWidth().testTag(InkTestTags.TOOLBAR),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    UndoRedoButtons(ui, onUndo, onRedo)
                     OptionDivider()
-                    RulerButton(ui, actions)
+                    Row(
+                        Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ToolButtons(ui, actions) { tool -> if (tool.inkTool != null) onPanel(!panelOpen) }
+                        OptionDivider()
+                        RulerButton(ui, actions)
+                    }
                 }
-            }
-            HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (onFullScreen != null) {
-                    FullScreenButton(entering = true, onClick = onFullScreen)
-                    OptionDivider()
+                HorizontalDivider(Modifier.padding(horizontal = 18.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f))
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (onFullScreen != null) {
+                        FullScreenButton(entering = true, onClick = onFullScreen)
+                        OptionDivider()
+                    }
+                    ToolOptionsRow(ui, actions, panelOpen, onPanel, Modifier.weight(1f))
                 }
-                ToolOptionsRow(ui, actions, panelOpen, onPanel, Modifier.weight(1f))
             }
         }
     }
@@ -252,7 +260,7 @@ fun InkToolbar(
 internal fun ToolButtons(ui: InkEditorUi, actions: InkToolActions, onSelectedAgain: (EditorTool) -> Unit) {
     val tools = ui.tools
     // On dark paper ink is shown mapped (black reads as light), so the tool tips match the page.
-    val darkPaper = LocalDarkPaper.current && com.appname.notes.core.designsystem.theme.LocalDarkTheme.current
+    val darkPaper = LocalDarkPaper.current && LocalDarkTheme.current
     BarTools.filter { it !in ui.hiddenTools || it == tools.tool }.forEach { tool ->
         val raw = when (tool) {
             EditorTool.LASER -> ui.laser.colorArgb
@@ -279,13 +287,20 @@ internal fun RulerButton(ui: InkEditorUi, actions: InkToolActions) {
         Modifier
             .size(48.dp)
             .clip(CircleShape)
-            .then(if (ui.ruler) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
             .toggleable(value = ui.ruler, role = Role.Switch, onValueChange = { actions.onRuler() })
             .semantics { contentDescription = rulerLabel }
             .testTag(InkToolTags.RULER),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Outlined.Straighten, null, tint = if (ui.ruler) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .then(if (ui.ruler) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Outlined.Straighten, null, tint = if (ui.ruler) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -317,7 +332,7 @@ internal fun ToolOptionsRow(ui: InkEditorUi, actions: InkToolActions, panelOpen:
     // Each tool's options start scrolled to the beginning.
     val optionsScroll = key(tools.tool) { rememberScrollState() }
     Row(
-        modifier.fillMaxWidth().horizontalScroll(optionsScroll).padding(horizontal = 6.dp).height(52.dp),
+        modifier.fillMaxWidth().horizontalScroll(optionsScroll).padding(horizontal = 6.dp).height(48.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
     ) {
@@ -386,13 +401,13 @@ internal fun ToolOptionsRow(ui: InkEditorUi, actions: InkToolActions, panelOpen:
                 // Photos: remove the background (or put it back) — first, so it's seen right after pasting a photo.
                 if (ui.selectionPhotos > 0) {
                     androidx.compose.material3.TextButton(onClick = actions.onRemoveBackground, modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.REMOVE_BG)) {
-                        Icon(androidx.compose.material.icons.Icons.Outlined.AutoFixHigh, null, Modifier.size(18.dp))
+                        Icon(Icons.Outlined.AutoFixHigh, null, Modifier.size(18.dp))
                         Text(stringResource(R.string.ink_selection_remove_bg), Modifier.padding(start = 6.dp), maxLines = 1)
                     }
                 }
                 if (ui.selectionCutouts > 0) {
                     androidx.compose.material3.TextButton(onClick = actions.onRestoreBackground, modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.RESTORE_BG)) {
-                        Icon(androidx.compose.material.icons.Icons.Outlined.Wallpaper, null, Modifier.size(18.dp))
+                        Icon(Icons.Outlined.Wallpaper, null, Modifier.size(18.dp))
                         Text(stringResource(R.string.ink_selection_restore_bg), Modifier.padding(start = 6.dp), maxLines = 1)
                     }
                 }
@@ -420,11 +435,10 @@ fun VariationPanel(ui: InkEditorUi, actions: InkToolActions, onClose: () -> Unit
     val tool = ui.tools.tool.inkTool ?: return
     val brush = ui.tools.brushes[tool] ?: ui.tools.brushFor(ui.tools.tool) ?: return
     val style = brush.effectiveStyle
-    // A solid card (a Material surface also keeps touches on it from reaching the page below). No live blur:
-    // the panel must react at once.
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         shadowElevation = 8.dp,
         modifier = modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag(InkToolTags.PANEL),
     ) {
@@ -715,24 +729,31 @@ private fun LaserControls(laser: LaserSettings, actions: InkToolActions) {
 private fun ToolButton(tool: EditorTool, selected: Boolean, ink: Color, rainbow: Boolean, onClick: () -> Unit) {
     val label = stringResource(tool.label())
     val colors = MaterialTheme.colorScheme
-    // The chosen tool sits on a soft disc and is drawn a little bigger.
+    // 48 dp touch target with a compact 38 dp visual pill highlight.
     Box(
         Modifier
             .size(48.dp)
             .clip(CircleShape)
-            .then(if (selected) Modifier.background(colors.primaryContainer) else Modifier)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .semantics { contentDescription = label }
             .testTag(InkTestTags.tool(tool)),
         contentAlignment = Alignment.Center,
     ) {
-        ToolGlyph(tool, body = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant, ink = ink, size = if (selected) 32.dp else 28.dp, rainbow = rainbow)
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .then(if (selected) Modifier.background(colors.primaryContainer) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            ToolGlyph(tool, body = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant, ink = ink, size = if (selected) 28.dp else 25.dp, rainbow = rainbow)
+        }
     }
 }
 
 @Composable
 private fun OptionDivider() {
-    Box(Modifier.padding(horizontal = 3.dp).size(width = 1.dp, height = 24.dp).background(MaterialTheme.colorScheme.outlineVariant))
+    Box(Modifier.padding(horizontal = 3.dp).size(width = 1.dp, height = 22.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)))
 }
 
 /** Opens the tool's options panel (variants, size, opacity, pressure). */
@@ -751,7 +772,7 @@ private fun PanelButton(style: BrushStyle, open: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** 48 dp touch target with a 28 dp colour dot (SRS 8.2). */
+/** 48 dp touch target with a 24 dp colour dot (SRS 8.2). */
 @Composable
 internal fun ColorDot(argb: Int, selected: Boolean, onClick: () -> Unit, label: String? = null) {
     val hex = "#" + Integer.toHexString(argb and 0xFFFFFF).padStart(6, '0').uppercase()
@@ -771,9 +792,9 @@ internal fun ColorDot(argb: Int, selected: Boolean, onClick: () -> Unit, label: 
     ) {
         Box(
             Modifier
-                .size(26.dp)
-                .then(if (selected) Modifier.border(2.5.dp, ring, CircleShape) else Modifier.border(1.dp, Color(0x33000000), CircleShape))
-                .padding(if (selected) 4.dp else 1.dp)
+                .size(24.dp)
+                .then(if (selected) Modifier.border(2.2.dp, ring, CircleShape) else Modifier.border(1.dp, Color(0x33000000), CircleShape))
+                .padding(if (selected) 3.5.dp else 1.dp)
                 .background(Color(argb or OPAQUE), CircleShape),
         )
     }
@@ -796,7 +817,6 @@ private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, on
             .size(48.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick)
-            .then(if (selected) Modifier.background(colors.secondaryContainer, CircleShape) else Modifier)
             .semantics {
                 contentDescription = label
                 role = Role.RadioButton
@@ -804,7 +824,15 @@ private fun SizeDot(fraction: Float, @StringRes name: Int, selected: Boolean, on
             },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size((5 + 13 * fraction).dp).background(colors.onSurface, CircleShape))
+        Box(
+            Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .then(if (selected) Modifier.background(colors.secondaryContainer, CircleShape) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size((5 + 12 * fraction).dp).background(colors.onSurface, CircleShape))
+        }
     }
 }
 

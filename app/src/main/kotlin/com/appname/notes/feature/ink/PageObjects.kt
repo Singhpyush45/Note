@@ -30,6 +30,7 @@ import kotlin.math.ceil
  * page redraws. Until then a light placeholder is drawn. [sync] decodes on the calling thread (export, thumbnails).
  */
 object InkImages {
+    @Volatile
     private var dir: File? = null
     private val cache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 12).toInt()) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
@@ -41,6 +42,15 @@ object InkImages {
 
     fun init(context: Context) {
         if (dir == null) dir = File(context.applicationContext.filesDir, AttachmentFileStore.DIR)
+    }
+
+    fun initDir(directory: File) {
+        if (dir == null) dir = directory
+    }
+
+    fun isCached(fileName: String, targetPx: Int = 512): Boolean {
+        val want = bucket(targetPx)
+        return cache.get("$fileName@$want") != null || listOf(2048, 1024, 512, 256).any { cache.get("$fileName@$it") != null }
     }
 
     fun addListener(l: () -> Unit) = synchronized(listeners) { listeners.add(l) }
@@ -97,7 +107,7 @@ object InkImages {
 
 /** Drawing photos and text boxes on a page; canvas in page units. */
 internal object PageObjectPainter {
-    private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private val placeholder = Paint().apply { color = 0x14000000 }
     private val rect = RectF()
 
@@ -105,6 +115,10 @@ internal object PageObjectPainter {
         val p = item.place
         val target = (maxOf(p.width, p.height) * pxPerUnit).toInt().coerceAtLeast(64)
         val bmp = if (sync) InkImages.sync(item.fileName, target) else InkImages.get(item.fileName, target)
+        // Guarantee true photo colours: no colour filter, full opacity, normal blending.
+        bitmapPaint.colorFilter = null
+        bitmapPaint.xfermode = null
+        bitmapPaint.alpha = 255
         canvas.withSave {
             rotate(p.rotationDeg, p.cx, p.cy)
             if (item.flipped) scale(-1f, 1f, p.cx, p.cy)

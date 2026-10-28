@@ -175,6 +175,7 @@ class InkEditorViewModel @AssistedInject constructor(
     private val recordings: com.appname.notes.feature.audio.RecordingController,
     private val attachmentRepo: com.appname.notes.core.domain.repository.AttachmentRepository,
     private val attachmentStore: com.appname.notes.feature.attachments.AttachmentFileStore,
+    private val planner: com.appname.notes.core.domain.repository.PlannerRepository,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -1494,6 +1495,38 @@ class InkEditorViewModel @AssistedInject constructor(
         viewModelScope.launch {
             val r = notes.setTitle(noteId, title)
             if (r is AppResult.Failure) _message.value = r.error.toUserMessage()
+        }
+    }
+
+    /**
+     * Creates a To-do List task from any selected text box on the canvas, or from the note's title,
+     * and links the task to this handwritten note.
+     */
+    fun createTaskFromNote() {
+        val selectedText = controller()?.selectedItems()
+            ?.filterIsInstance<com.appname.notes.core.ink.model.TextItem>()
+            ?.map { it.text.trim() }
+            ?.firstOrNull { it.isNotEmpty() }
+        val pageText = session()?.pages?.getOrNull(_ui.value.currentPage)?.items?.items
+            ?.filterIsInstance<com.appname.notes.core.ink.model.TextItem>()
+            ?.map { it.text.trim() }
+            ?.firstOrNull { it.isNotEmpty() }
+        val noteTitle = _ui.value.title.trim()
+        val taskTitle = selectedText
+            ?: noteTitle.ifEmpty { pageText ?: appContext.getString(R.string.ink_untitled) }
+        val taskDesc = if (noteTitle.isNotEmpty() && noteTitle != taskTitle) noteTitle else ""
+        viewModelScope.launch {
+            when (val r = planner.createTask(
+                title = taskTitle,
+                description = taskDesc,
+                dueDate = null,
+                dueTime = null,
+                reminderAt = null,
+                noteId = noteId,
+            )) {
+                is AppResult.Success -> _message.value = UserMessage(R.string.todo_msg_created)
+                is AppResult.Failure -> _message.value = r.error.toUserMessage()
+            }
         }
     }
 

@@ -2,8 +2,10 @@ package com.appname.notes.navigation
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -19,6 +21,14 @@ import kotlinx.serialization.Serializable
 /** The notes library (list pane on tablets). */
 @Serializable
 data object HomeKey : NavKey
+
+/** Monthly calendar and integrated To-do List (Argon 4 §4–5). */
+@Serializable
+data object CalendarKey : NavKey
+
+/** Direct route into the To-do List view of the planner. */
+@Serializable
+data object TasksKey : NavKey
 
 @Serializable
 data object SettingsKey : NavKey
@@ -52,7 +62,7 @@ data class TemplatesKey(val notebookId: String = "", val tagId: String = "", val
 @Serializable
 data class TemplateEditorKey(val templateId: String = "") : NavKey
 
-/** Destinations shown in the bottom bar / navigation rail. */
+/** Destinations shown in the bottom bar / navigation rail in exact order: Notes · Calendar · Settings. */
 enum class TopLevelDestination(
     val key: NavKey,
     @param:StringRes val label: Int,
@@ -61,5 +71,6 @@ enum class TopLevelDestination(
     val testTag: String,
 ) {
     HOME(HomeKey, R.string.nav_home, Icons.Filled.Home, Icons.Outlined.Home, "nav_home"),
+    CALENDAR(CalendarKey, R.string.nav_calendar, Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth, "nav_calendar"),
     SETTINGS(SettingsKey, R.string.nav_settings, Icons.Filled.Settings, Icons.Outlined.Settings, "nav_settings"),
 }

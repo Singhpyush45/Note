@@ -3,6 +3,7 @@ package com.appname.notes
 import android.app.Application
 import android.os.StrictMode
 import com.appname.notes.feature.ink.InkCrashGuard
+import com.appname.notes.feature.ink.InkImages
 import com.appname.notes.di.ApplicationScope
 import com.appname.notes.feature.attachments.StorageCleanup
 import com.appname.notes.feature.audio.RecordingController
@@ -33,6 +34,8 @@ class NotesApplication : Application() {
         if (BuildConfig.DEBUG) enableStrictMode()
         super.onCreate() // Hilt injects the fields above here
         InkCrashGuard.install()
+        // Initialize the ink image cache directory at startup so front-page note thumbnails decode photos on first launch.
+        InkImages.init(this)
         // Keeps the alarm set for the next reminder (FR-010); anything missed while the app was stopped goes off now.
         reminders.start()
         // Remove stored PDFs and attachments no note uses any more (e.g. the app was killed during a delete).

@@ -66,6 +66,19 @@ class PageStackTest {
     }
 
     @Test
+    fun `continuous scrollFraction and scrollToFraction map smoothly across the document`() {
+        val w = 1080.0
+        val h = 2000.0
+        val v0 = rules.initial(w, h, stack)
+        assertEquals(0f, rules.scrollFraction(v0, w, h, stack), 1e-5f)
+        val vMid = rules.scrollToFraction(v0, 0.37f, w, h, stack)
+        assertEquals(0.37f, rules.scrollFraction(vMid, w, h, stack), 1e-5f)
+        val vEnd = rules.scrollToFraction(v0, 1f, w, h, stack)
+        assertEquals(1f, rules.scrollFraction(vEnd, w, h, stack), 1e-5f)
+        assertEquals(2, rules.currentPage(vEnd, h, stack, w))
+    }
+
+    @Test
     fun `fit width fills the view with that page, even past real size`() {
         // Tablet: the reading zoom stops at real size, fit width goes further.
         val v = rules.fitWidth(2, 2560.0, 1600.0, stack)

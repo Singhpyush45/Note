@@ -1,46 +1,50 @@
 package com.appname.notes.feature.library
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
-import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
-import com.appname.notes.core.domain.model.AttachmentKind
-import com.appname.notes.feature.attachments.AttachmentIntents
-import com.appname.notes.feature.attachments.AttachmentPreviews
-import com.appname.notes.feature.attachments.Attacher
-import java.io.File
-import com.appname.notes.feature.attachments.StorageCleanup
-import com.appname.notes.feature.pdf.PdfImport
-import com.appname.notes.feature.pdf.PdfImporter
-import com.appname.notes.feature.pdf.PdfThumbnails
-import com.appname.notes.feature.pdf.messageRes
 import androidx.lifecycle.viewModelScope
 import com.appname.notes.R
+import com.appname.notes.core.common.coroutines.DispatcherProvider
 import com.appname.notes.core.common.id.IdGenerator
 import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.domain.markdown.Markdown
+import com.appname.notes.core.domain.model.AttachmentKind
+import com.appname.notes.core.domain.model.FolderTree
 import com.appname.notes.core.domain.model.NoteCollection
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.core.domain.model.NoteSort
 import com.appname.notes.core.domain.model.NoteSummary
 import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.domain.model.Notebook
-import com.appname.notes.core.domain.model.NotebookId
-import com.appname.notes.core.domain.model.FolderTree
 import com.appname.notes.core.domain.model.NotebookDeleteMode
+import com.appname.notes.core.domain.model.NotebookId
 import com.appname.notes.core.domain.model.Tag
 import com.appname.notes.core.domain.model.TagId
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
-import com.appname.notes.core.ink.model.PageTemplate
-import com.appname.notes.ui.common.InkThumbnail
 import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.TagRepository
 import com.appname.notes.core.files.DocumentFiles
+import com.appname.notes.core.ink.model.ImageItem
+import com.appname.notes.core.ink.model.PageTemplate
 import com.appname.notes.core.settings.SettingsRepository
+import com.appname.notes.feature.attachments.Attacher
+import com.appname.notes.feature.attachments.AttachmentFileStore
+import com.appname.notes.feature.attachments.AttachmentIntents
+import com.appname.notes.feature.attachments.AttachmentPreviews
+import com.appname.notes.feature.attachments.StorageCleanup
+import com.appname.notes.feature.ink.InkImages
+import com.appname.notes.feature.pdf.PdfImport
+import com.appname.notes.feature.pdf.PdfImporter
+import com.appname.notes.feature.pdf.PdfThumbnails
+import com.appname.notes.feature.pdf.messageRes
+import com.appname.notes.ui.common.InkThumbnail
 import com.appname.notes.ui.common.UserMessage
 import com.appname.notes.ui.common.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,6 +56,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class LibraryUiState(
     val collection: NoteCollection = NoteCollection.All,
@@ -95,9 +100,15 @@ class LibraryViewModel @Inject constructor(
     private val pdfThumbnails: PdfThumbnails,
     private val storageCleanup: StorageCleanup,
     private val attachmentPreviews: AttachmentPreviews,
+    private val attachmentStore: AttachmentFileStore,
     private val attacher: Attacher,
     private val attachmentIntents: AttachmentIntents,
+    private val dispatchers: DispatcherProvider,
 ) : ViewModel() {
+
+    init {
+        InkImages.initDir(attachmentStore.dir)
+    }
 
     // The chosen collection survives rotation and process death via SavedStateHandle.
     private val collection = MutableStateFlow(decode(savedState.get<String>(KEY_COLLECTION)))
@@ -180,7 +191,7 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** Recently drawn thumbnails, keyed by note and its modified time, so scrolling doesn't reload them. */
+    /** Recently drawn thumbnails, keyed by note, modified time and attachment count, so scrolling doesn't reload them. */
     private val thumbnails = object : LinkedHashMap<String, InkThumbnail>(32, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, InkThumbnail>?) = size > THUMBNAIL_CACHE
     }
@@ -203,12 +214,32 @@ class LibraryViewModel @Inject constructor(
     suspend fun cover(fileName: String): Bitmap? = attachmentPreviews.load(fileName, AttachmentKind.IMAGE, COVER_PX)
 
     suspend fun inkThumbnail(note: NoteSummary): InkThumbnail? {
-        val key = "${note.id.value}@${note.updatedAt.toEpochMilli()}"
-        synchronized(thumbnails) { thumbnails[key] }?.let { return it }
+        InkImages.initDir(attachmentStore.dir)
+        val key = "${note.id.value}@${note.updatedAt.toEpochMilli()}@${note.attachmentCount}"
+        synchronized(thumbnails) { thumbnails[key] }?.let { cached ->
+            val images = cached.items.filterIsInstance<ImageItem>()
+            if (images.isEmpty() || images.all { InkImages.isCached(it.fileName, THUMB_IMAGE_PX) }) {
+                return cached
+            }
+            withContext(dispatchers.io) {
+                images.forEach { InkImages.sync(it.fileName, THUMB_IMAGE_PX) }
+            }
+            return cached
+        }
         val page = (ink.firstPage(note.id) as? AppResult.Success)?.value ?: return null
+        val imageItems = page.items.filterIsInstance<ImageItem>()
+        if (imageItems.isNotEmpty()) {
+            withContext(dispatchers.io) {
+                imageItems.forEach { InkImages.sync(it.fileName, THUMB_IMAGE_PX) }
+            }
+        }
         val pdfPage = page.info.pdfPageIndex?.let { pdfThumbnails.render(note.id, it) }
         val thumb = InkThumbnail(page.info.width, page.info.height, page.info.template, page.items, pdfPage, page.info.layout)
-        synchronized(thumbnails) { thumbnails[key] = thumb }
+        val allImagesReady = imageItems.all { InkImages.isCached(it.fileName, THUMB_IMAGE_PX) }
+        // Cache only when ready and non-transient so cold-start or in-progress notes never get stuck with a blank preview.
+        if (allImagesReady && (page.items.isNotEmpty() || note.attachmentCount == 0 || pdfPage != null || page.info.layout != null)) {
+            synchronized(thumbnails) { thumbnails[key] = thumb }
+        }
         return thumb
     }
 
@@ -419,6 +450,7 @@ class LibraryViewModel @Inject constructor(
         private const val KEY_COLLECTION = "collection"
         private const val THUMBNAIL_CACHE = 60
         private const val COVER_PX = 480
+        private const val THUMB_IMAGE_PX = 512
         private val TEXT_TYPES = setOf("text/markdown", "text/x-markdown", "text/plain")
 
         fun encode(c: NoteCollection): String = when (c) {

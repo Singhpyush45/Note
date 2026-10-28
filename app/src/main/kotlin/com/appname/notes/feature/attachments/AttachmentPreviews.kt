@@ -67,8 +67,8 @@ class AttachmentPreviews(
 }
 
 /**
- * Decodes [file] so its longer side is at least [targetPx] (powers of two, the cheap way BitmapFactory
- * scales while reading), then rotates/mirrors it upright.
+ * Decodes [file] in full-fidelity ARGB_8888 so its longer side is at least [targetPx] (powers of two, the cheap way
+ * BitmapFactory scales while reading), then rotates/mirrors it upright while preserving original colours and alpha.
  */
 internal fun decodeImage(file: File, targetPx: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -77,7 +77,13 @@ internal fun decodeImage(file: File, targetPx: Int): Bitmap? {
     if (longSide <= 0) return null
     var sample = 1
     while (longSide / (sample * 2) >= targetPx) sample *= 2
-    val bitmap = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = sample
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+        inScaled = false
+        inPremultiplied = true
+    }
+    val bitmap = BitmapFactory.decodeFile(file.path, options) ?: return null
     val (degrees, mirrored) = exifRotation(file)
     if (degrees == 0 && !mirrored) return bitmap
     val m = Matrix().apply {

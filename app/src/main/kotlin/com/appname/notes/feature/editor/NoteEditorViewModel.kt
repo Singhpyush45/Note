@@ -122,6 +122,7 @@ class NoteEditorViewModel @AssistedInject constructor(
     reminderFactory: NoteReminders.Factory,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val settings: SettingsRepository,
+    private val planner: com.appname.notes.core.domain.repository.PlannerRepository,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -661,6 +662,39 @@ class NoteEditorViewModel @AssistedInject constructor(
         val state = controller?.state ?: return null
         val line = state.paragraphs.indexOfFirst { it.id == blockId }.takeIf { it >= 0 } ?: return null
         return state.lineText(line).trim().ifEmpty { null }
+    }
+
+    /**
+     * Creates a To-do List task from the currently selected text, the current line under the cursor,
+     * or the note's title, and links the new task to this note.
+     */
+    fun createTaskFromNote() {
+        val c = controller ?: return
+        val state = c.state
+        val selectedText = if (!state.selection.collapsed) {
+            state.text.substring(state.selection.min, state.selection.max)
+                .lines()
+                .map { it.trim() }
+                .firstOrNull { it.isNotEmpty() }
+        } else {
+            null
+        }
+        val cursorLineText = state.lineText(state.lineOf(state.selection.min)).trim().takeIf { it.isNotEmpty() }
+        val noteTitle = c.title.trim()
+        val taskTitle = selectedText
+            ?: cursorLineText
+            ?: noteTitle.ifEmpty { appContext.getString(R.string.note_untitled) }
+        val taskDescription = if (noteTitle.isNotEmpty() && noteTitle != taskTitle) noteTitle else ""
+        act(UserMessage(R.string.todo_msg_created)) {
+            planner.createTask(
+                title = taskTitle,
+                description = taskDescription,
+                dueDate = null,
+                dueTime = null,
+                reminderAt = null,
+                noteId = noteId,
+            )
+        }
     }
 
     fun noAppToOpen() {

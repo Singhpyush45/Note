@@ -71,8 +71,19 @@ abstract class InkDao {
     @Query("UPDATE ink_pages SET updatedAt = :now WHERE id = :pageId")
     protected abstract suspend fun touchPage(pageId: String, now: Long)
 
-    /** Marks the note modified. Returns 0 if the note is gone (deleted). */
-    @Query("UPDATE notes SET updatedAt = :now, revision = revision + 1 WHERE id = :noteId AND deletedAt IS NULL")
+    /**
+     * Marks the note modified and strictly advances updatedAt so note list observers and thumbnail caches
+     * always invalidate even when commits happen within the same millisecond as note creation.
+     * Returns 0 if the note is gone (deleted).
+     */
+    @Query(
+        """
+        UPDATE notes
+        SET updatedAt = CASE WHEN :now > updatedAt THEN :now ELSE updatedAt + 1 END,
+            revision = revision + 1
+        WHERE id = :noteId AND deletedAt IS NULL
+        """,
+    )
     protected abstract suspend fun touchNote(noteId: String, now: Long): Int
 
     @Insert

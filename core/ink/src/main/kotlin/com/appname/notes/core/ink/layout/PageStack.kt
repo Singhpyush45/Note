@@ -210,6 +210,30 @@ class ViewportRules(
             stack,
         )
 
+    /** Continuous 0..1 scroll progress along the document's primary scroll axis. */
+    fun scrollFraction(v: Viewport, viewW: Double, viewH: Double, stack: PageStack): Float {
+        if (stack.count == 0) return 0f
+        return if (stack.vertical) {
+            val range = (stack.height * v.scale + 2 * margin - viewH).coerceAtLeast(0.0)
+            if (range <= 1e-4) 0f else ((margin - v.dy) / range).toFloat().coerceIn(0f, 1f)
+        } else {
+            val range = (stack.width * v.scale + 2 * margin - viewW).coerceAtLeast(0.0)
+            if (range <= 1e-4) 0f else ((margin - v.dx) / range).toFloat().coerceIn(0f, 1f)
+        }
+    }
+
+    /** Scrolls continuously to [fraction] (0..1) along the document's primary scroll axis. */
+    fun scrollToFraction(v: Viewport, fraction: Float, viewW: Double, viewH: Double, stack: PageStack): Viewport {
+        val f = if (fraction.isFinite()) fraction.coerceIn(0f, 1f).toDouble() else 0.0
+        return if (stack.vertical) {
+            val range = (stack.height * v.scale + 2 * margin - viewH).coerceAtLeast(0.0)
+            clamp(v.copy(dy = margin - f * range), viewW, viewH, stack)
+        } else {
+            val range = (stack.width * v.scale + 2 * margin - viewW).coerceAtLeast(0.0)
+            clamp(v.copy(dx = margin - f * range), viewW, viewH, stack)
+        }
+    }
+
     /** "Fit width" (SRS 7.1): page [i]'s width fills the view, even beyond real size; the page starts at the top. */
     fun fitWidth(i: Int, viewW: Double, viewH: Double, stack: PageStack): Viewport {
         val r = stack.rect(i)

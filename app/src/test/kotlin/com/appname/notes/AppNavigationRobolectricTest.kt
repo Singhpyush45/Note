@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.appname.notes.feature.calendar.PlannerTestTags
 import com.appname.notes.feature.library.LibraryTestTags
 import com.appname.notes.feature.settings.SettingsTestTags
 import com.google.common.truth.Truth.assertThat
@@ -37,6 +38,22 @@ class AppNavigationRobolectricTest {
         composeRule.onNodeWithTag(LibraryTestTags.SCREEN).assertIsDisplayed()
         composeRule.waitUntilExactlyOneExists(hasText(string(R.string.home_empty_title)), timeoutMillis = 5_000)
         composeRule.onNodeWithTag("nav_home").assertIsSelected()
+    }
+
+    @Test
+    fun calendarTab_opensCalendarAndTasks_andBackReturnsHome() {
+        composeRule.onNodeWithTag("nav_calendar").performClick()
+        composeRule.onNodeWithTag(PlannerTestTags.SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag("nav_calendar").assertIsSelected()
+
+        composeRule.onNodeWithTag(PlannerTestTags.TAB_TASKS).performClick()
+        composeRule.onNodeWithTag(PlannerTestTags.FILTER_PENDING).assertIsDisplayed()
+
+        pressBack()
+
+        composeRule.onNodeWithTag(LibraryTestTags.SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag("nav_home").assertIsSelected()
+        assertThat(composeRule.activity.isFinishing).isFalse()
     }
 
     @Test

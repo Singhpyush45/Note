@@ -5,6 +5,7 @@ import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
 import com.appname.notes.core.domain.repository.PdfRepository
 import com.appname.notes.core.domain.repository.NotebookRepository
+import com.appname.notes.core.domain.repository.PlannerRepository
 import com.appname.notes.core.domain.repository.TagRepository
 import com.appname.notes.core.domain.repository.TextIndexRepository
 import com.appname.notes.feature.pdf.PdfAnnotationWriter
@@ -30,6 +31,7 @@ interface AppDataEntryPoint {
     fun textIndex(): TextIndexRepository
     fun reminders(): com.appname.notes.core.domain.repository.ReminderRepository
     fun templates(): com.appname.notes.core.domain.repository.TemplateRepository
+    fun planner(): PlannerRepository
     fun reminderScheduler(): com.appname.notes.feature.reminders.ReminderScheduler
     fun reminderNotifier(): com.appname.notes.feature.reminders.ReminderNotifier
     fun recordings(): com.appname.notes.feature.audio.RecordingController
