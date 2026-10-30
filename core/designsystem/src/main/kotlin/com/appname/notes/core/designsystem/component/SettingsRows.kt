@@ -1,55 +1,56 @@
 package com.appname.notes.core.designsystem.component
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import com.appname.notes.core.designsystem.theme.AppTheme
-
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.material3.Slider
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.unit.dp
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.appname.notes.core.designsystem.theme.AppTheme
+import com.appname.notes.core.designsystem.theme.LocalDarkTheme
 
 /*
  * Settings building blocks. The whole row is the touch target (≥48dp) and carries the accessibility
@@ -62,6 +63,7 @@ fun SettingsSectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.primary,
         modifier = modifier
             .fillMaxWidth()
@@ -131,7 +133,13 @@ fun SettingsRadioRow(
 
 /** A row that performs an action when tapped (e.g. "Rebuild search index"). */
 @Composable
-fun SettingsActionRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier, summary: String? = null) {
+fun SettingsActionRow(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    icon: ImageVector? = null,
+) {
     val spacing = AppTheme.spacing
     Row(
         modifier = modifier
@@ -140,8 +148,25 @@ fun SettingsActionRow(title: String, onClick: () -> Unit, modifier: Modifier = M
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = spacing.lg, vertical = spacing.md),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.md),
     ) {
+        if (icon != null) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+            }
+        }
         RowText(title = title, summary = summary, enabled = true, modifier = Modifier.weight(1f))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        )
     }
 }
 
@@ -168,6 +193,7 @@ private fun RowText(title: String, summary: String?, enabled: Boolean, modifier:
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
         )
         if (summary != null) {
@@ -182,18 +208,46 @@ private fun RowText(title: String, summary: String?, enabled: Boolean, modifier:
 
 private const val DISABLED_ALPHA = 0.38f
 
-/** A group of settings on a glass card (owner brief §19), with its heading above. */
+/** A group of settings on a glass card (owner brief §19), with its heading and optional icon badge above. */
 @Composable
-fun SettingsCard(title: String?, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun SettingsCard(
+    title: String?,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val spacing = AppTheme.spacing
     Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg)) {
         if (title != null) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = spacing.xs, top = spacing.xl, bottom = spacing.sm).semantics { heading() },
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(start = spacing.xs, top = spacing.xl, bottom = spacing.sm),
+            ) {
+                if (icon != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
         }
         GlassSurface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, elevation = 2.dp) {
             Column(Modifier.fillMaxWidth().padding(vertical = spacing.xs), content = content)
@@ -223,11 +277,19 @@ fun SettingsSliderRow(
     Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.sm)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RowText(title = title, summary = summary, enabled = enabled, modifier = Modifier.weight(1f))
-            Text(
-                valueLabel(shown),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
-            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (enabled) 0.65f else 0.25f))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    valueLabel(shown),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
+                )
+            }
         }
         GlassSlider(
             value = shown,
@@ -270,10 +332,10 @@ fun GlassSlider(
         thumb = {
             Box(
                 Modifier
-                    .size(24.dp)
+                    .size(22.dp)
                     .shadow(3.dp, CircleShape)
                     .background(Color.White, CircleShape)
-                    .border(1.dp, edge, CircleShape),
+                    .border(1.5.dp, if (enabled) active else edge, CircleShape),
             )
         },
         track = { state ->
@@ -292,8 +354,10 @@ fun GlassSlider(
     )
 }
 
-/** One choice out of a few, as a segmented button row ("Light | Dark | System", "Compact | Comfortable"). */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Sleek capsule segmented control ("Light | Dark | System", "Compact | Comfortable") with a soft pill indicator
+ * instead of bulky Material SegmentedButtons with checkmarks and heavy borders.
+ */
 @Composable
 fun SettingsSegmentedRow(
     title: String,
@@ -304,16 +368,59 @@ fun SettingsSegmentedRow(
     optionTag: (Int) -> String = { "segment_$it" },
 ) {
     val spacing = AppTheme.spacing
+    val isDark = LocalDarkTheme.current
+    val trackColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f)
+    }
     Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.sm)) {
-        Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = spacing.sm)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = spacing.sm)
+                .clip(RoundedCornerShape(50))
+                .background(trackColor, RoundedCornerShape(50))
+                .border(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f), RoundedCornerShape(50))
+                .padding(4.dp)
+                .selectableGroup(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             options.forEachIndexed { i, label ->
-                SegmentedButton(
-                    selected = i == selectedIndex,
-                    onClick = { onSelect(i) },
-                    shape = SegmentedButtonDefaults.itemShape(i, options.size),
-                    modifier = Modifier.testTag(optionTag(i)),
-                ) { Text(label, maxLines = 1) }
+                val selected = i == selectedIndex
+                val pillBg = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                val textColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 36.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(pillBg, RoundedCornerShape(50))
+                        .selectable(
+                            selected = selected,
+                            role = Role.RadioButton,
+                            onClick = { onSelect(i) },
+                        )
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .testTag(optionTag(i)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

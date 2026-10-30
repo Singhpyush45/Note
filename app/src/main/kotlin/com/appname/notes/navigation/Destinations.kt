@@ -3,11 +3,11 @@ package com.appname.notes.navigation
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation3.runtime.NavKey
 import com.appname.notes.R
@@ -62,7 +62,7 @@ data class TemplatesKey(val notebookId: String = "", val tagId: String = "", val
 @Serializable
 data class TemplateEditorKey(val templateId: String = "") : NavKey
 
-/** Destinations shown in the bottom bar / navigation rail in exact order: Notes · Calendar · Settings. */
+/** Destinations shown in the bottom bar / navigation rail in exact order: Notes · Calendar · To-do. */
 enum class TopLevelDestination(
     val key: NavKey,
     @param:StringRes val label: Int,
@@ -72,5 +72,5 @@ enum class TopLevelDestination(
 ) {
     HOME(HomeKey, R.string.nav_home, Icons.Filled.Home, Icons.Outlined.Home, "nav_home"),
     CALENDAR(CalendarKey, R.string.nav_calendar, Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth, "nav_calendar"),
-    SETTINGS(SettingsKey, R.string.nav_settings, Icons.Filled.Settings, Icons.Outlined.Settings, "nav_settings"),
+    TODO(TasksKey, R.string.todo_title, Icons.Filled.Checklist, Icons.Outlined.Checklist, "nav_todo"),
 }

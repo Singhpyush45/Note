@@ -48,6 +48,7 @@ import com.appname.notes.core.domain.repository.NotebookRepository
 import com.appname.notes.core.domain.repository.TagRepository
 import com.appname.notes.core.files.DocumentFiles
 import com.appname.notes.di.ApplicationScope
+import com.appname.notes.feature.pro.TypedNotePdfExporter
 import com.appname.notes.ui.common.UserMessage
 import com.appname.notes.ui.common.toUserMessage
 import dagger.assisted.Assisted
@@ -683,7 +684,7 @@ class NoteEditorViewModel @AssistedInject constructor(
         val noteTitle = c.title.trim()
         val taskTitle = selectedText
             ?: cursorLineText
-            ?: noteTitle.ifEmpty { appContext.getString(R.string.note_untitled) }
+            ?: noteTitle.ifEmpty { appContext.getString(R.string.untitled) }
         val taskDescription = if (noteTitle.isNotEmpty() && noteTitle != taskTitle) noteTitle else ""
         act(UserMessage(R.string.todo_msg_created)) {
             planner.createTask(
@@ -735,6 +736,21 @@ class NoteEditorViewModel @AssistedInject constructor(
 
     fun suggestedFileName(): String =
         (controller?.title?.trim()?.takeIf { it.isNotEmpty() } ?: "note").replace(Regex("""[\\/:*?"<>|]"""), "_") + ".md"
+
+    fun suggestedPdfFileName(): String =
+        (controller?.title?.trim()?.takeIf { it.isNotEmpty() } ?: "note").replace(Regex("""[\\/:*?"<>|]"""), "_") + ".pdf"
+
+    fun writePdfExport(uri: Uri) {
+        val snap = snapshot() ?: return
+        viewModelScope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                TypedNotePdfExporter.export(snap.title, snap.document) {
+                    appContext.contentResolver.openOutputStream(uri, "w")
+                }
+            }
+            _message.value = UserMessage(if (ok) R.string.ink_pdf_exported else R.string.msg_export_failed)
+        }
+    }
 
     fun writeExport(uri: Uri, text: String) {
         viewModelScope.launch {

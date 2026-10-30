@@ -18,11 +18,11 @@ class TopLevelNavigationTest {
     }
 
     @Test
-    fun `top level destinations follow Notes Calendar Settings order`() {
+    fun `top level destinations follow Notes Calendar Todo order`() {
         assertThat(TopLevelDestination.entries).containsExactly(
             TopLevelDestination.HOME,
             TopLevelDestination.CALENDAR,
-            TopLevelDestination.SETTINGS,
+            TopLevelDestination.TODO,
         ).inOrder()
     }
 
@@ -34,7 +34,7 @@ class TopLevelNavigationTest {
     @Test
     fun `other tabs sit on top of home so back returns home`() {
         assertThat(topLevelStackFor(TopLevelDestination.CALENDAR)).containsExactly(HomeKey, CalendarKey).inOrder()
-        assertThat(topLevelStackFor(TopLevelDestination.SETTINGS)).containsExactly(HomeKey, SettingsKey).inOrder()
+        assertThat(topLevelStackFor(TopLevelDestination.TODO)).containsExactly(HomeKey, TasksKey).inOrder()
     }
 
     @Test
@@ -43,28 +43,28 @@ class TopLevelNavigationTest {
         stack.navigateToTopLevel(TopLevelDestination.CALENDAR)
         assertThat(stack).containsExactly(HomeKey, CalendarKey).inOrder()
 
-        stack.navigateToTopLevel(TopLevelDestination.SETTINGS)
-        assertThat(stack).containsExactly(HomeKey, SettingsKey).inOrder()
+        stack.navigateToTopLevel(TopLevelDestination.TODO)
+        assertThat(stack).containsExactly(HomeKey, TasksKey).inOrder()
     }
 
     @Test
     fun `selecting home from settings pops back to root`() {
-        val stack = mutableListOf<NavKey>(HomeKey, SettingsKey)
+        val stack = mutableListOf<NavKey>(HomeKey, TasksKey)
         stack.navigateToTopLevel(TopLevelDestination.HOME)
         assertThat(stack).containsExactly(HomeKey)
     }
 
     @Test
     fun `reselecting the current tab makes no edits`() {
-        val stack = CountingList(listOf(HomeKey, SettingsKey))
-        stack.navigateToTopLevel(TopLevelDestination.SETTINGS)
+        val stack = CountingList(listOf(HomeKey, TasksKey))
+        stack.navigateToTopLevel(TopLevelDestination.TODO)
         assertThat(stack.edits).isEqualTo(0)
-        assertThat(stack).containsExactly(HomeKey, SettingsKey).inOrder()
+        assertThat(stack).containsExactly(HomeKey, TasksKey).inOrder()
     }
 
     @Test
     fun `switching tabs keeps the shared root untouched`() {
-        val stack = CountingList(listOf(HomeKey, SettingsKey))
+        val stack = CountingList(listOf(HomeKey, TasksKey))
         stack.navigateToTopLevel(TopLevelDestination.HOME)
         assertThat(stack.edits).isEqualTo(1) // only Settings removed
     }
@@ -74,22 +74,22 @@ class TopLevelNavigationTest {
         assertThat(listOf<NavKey>(HomeKey).currentTopLevel()).isEqualTo(TopLevelDestination.HOME)
         assertThat(listOf(HomeKey, CalendarKey).currentTopLevel()).isEqualTo(TopLevelDestination.CALENDAR)
         assertThat(listOf(HomeKey, TasksKey).currentTopLevel()).isEqualTo(TopLevelDestination.CALENDAR)
-        assertThat(listOf(HomeKey, SettingsKey).currentTopLevel()).isEqualTo(TopLevelDestination.SETTINGS)
+        assertThat(listOf(HomeKey, TasksKey).currentTopLevel()).isEqualTo(TopLevelDestination.TODO)
         assertThat(emptyList<NavKey>().currentTopLevel()).isEqualTo(TopLevelDestination.HOME)
     }
 
     @Test
     fun `nested screens above a tab still highlight that tab`() {
         val detail = object : NavKey {}
-        assertThat(listOf(HomeKey, SettingsKey, detail).currentTopLevel()).isEqualTo(TopLevelDestination.SETTINGS)
+        assertThat(listOf(HomeKey, TasksKey, detail).currentTopLevel()).isEqualTo(TopLevelDestination.TODO)
     }
 
     @Test
     fun `switching tabs from a nested screen drops the nested screen`() {
         val detail = object : NavKey {}
         val stack = mutableListOf(HomeKey, detail)
-        stack.navigateToTopLevel(TopLevelDestination.SETTINGS)
-        assertThat(stack).containsExactly(HomeKey, SettingsKey).inOrder()
+        stack.navigateToTopLevel(TopLevelDestination.TODO)
+        assertThat(stack).containsExactly(HomeKey, TasksKey).inOrder()
     }
 
     @Test

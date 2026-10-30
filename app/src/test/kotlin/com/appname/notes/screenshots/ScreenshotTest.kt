@@ -367,18 +367,24 @@ abstract class ScreenshotTestBase(private val device: String) {
     }
 
     protected fun setTheme(id: Int) {
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.MORE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.SETTINGS).performClick()
         waitAdvancing { exists(hasText(string(id))) }
         composeRule.onNodeWithText(string(id)).performClick()
         waitAdvancing { exists(hasText(string(id)) and isSelected()) }
-        composeRule.onNodeWithTag("nav_home").performClick()
+        if (exists(hasTestTag("nav_home"))) {
+            composeRule.onNodeWithTag("nav_home").performClick()
+        } else {
+            pressBack()
+        }
         waitAdvancing { exists(hasTestTag(LibraryTestTags.SCREEN)) }
     }
 
     /** Settings in the Liquid Glass design (owner brief §19), light and dark, with the wallpaper picker. */
     @Test
     fun captureSettings() {
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.MORE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.SETTINGS).performClick()
         waitAdvancing { exists(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.LIST)) }
         snap("settings_light")
         composeRule.onNodeWithTag(com.appname.notes.feature.settings.SettingsTestTags.WALLPAPER).performClick()
@@ -420,7 +426,8 @@ abstract class ScreenshotTestBase(private val device: String) {
         snap("library_template_note_light")
 
         // Settings › Templates › New template, with a few options changed.
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.MORE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.SETTINGS).performClick()
         waitAdvancing { exists(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.LIST)) }
         composeRule.onNodeWithTag(com.appname.notes.feature.settings.SettingsTestTags.LIST)
             .performScrollToNode(hasTestTag(com.appname.notes.feature.settings.SettingsTestTags.TEMPLATES))
@@ -483,7 +490,7 @@ class PhoneScreenshotTest : ScreenshotTestBase("phone") {
 
     @Test
     fun phoneUsesBottomNavigationBar() {
-        val item = composeRule.onNodeWithTag("nav_settings").fetchSemanticsNode().boundsInRoot
+        val item = composeRule.onNodeWithTag("nav_todo").fetchSemanticsNode().boundsInRoot
         val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
         assertThat(item.top).isGreaterThan(root.height * 0.75f) // bottom of the screen
     }
@@ -495,7 +502,7 @@ class PhoneScreenshotTest : ScreenshotTestBase("phone") {
         composeRule.onNodeWithTag(LibraryTestTags.NEW_NOTE).performClick()
         waitAdvancing { exists(hasTestTag(EditorTestTags.BODY)) }
         assertThat(exists(hasTestTag(LibraryTestTags.SCREEN))).isFalse()
-        assertThat(exists(hasTestTag("nav_settings"))).isFalse() // bottom bar hidden while editing
+        assertThat(exists(hasTestTag("nav_todo"))).isFalse() // bottom bar hidden while editing
     }
 }
 
@@ -505,7 +512,7 @@ class TabletScreenshotTest : ScreenshotTestBase("tablet") {
 
     @Test
     fun tabletUsesNavigationRail() {
-        val item = composeRule.onNodeWithTag("nav_settings").fetchSemanticsNode().boundsInRoot
+        val item = composeRule.onNodeWithTag("nav_todo").fetchSemanticsNode().boundsInRoot
         val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
         assertThat(item.left).isLessThan(root.width * 0.15f) // left edge, not a bottom bar
         assertThat(item.top).isLessThan(root.height * 0.75f)
@@ -535,7 +542,7 @@ class TabletScreenshotTest : ScreenshotTestBase("tablet") {
         composeRule.onNodeWithTag(TemplatesTestTags.USE).performClick()
         waitAdvancing { exists(hasTestTag(InkTestTags.CANVAS)) }
         assertThat(exists(hasTestTag(LibraryTestTags.SCREEN))).isFalse() // no list pane
-        assertThat(exists(hasTestTag("nav_settings"))).isFalse() // no navigation rail
+        assertThat(exists(hasTestTag("nav_todo"))).isFalse() // no navigation rail
         val canvas = composeRule.onNodeWithTag(InkTestTags.CANVAS).fetchSemanticsNode().boundsInRoot
         val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
         assertThat(canvas.width).isAtLeast(root.width - 1f)

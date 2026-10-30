@@ -131,7 +131,8 @@ class TemplatesFlowRobolectricTest {
     @Test
     fun makeUseAndDeleteYourOwnTemplate() {
         // Settings › Templates › New template
-        click("nav_settings")
+        click(LibraryTestTags.MORE)
+        click(LibraryTestTags.SETTINGS)
         waitFor(SettingsTestTags.LIST)
         composeRule.onNodeWithTag(SettingsTestTags.LIST).performScrollToNode(hasTestTag(SettingsTestTags.TEMPLATES))
         click(SettingsTestTags.TEMPLATES)

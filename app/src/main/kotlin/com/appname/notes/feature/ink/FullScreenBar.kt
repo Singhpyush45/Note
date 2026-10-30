@@ -17,7 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DragIndicator
+import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tune
@@ -52,8 +54,8 @@ import kotlin.math.roundToInt
 /**
  * The tool bar in full screen (owner request): a slim floating bar, upright on the side by default (in portrait and
  * landscape) or across; drag its handle to put it anywhere. It holds leave full screen, upright/across, undo, redo,
- * the tools, the ruler, tool options and Insert. Tapping the chosen tool again (or the options button) shows the
- * tool's options in a pill at the bottom; a lasso selection shows its actions there too.
+ * the tools, the ruler, tool options, Insert, Paste, and Add Page. Tapping the chosen tool again (or the options button)
+ * shows the tool's options in a pill at the bottom; a lasso selection shows its actions there too.
  */
 @Composable
 fun FloatingInkToolbar(
@@ -66,6 +68,7 @@ fun FloatingInkToolbar(
     onExit: () -> Unit,
     insert: InsertActions?,
     modifier: Modifier = Modifier,
+    onAddPage: (() -> Unit)? = null,
 ) {
     var vertical by rememberSaveable { mutableStateOf(true) }
     var posX by rememberSaveable { mutableFloatStateOf(Float.NaN) }
@@ -147,7 +150,26 @@ fun FloatingInkToolbar(
                         tint = if (showOptions) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (insert != null) InsertButton(insert)
+                if (insert != null) {
+                    InsertButton(insert)
+                    IconButton(
+                        onClick = insert.paste,
+                        modifier = Modifier.testTag(InkToolTags.FULL_SCREEN_PASTE),
+                    ) {
+                        Icon(Icons.Outlined.ContentPaste, stringResource(R.string.insert_paste))
+                    }
+                }
+                if (onAddPage != null) {
+                    IconButton(
+                        onClick = onAddPage,
+                        modifier = Modifier.testTag(InkToolTags.FULL_SCREEN_ADD_PAGE),
+                    ) {
+                        Icon(
+                            Icons.Outlined.NoteAdd,
+                            stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add),
+                        )
+                    }
+                }
             }
             if (vertical) {
                 Column(

@@ -1,6 +1,10 @@
 package com.appname.notes.feature.calendar
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
+import com.appname.notes.feature.pro.NoteProStore
+import com.appname.notes.feature.pro.TaskProMeta
+import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appname.notes.R
@@ -91,6 +95,7 @@ class PlannerViewModel @Inject constructor(
     private val reminders: ReminderRepository,
     private val clock: AppClock,
     private val savedState: SavedStateHandle,
+    @param:ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val zone: ZoneId get() = ZoneId.systemDefault()
@@ -190,6 +195,7 @@ class PlannerViewModel @Inject constructor(
         enableReminder: Boolean,
         sourceNoteId: NoteId?,
         sourceNoteTitle: String?,
+        proMeta: TaskProMeta? = null,
     ) {
         val cleanTitle = title.trim()
         if (cleanTitle.isEmpty()) {
@@ -210,6 +216,10 @@ class PlannerViewModel @Inject constructor(
             }
             when (result) {
                 is AppResult.Success -> {
+                    val savedId = (result.value as? TaskId)?.value ?: editingId?.value
+                    if (savedId != null && proMeta != null) {
+                        NoteProStore.saveTaskMeta(appContext, savedId, proMeta)
+                    }
                     // If the task is linked to a note and has a reminder time in the future, sync a note reminder too.
                     if (sourceNoteId != null && enableReminder && dueDate != null) {
                         val at = LocalDateTime.of(dueDate, dueTime ?: LocalTime.of(9, 0))

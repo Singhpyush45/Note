@@ -155,6 +155,9 @@ class InkInputController(
     /** True while the note can't be changed (unreadable newer data, trashed). */
     var readOnly: Boolean = false
 
+    /** Item IDs locked to the page background so eraser and lasso drag skip them. */
+    var lockedIds: Set<String> = emptySet()
+
     var selection: Selection? = null
         private set
 
@@ -392,7 +395,7 @@ class InkInputController(
             is Gesture.LassoDraw -> {
                 val path = lassoPath
                 lassoPath = emptyList()
-                val items = session.items(g.pageId)
+                val items = session.items(g.pageId).filter { it.id !in lockedIds }
                 selection = if (path.size < 3 || bounds(path).diagonal < 6 * unitsPerDp) {
                     path.firstOrNull()?.let { Lasso.selectAtPoint(items, it, HANDLE_DP * unitsPerDp) }
                         ?.let { selectionOf(g.pageId, it) }
@@ -413,7 +416,7 @@ class InkInputController(
             is Gesture.MoveSelection, is Gesture.ResizeSelection, is Gesture.RotateSelection -> {
                 val t = selectionTransform
                 selectionTransform = null
-                val selected = selectedItems()
+                val selected = selectedItems().filter { it.id !in lockedIds }
                 val moved = t != null && (Vec(t.dx, t.dy).length >= 2 * unitsPerDp || kotlin.math.abs(t.scale - 1) >= 0.01 || kotlin.math.abs(t.rotationDeg) >= 0.5)
                 selectionMoved = moved && selected.isNotEmpty()
                 if (moved && selected.isNotEmpty()) {
@@ -513,7 +516,7 @@ class InkInputController(
     // ---------------------------------------------------------------- erasing
 
     private fun eraseAlong(pageId: String, path: List<Vec>) {
-        val items = session.items(pageId)
+        val items = session.items(pageId).filter { it.id !in lockedIds }
         val edit = when (tools.eraserMode) {
             EraserMode.STROKE -> Eraser.touched(items, path, eraserRadius).takeIf { it.isNotEmpty() }?.let { InkEdit.remove(it) }
             EraserMode.AREA -> Eraser.erasePartially(items, path, eraserRadius, newId)?.let { e ->
@@ -640,7 +643,7 @@ class InkInputController(
 
     fun deleteSelection(): Boolean {
         val sel = selection ?: return false
-        val items = selectedItems()
+        val items = selectedItems().filter { it.id !in lockedIds }
         selection = null
         return items.isNotEmpty() && session.apply(sel.pageId, Lasso.delete(items))
     }

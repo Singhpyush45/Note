@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -207,19 +210,48 @@ fun ColorPickerDialog(
                             .testTag(ColorPickerTags.PREVIEW),
                     )
                 }
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                    SegmentedButton(
-                        selected = !custom,
-                        onClick = { custom = false },
-                        shape = SegmentedButtonDefaults.itemShape(0, 2),
-                        modifier = Modifier.testTag(ColorPickerTags.TAB_PALETTES),
-                    ) { Text(stringResource(R.string.color_tab_palettes)) }
-                    SegmentedButton(
-                        selected = custom,
-                        onClick = { custom = true },
-                        shape = SegmentedButtonDefaults.itemShape(1, 2),
-                        modifier = Modifier.testTag(ColorPickerTags.TAB_CUSTOM),
-                    ) { Text(stringResource(R.string.color_tab_custom)) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f), RoundedCornerShape(50))
+                        .border(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), RoundedCornerShape(50))
+                        .padding(4.dp)
+                        .selectableGroup(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    listOf(
+                        Triple(false, R.string.color_tab_palettes, ColorPickerTags.TAB_PALETTES),
+                        Triple(true, R.string.color_tab_custom, ColorPickerTags.TAB_CUSTOM),
+                    ).forEach { (isCustomTab, labelRes, tag) ->
+                        val selected = custom == isCustomTab
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 38.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                    RoundedCornerShape(50),
+                                )
+                                .selectable(
+                                    selected = selected,
+                                    role = Role.Tab,
+                                    onClick = { custom = isCustomTab },
+                                )
+                                .testTag(tag),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(labelRes),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
 
                 // Only the colours scroll; the title, tabs and buttons stay in view.

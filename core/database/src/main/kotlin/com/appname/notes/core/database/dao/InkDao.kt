@@ -71,6 +71,9 @@ abstract class InkDao {
     @Query("UPDATE ink_pages SET updatedAt = :now WHERE id = :pageId")
     protected abstract suspend fun touchPage(pageId: String, now: Long)
 
+    @Query("UPDATE notes SET plainText = :plainText, preview = :preview WHERE id = :noteId AND deletedAt IS NULL")
+    abstract suspend fun updateNoteIndexedText(noteId: String, plainText: String, preview: String): Int
+
     /**
      * Marks the note modified and strictly advances updatedAt so note list observers and thumbnail caches
      * always invalidate even when commits happen within the same millisecond as note creation.

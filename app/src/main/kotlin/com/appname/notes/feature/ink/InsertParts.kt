@@ -10,6 +10,7 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
+import android.util.Base64
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.outlined.FormatAlignCenter
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -75,6 +77,7 @@ import androidx.compose.ui.unit.sp
 import com.appname.notes.R
 import com.appname.notes.core.ink.model.TextAlign
 import com.appname.notes.core.ink.model.TextFont
+import java.io.File
 import kotlin.math.roundToInt
 
 object InsertTags {
@@ -93,6 +96,7 @@ object InsertTags {
     fun math(s: String) = "ink_math_$s"
     const val TEXT_MOVE = "ink_text_move"
     const val EQUATION = "ink_insert_equation"
+    const val DATE_STAMP = "ink_insert_date_stamp"
     const val EQUATION_FIELD = "ink_equation_field"
     const val EQUATION_INSERT = "ink_equation_insert"
     const val TEXT_BAR = "ink_text_bar"
@@ -114,6 +118,7 @@ data class InsertActions(
     val sticker: () -> Unit = {},
     val table: () -> Unit = {},
     val equation: () -> Unit = {},
+    val dateStamp: () -> Unit = {},
 )
 
 /** The Insert button in the top bar: photo, camera, text box, PDF pages, paste. */
@@ -182,6 +187,12 @@ fun InsertButton(actions: InsertActions) {
                 modifier = Modifier.testTag(InsertTags.AUDIO_FILE),
             )
             DropdownMenuItem(
+                text = { Text(stringResource(R.string.insert_date_stamp)) },
+                leadingIcon = { Icon(Icons.Outlined.Schedule, null) },
+                onClick = { open = false; actions.dateStamp() },
+                modifier = Modifier.testTag(InsertTags.DATE_STAMP),
+            )
+            DropdownMenuItem(
                 text = { Text(stringResource(R.string.insert_paste)) },
                 leadingIcon = { Icon(Icons.Outlined.ContentPaste, null) },
                 onClick = { open = false; actions.paste() },
@@ -194,26 +205,49 @@ fun InsertButton(actions: InsertActions) {
 /** What's on the clipboard that can go on a page: picture/PDF links, or text. */
 data class ClipContent(val uris: List<Uri>, val text: String?, val label: String? = null)
 
-/** Reads pictures (content links) and text from the clipboard, or from a dropped [clip]. */
+private val DATA_IMAGE_REGEX = Regex("""data:image/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)""", RegexOption.IGNORE_CASE)
+
+/** Reads pictures (content links, intent data, or Base64 image data) and text from the clipboard, or from a dropped [clip]. */
 fun clipContent(context: Context, clip: ClipData? = (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.primaryClip): ClipContent {
     if (clip == null) return ClipContent(emptyList(), null)
     val uris = ArrayList<Uri>()
     val text = StringBuilder()
     for (i in 0 until clip.itemCount) {
         val item = clip.getItemAt(i)
-        val uri = item.uri
+        val uri = item.uri ?: item.intent?.data
         if (uri != null) {
             uris += uri
         } else {
-            val t = item.coerceToText(context)?.toString().orEmpty()
-            if (t.isNotBlank()) {
+            val html = item.htmlText.orEmpty()
+            val rawText = item.text?.toString() ?: item.coerceToText(context)?.toString().orEmpty()
+            val dataMatch = DATA_IMAGE_REGEX.find(html) ?: DATA_IMAGE_REGEX.find(rawText)
+            val trimmed = rawText.trim()
+            if (dataMatch != null) {
+                decodeDataImageUri(context, dataMatch.groupValues[1], dataMatch.groupValues[2])?.let { uris += it }
+            } else if (trimmed.startsWith("content://") || trimmed.startsWith("file://")) {
+                runCatching { Uri.parse(trimmed) }.getOrNull()?.let { uris += it }
+            } else if (rawText.isNotBlank()) {
                 if (text.isNotEmpty()) text.append('\n')
-                text.append(t)
+                text.append(rawText)
             }
         }
     }
     return ClipContent(uris, text.toString().ifBlank { null }, clip.description?.label?.toString())
 }
+
+private fun decodeDataImageUri(context: Context, subtype: String, base64Payload: String): Uri? = runCatching {
+    val bytes = Base64.decode(base64Payload.replace("\\s".toRegex(), ""), Base64.DEFAULT)
+    if (bytes.isEmpty()) return null
+    val ext = when (subtype.lowercase()) {
+        "jpeg", "jpg" -> "jpg"
+        "webp" -> "webp"
+        else -> "png"
+    }
+    val dir = File(context.cacheDir, "clipboard").apply { mkdirs() }
+    val file = File(dir, "Clip_${System.currentTimeMillis()}.$ext")
+    file.writeBytes(bytes)
+    Uri.fromFile(file)
+}.getOrNull()
 
 /** Whether a drag carries something a page can take. */
 fun acceptsDrop(description: ClipDescription?): Boolean {

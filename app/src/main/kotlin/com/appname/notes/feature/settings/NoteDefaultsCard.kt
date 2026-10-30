@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -62,7 +63,7 @@ import com.appname.notes.feature.templates.TemplatePreview
 @Composable
 fun NoteDefaultsCard(defaults: NoteDefaults, onChange: ((NoteDefaults) -> NoteDefaults) -> Unit) {
     var choosingStyle by rememberSaveable { mutableStateOf(false) }
-    SettingsCard(stringResource(R.string.settings_section_note_defaults), Modifier.testTag(SettingsTestTags.DEFAULTS)) {
+    SettingsCard(stringResource(R.string.settings_section_note_defaults), Modifier.testTag(SettingsTestTags.DEFAULTS), icon = Icons.Outlined.Description) {
         val kinds = BlankNoteKind.entries
         SettingsSegmentedRow(
             title = stringResource(R.string.settings_blank_note),

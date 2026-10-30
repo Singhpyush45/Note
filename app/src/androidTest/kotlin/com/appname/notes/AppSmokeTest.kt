@@ -28,7 +28,8 @@ class AppSmokeTest {
     fun navigateToSettings_recreate_andBack() {
         composeRule.onNodeWithTag(LibraryTestTags.SCREEN).assertIsDisplayed()
 
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.MORE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.SETTINGS).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.SCREEN).assertIsDisplayed()
 
         composeRule.activityRule.scenario.recreate() // same path as rotation / theme change
@@ -44,7 +45,8 @@ class AppSmokeTest {
         val dark = composeRule.activity.getString(R.string.settings_theme_dark)
         val system = composeRule.activity.getString(R.string.settings_theme_system_short)
 
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.MORE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.SETTINGS).performClick()
         try {
             composeRule.onNodeWithText(dark).performClick()
             waitUntilSelected(dark) // saved on a background thread, then shown
