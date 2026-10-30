@@ -1,0 +1,563 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as no cached configuration is available for tasks: assembleDebug assembleRelease :core:common:test :core:domain:test :core:ink:test testDebugUnitTest lintDebug
+
+> Configure project :app
+The Configuration.setVisible(boolean) method has been deprecated. This is scheduled to be removed in Gradle 11. Consult the upgrading guide for further information: https://docs.gradle.org/9.8.2/userguide/upgrading_version_9.html#deprecate-visible-property
+
+> Task :app:preBuild UP-TO-DATE
+> Task :core:common:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :core:domain:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:ink:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :core:ink:processResources NO-SOURCE
+> Task :core:common:processResources NO-SOURCE
+> Task :core:domain:processResources NO-SOURCE
+> Task :app:generateDebugResources FROM-CACHE
+> Task :core:common:compileKotlin FROM-CACHE
+> Task :core:common:compileJava NO-SOURCE
+> Task :core:common:classes UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :core:ink:compileKotlin FROM-CACHE
+> Task :core:database:preBuild UP-TO-DATE
+> Task :core:database:preDebugBuild UP-TO-DATE
+> Task :core:ink:compileJava NO-SOURCE
+> Task :core:ink:classes UP-TO-DATE
+> Task :core:database:processDebugNavigationResources FROM-CACHE
+> Task :core:designsystem:preBuild UP-TO-DATE
+> Task :core:designsystem:preDebugBuild UP-TO-DATE
+> Task :app:packageDebugResources FROM-CACHE
+> Task :core:designsystem:processDebugNavigationResources FROM-CACHE
+> Task :core:database:generateDebugResources FROM-CACHE
+> Task :core:database:packageDebugResources FROM-CACHE
+> Task :core:common:jar
+> Task :core:ink:jar
+> Task :core:domain:compileKotlin FROM-CACHE
+> Task :core:domain:compileJava NO-SOURCE
+> Task :core:domain:classes UP-TO-DATE
+> Task :core:database:javaPreCompileDebug FROM-CACHE
+> Task :core:database:preDebugUnitTestBuild UP-TO-DATE
+> Task :core:domain:jar
+> Task :core:database:mapDebugSourceSetPaths
+> Task :core:database:compileDebugLibraryResources FROM-CACHE
+> Task :core:database:mapDebugUnitTestSourceSetPaths
+> Task :core:database:generateDebugUnitTestResources FROM-CACHE
+> Task :core:database:mergeDebugUnitTestResources FROM-CACHE
+> Task :core:database:extractDeepLinksDebug FROM-CACHE
+> Task :core:database:processDebugManifest FROM-CACHE
+> Task :core:database:parseDebugLocalResources FROM-CACHE
+> Task :core:database:generateDebugRFile FROM-CACHE
+> Task :core:database:mergeDebugUnitTestManifest
+> Task :core:database:processDebugUnitTestManifest
+> Task :core:database:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :core:database:preReleaseBuild UP-TO-DATE
+> Task :core:database:generateReleaseResources FROM-CACHE
+> Task :core:database:writeDebugAarMetadata
+> Task :core:database:packageReleaseResources FROM-CACHE
+> Task :core:database:processReleaseNavigationResources FROM-CACHE
+> Task :core:database:parseReleaseLocalResources FROM-CACHE
+> Task :core:database:generateReleaseRFile FROM-CACHE
+> Task :core:database:kspReleaseKotlin FROM-CACHE
+> Task :core:database:kspDebugKotlin FROM-CACHE
+> Task :app:processDebugNavigationResources FROM-CACHE
+> Task :core:database:checkDebugUnitTestAarMetadata
+> Task :app:parseDebugLocalResources FROM-CACHE
+> Task :app:generateDebugRFile FROM-CACHE
+> Task :core:database:javaPreCompileRelease FROM-CACHE
+> Task :core:designsystem:generateDebugResources FROM-CACHE
+> Task :core:designsystem:packageDebugResources FROM-CACHE
+> Task :core:designsystem:parseDebugLocalResources FROM-CACHE
+> Task :core:designsystem:generateDebugRFile FROM-CACHE
+> Task :core:database:processDebugUnitTestResources FROM-CACHE
+> Task :core:designsystem:javaPreCompileDebug FROM-CACHE
+> Task :app:javaPreCompileDebug FROM-CACHE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :core:database:generateDebugAssets UP-TO-DATE
+> Task :core:database:compileDebugKotlin FROM-CACHE
+> Task :core:database:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:database:compileReleaseKotlin FROM-CACHE
+> Task :core:database:compileReleaseJavaWithJavac NO-SOURCE
+> Task :core:designsystem:generateDebugAssets UP-TO-DATE
+> Task :core:database:mergeDebugAssets
+> Task :core:designsystem:mergeDebugAssets
+> Task :app:generateDebugGlobalSynthetics FROM-CACHE
+> Task :core:designsystem:compileDebugKotlin FROM-CACHE
+> Task :core:designsystem:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:database:processDebugJavaRes
+> Task :core:designsystem:processDebugJavaRes
+> Task :core:database:bundleLibCompileToJarDebug
+> Task :core:database:kspDebugUnitTestKotlin FROM-CACHE
+> Task :core:designsystem:bundleLibCompileToJarDebug
+> Task :core:database:compileDebugUnitTestKotlin FROM-CACHE
+> Task :core:database:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:checkDebugDuplicateClasses
+> Task :app:desugarDebugFileDependencies FROM-CACHE
+> Task :core:database:copyRoomSchemas NO-SOURCE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets FROM-CACHE
+> Task :core:designsystem:bundleLibRuntimeToDirDebug
+> Task :core:database:bundleLibRuntimeToDirDebug
+> Task :app:mergeLibDexDebug FROM-CACHE
+> Task :core:designsystem:bundleLibRuntimeToJarDebug
+> Task :core:database:bundleLibRuntimeToJarDebug
+> Task :core:designsystem:writeDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:compileDebugNavigationResources FROM-CACHE
+> Task :app:checkDebugAarMetadata
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug FROM-CACHE
+> Task :core:designsystem:extractDeepLinksDebug FROM-CACHE
+> Task :core:designsystem:processDebugManifest FROM-CACHE
+> Task :app:mergeDebugResources FROM-CACHE
+> Task :core:designsystem:mapDebugSourceSetPaths
+> Task :core:designsystem:compileDebugLibraryResources FROM-CACHE
+> Task :app:mergeDebugJniLibFolders
+> Task :core:database:mergeDebugJniLibFolders
+> Task :core:database:mergeDebugNativeLibs NO-SOURCE
+> Task :core:database:copyDebugJniLibsProjectOnly
+> Task :core:designsystem:mergeDebugJniLibFolders
+> Task :core:designsystem:mergeDebugNativeLibs NO-SOURCE
+> Task :core:designsystem:copyDebugJniLibsProjectOnly
+> Task :app:mergeExtDexDebug FROM-CACHE
+> Task :app:processDebugMainManifest
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :e2e:preBuild UP-TO-DATE
+> Task :e2e:preDebugBuild UP-TO-DATE
+> Task :e2e:checkTestedAppObfuscationDebug
+> Task :e2e:generateDebugResources FROM-CACHE
+> Task :e2e:packageDebugResources FROM-CACHE
+> Task :e2e:processDebugNavigationResources FROM-CACHE
+> Task :e2e:parseDebugLocalResources FROM-CACHE
+> Task :e2e:generateDebugRFile FROM-CACHE
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:mergeDebugNativeLibs
+> Task :e2e:compileDebugKotlin FROM-CACHE
+> Task :e2e:javaPreCompileDebug FROM-CACHE
+> Task :e2e:compileDebugJavaWithJavac NO-SOURCE
+> Task :e2e:generateDebugAssets UP-TO-DATE
+> Task :e2e:mergeDebugAssets
+> Task :e2e:compressDebugAssets FROM-CACHE
+> Task :e2e:generateDebugGlobalSynthetics FROM-CACHE
+> Task :e2e:processDebugJavaRes
+
+> Task :app:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libdatastore_shared_counter.so, libgraphics-core.so, libink.so, libjnidispatch.so, libmlkit_google_ocr_pipeline.so, libvosk.so. Run with --info option to learn more.
+
+> Task :e2e:checkDebugDuplicateClasses
+> Task :e2e:desugarDebugFileDependencies FROM-CACHE
+> Task :e2e:mergeExtDexDebug FROM-CACHE
+> Task :e2e:mergeLibDexDebug FROM-CACHE
+> Task :e2e:checkDebugAarMetadata
+> Task :e2e:mapDebugSourceSetPaths
+> Task :e2e:compileDebugNavigationResources FROM-CACHE
+> Task :e2e:mergeDebugResources FROM-CACHE
+> Task :e2e:mergeDebugManifest
+> Task :e2e:processDebugManifest
+> Task :e2e:processDebugResources FROM-CACHE
+> Task :e2e:dexBuilderDebug FROM-CACHE
+> Task :e2e:mergeProjectDexDebug FROM-CACHE
+> Task :e2e:mergeDebugJniLibFolders
+> Task :e2e:mergeDebugNativeLibs NO-SOURCE
+> Task :e2e:stripDebugDebugSymbols NO-SOURCE
+> Task :e2e:mergeDebugJavaResource
+> Task :e2e:writeDebugSigningConfigVersions
+> Task :core:database:checkDebugAarMetadata
+> Task :core:database:stripDebugDebugSymbols NO-SOURCE
+> Task :core:database:copyDebugJniLibsProjectAndLocalJars
+> Task :app:processDebugResources
+> Task :core:database:extractDeepLinksForAarDebug FROM-CACHE
+> Task :core:database:mergeDebugGeneratedProguardFiles
+> Task :core:database:mergeDebugConsumerProguardFiles
+> Task :core:database:prepareDebugArtProfile
+> Task :core:database:prepareLintJarForPublish
+> Task :core:database:mergeDebugJavaResource
+> Task :core:designsystem:checkDebugAarMetadata
+> Task :core:designsystem:stripDebugDebugSymbols NO-SOURCE
+> Task :core:designsystem:copyDebugJniLibsProjectAndLocalJars
+> Task :core:database:extractDebugAnnotations FROM-CACHE
+> Task :core:database:syncDebugLibJars FROM-CACHE
+> Task :core:database:bundleDebugAar
+> Task :core:database:assembleDebug
+> Task :core:designsystem:extractDeepLinksForAarDebug FROM-CACHE
+> Task :core:designsystem:mergeDebugGeneratedProguardFiles
+> Task :core:designsystem:mergeDebugConsumerProguardFiles
+> Task :core:designsystem:extractDebugAnnotations FROM-CACHE
+> Task :core:designsystem:prepareDebugArtProfile
+> Task :core:designsystem:prepareLintJarForPublish
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders
+> Task :core:designsystem:mergeDebugJavaResource
+> Task :core:database:mergeReleaseJniLibFolders
+> Task :core:database:mergeReleaseNativeLibs NO-SOURCE
+> Task :core:database:copyReleaseJniLibsProjectOnly
+> Task :core:designsystem:preReleaseBuild UP-TO-DATE
+> Task :core:designsystem:mergeReleaseJniLibFolders
+> Task :core:designsystem:syncDebugLibJars FROM-CACHE
+> Task :core:designsystem:mergeReleaseNativeLibs NO-SOURCE
+> Task :core:designsystem:copyReleaseJniLibsProjectOnly
+> Task :core:designsystem:bundleDebugAar
+> Task :core:designsystem:assembleDebug
+> Task :core:database:mergeReleaseGeneratedProguardFiles
+> Task :core:database:exportReleaseConsumerProguardFiles
+> Task :core:designsystem:generateReleaseResources FROM-CACHE
+> Task :core:designsystem:packageReleaseResources FROM-CACHE
+> Task :core:designsystem:processReleaseNavigationResources FROM-CACHE
+> Task :core:designsystem:parseReleaseLocalResources FROM-CACHE
+> Task :core:designsystem:generateReleaseRFile FROM-CACHE
+> Task :core:designsystem:compileReleaseKotlin FROM-CACHE
+> Task :core:designsystem:javaPreCompileRelease FROM-CACHE
+> Task :core:designsystem:compileReleaseJavaWithJavac NO-SOURCE
+> Task :core:designsystem:mergeReleaseGeneratedProguardFiles
+> Task :core:designsystem:exportReleaseConsumerProguardFiles
+> Task :app:checkReleaseDuplicateClasses
+> Task :core:database:prepareReleaseArtProfile
+> Task :core:designsystem:prepareReleaseArtProfile
+> Task :app:mergeReleaseNativeLibs
+> Task :app:mergeReleaseArtProfile
+> Task :app:generateReleaseBuildConfig
+> Task :app:generateReleaseResources FROM-CACHE
+> Task :app:packageReleaseResources FROM-CACHE
+> Task :app:processReleaseNavigationResources FROM-CACHE
+> Task :app:parseReleaseLocalResources FROM-CACHE
+
+> Task :app:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libdatastore_shared_counter.so, libgraphics-core.so, libink.so, libjnidispatch.so, libmlkit_google_ocr_pipeline.so, libvosk.so. Run with --info option to learn more.
+
+> Task :app:generateReleaseRFile FROM-CACHE
+> Task :app:extractReleaseNativeSymbolTables FROM-CACHE
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :core:designsystem:bundleLibCompileToJarRelease
+> Task :app:javaPreCompileRelease FROM-CACHE
+> Task :core:database:bundleLibCompileToJarRelease
+> Task :core:database:bundleLibRuntimeToJarRelease
+> Task :core:designsystem:bundleLibRuntimeToJarRelease
+> Task :core:database:writeReleaseAarMetadata
+> Task :core:designsystem:writeReleaseAarMetadata
+> Task :app:checkReleaseAarMetadata
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:compileReleaseNavigationResources FROM-CACHE
+> Task :app:mergeReleaseResources FROM-CACHE
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease FROM-CACHE
+> Task :core:database:extractDeepLinksRelease FROM-CACHE
+> Task :core:database:processReleaseManifest FROM-CACHE
+> Task :core:designsystem:extractDeepLinksRelease FROM-CACHE
+> Task :core:designsystem:processReleaseManifest FROM-CACHE
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :app:processReleaseManifestForPackage
+> Task :core:database:mapReleaseSourceSetPaths
+> Task :core:database:compileReleaseLibraryResources FROM-CACHE
+> Task :core:designsystem:mapReleaseSourceSetPaths
+> Task :core:designsystem:compileReleaseLibraryResources FROM-CACHE
+> Task :e2e:validateSigningDebug
+> Task :app:processReleaseResources
+> Task :app:extractProguardFiles
+> Task :core:database:processReleaseJavaRes
+> Task :core:designsystem:processReleaseJavaRes
+> Task :app:mergeReleaseStartupProfile
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :core:database:generateReleaseAssets UP-TO-DATE
+> Task :core:database:mergeReleaseAssets
+> Task :core:designsystem:generateReleaseAssets UP-TO-DATE
+> Task :core:designsystem:mergeReleaseAssets
+> Task :e2e:packageDebug
+> Task :e2e:createDebugApkListingFileRedirect
+> Task :e2e:assembleDebug
+> Task :app:mergeReleaseAssets
+> Task :app:extractReleaseVersionControlInfo
+> Task :app:compressReleaseAssets FROM-CACHE
+> Task :core:database:createFullJarRelease
+> Task :core:database:extractProguardFiles
+> Task :core:common:generateJvmMainLintModel
+> Task :core:ink:generateJvmMainLintModel
+> Task :core:designsystem:createFullJarRelease
+> Task :core:designsystem:extractProguardFiles
+> Task :core:domain:generateJvmMainLintModel
+> Task :core:database:generateReleaseLintModel
+> Task :core:database:checkReleaseAarMetadata
+> Task :core:database:extractDeepLinksForAarRelease FROM-CACHE
+> Task :core:database:extractReleaseAnnotations FROM-CACHE
+> Task :core:database:mergeReleaseConsumerProguardFiles
+> Task :core:database:mergeReleaseJavaResource
+> Task :core:database:syncReleaseLibJars FROM-CACHE
+> Task :core:database:bundleReleaseLocalLintAar
+> Task :core:designsystem:generateReleaseLintModel
+> Task :core:designsystem:checkReleaseAarMetadata
+> Task :core:designsystem:extractDeepLinksForAarRelease FROM-CACHE
+> Task :core:designsystem:extractReleaseAnnotations FROM-CACHE
+> Task :core:designsystem:mergeReleaseConsumerProguardFiles
+> Task :core:designsystem:mergeReleaseJavaResource
+> Task :core:designsystem:syncReleaseLibJars FROM-CACHE
+> Task :core:common:lintVitalAnalyzeJvmMain FROM-CACHE
+> Task :core:designsystem:bundleReleaseLocalLintAar
+> Task :core:common:writeJvmLintModelMetadata
+> Task :core:domain:writeJvmLintModelMetadata
+> Task :core:ink:writeJvmLintModelMetadata
+> Task :core:database:writeReleaseLintModelMetadata
+> Task :core:database:lintVitalAnalyzeRelease FROM-CACHE
+> Task :core:designsystem:lintVitalAnalyzeRelease FROM-CACHE
+> Task :core:designsystem:writeReleaseLintModelMetadata
+> Task :core:common:generateLintVitalJvmMainLintModel
+> Task :core:ink:lintVitalAnalyzeJvmMain FROM-CACHE
+> Task :core:domain:lintVitalAnalyzeJvmMain FROM-CACHE
+> Task :core:database:generateReleaseLintVitalModel
+> Task :core:domain:generateLintVitalJvmMainLintModel
+> Task :core:ink:generateLintVitalJvmMainLintModel
+> Task :core:designsystem:generateReleaseLintVitalModel
+> Task :app:validateSigningRelease
+> Task :app:writeReleaseAppMetadata
+> Task :app:writeReleaseSigningConfigVersions
+> Task :core:database:stripReleaseDebugSymbols NO-SOURCE
+> Task :core:database:copyReleaseJniLibsProjectAndLocalJars
+> Task :core:database:bundleReleaseAar
+> Task :core:database:mergeReleaseResources FROM-CACHE
+> Task :core:database:verifyReleaseResources FROM-CACHE
+> Task :core:database:assembleRelease
+> Task :core:designsystem:stripReleaseDebugSymbols NO-SOURCE
+> Task :core:designsystem:copyReleaseJniLibsProjectAndLocalJars
+> Task :core:designsystem:bundleReleaseAar
+> Task :core:designsystem:mergeReleaseResources FROM-CACHE
+> Task :core:designsystem:verifyReleaseResources FROM-CACHE
+> Task :core:designsystem:assembleRelease
+> Task :app:collectReleaseDependencies
+> Task :core:common:compileTestKotlin FROM-CACHE
+> Task :core:common:compileTestJava NO-SOURCE
+> Task :core:common:processTestResources NO-SOURCE
+> Task :core:common:testClasses UP-TO-DATE
+> Task :core:common:test FROM-CACHE
+> Task :core:domain:compileTestKotlin FROM-CACHE
+> Task :core:domain:compileTestJava NO-SOURCE
+> Task :core:domain:processTestResources NO-SOURCE
+> Task :core:domain:testClasses UP-TO-DATE
+> Task :core:domain:test FROM-CACHE
+> Task :core:ink:compileTestKotlin FROM-CACHE
+> Task :core:ink:compileTestJava NO-SOURCE
+> Task :core:ink:processTestResources NO-SOURCE
+> Task :core:ink:testClasses UP-TO-DATE
+> Task :core:ink:test FROM-CACHE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:sdkReleaseDependencyData
+> Task :app:packageDebugUnitTestForUnitTest
+> Task :app:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :core:database:generateDebugUnitTestAssets UP-TO-DATE
+> Task :core:database:mergeDebugUnitTestAssets
+> Task :core:database:packageDebugUnitTestForUnitTest
+> Task :core:database:generateDebugUnitTestConfig
+> Task :core:database:processDebugUnitTestJavaRes
+> Task :app:mergeDebugUnitTestManifest
+> Task :core:database:testDebugUnitTest FROM-CACHE
+> Task :core:designsystem:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:processDebugUnitTestManifest
+> Task :app:generateDebugUnitTestConfig
+> Task :core:designsystem:mapDebugUnitTestSourceSetPaths
+> Task :core:designsystem:generateDebugUnitTestResources FROM-CACHE
+> Task :core:designsystem:checkDebugUnitTestAarMetadata
+> Task :core:designsystem:mergeDebugUnitTestResources FROM-CACHE
+> Task :core:designsystem:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :core:designsystem:generateDebugUnitTestAssets UP-TO-DATE
+> Task :core:designsystem:mergeDebugUnitTestManifest
+> Task :core:designsystem:processDebugUnitTestManifest
+> Task :core:designsystem:mergeDebugUnitTestAssets
+> Task :core:database:bundleDebugLocalLintAar
+> Task :core:designsystem:processDebugUnitTestResources FROM-CACHE
+> Task :core:designsystem:packageDebugUnitTestForUnitTest
+> Task :core:designsystem:generateDebugUnitTestConfig
+> Task :core:designsystem:bundleDebugLocalLintAar
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :core:database:createFullJarDebug
+> Task :core:database:writeDebugLintModelMetadata
+> Task :core:designsystem:createFullJarDebug
+> Task :core:designsystem:writeDebugLintModelMetadata
+> Task :core:database:generateDebugLintModel
+> Task :core:designsystem:compileDebugUnitTestKotlin FROM-CACHE
+> Task :core:designsystem:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :core:designsystem:processDebugUnitTestJavaRes
+> Task :core:designsystem:generateDebugLintModel
+> Task :core:common:lintAnalyzeJvmMain FROM-CACHE
+> Task :core:ink:lintAnalyzeJvmMain FROM-CACHE
+> Task :core:designsystem:testDebugUnitTest FROM-CACHE
+> Task :core:domain:lintAnalyzeJvmMain FROM-CACHE
+> Task :core:designsystem:lintAnalyzeDebug FROM-CACHE
+> Task :core:database:lintAnalyzeDebug FROM-CACHE
+> Task :core:common:generateJvmTestLintModel
+> Task :core:database:preDebugAndroidTestBuild UP-TO-DATE
+> Task :core:common:lintAnalyzeJvmTest FROM-CACHE
+> Task :core:database:generateDebugAndroidTestLintModel
+> Task :core:database:lintAnalyzeDebugAndroidTest FROM-CACHE
+> Task :core:database:lintAnalyzeDebugUnitTest FROM-CACHE
+> Task :core:designsystem:preDebugAndroidTestBuild UP-TO-DATE
+> Task :core:database:generateDebugUnitTestLintModel
+> Task :core:designsystem:generateDebugAndroidTestLintModel
+> Task :core:designsystem:lintAnalyzeDebugAndroidTest FROM-CACHE
+> Task :core:designsystem:generateDebugUnitTestLintModel
+> Task :core:domain:generateJvmTestLintModel
+> Task :core:designsystem:lintAnalyzeDebugUnitTest FROM-CACHE
+> Task :core:domain:lintAnalyzeJvmTest FROM-CACHE
+> Task :core:ink:lintAnalyzeJvmTest FROM-CACHE
+> Task :core:ink:generateJvmTestLintModel
+> Task :core:database:generateDebugLintReportModel
+> Task :core:designsystem:generateDebugLintReportModel
+> Task :core:designsystem:lintReportDebug
+> Task :core:database:lintReportDebug
+> Task :core:designsystem:lintDebug
+> Task :core:database:lintDebug
+> Task :app:kspDebugKotlin
+> Task :app:kspReleaseKotlin
+> Task :app:compileDebugKotlin
+> Task :app:compileReleaseKotlin
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.InsertDriveFile: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.InsertDriveFile.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/attachments/AttachmentUi.kt:251
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.InsertDriveFile: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.InsertDriveFile.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/attachments/AttachmentUi.kt:273
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'static field SERVICE_DISABLED: Int' is deprecated. Deprecated in Java.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/backup/DriveBackup.kt:77
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'static field SERVICE_VERSION_UPDATE_REQUIRED: Int' is deprecated. Deprecated in Java.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/backup/DriveBackup.kt:77
+Problem found: Kotlin compiler: CAST_NEVER_SUCCEEDS (id: kotlin:compiler:warning:CAST_NEVER_SUCCEEDS)
+  Kotlin compiler warning
+    This cast can never succeed.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/calendar/PlannerViewModel.kt:219
+Problem found: Kotlin compiler: UNUSED_EXPRESSION (id: kotlin:compiler:warning:UNUSED_EXPRESSION)
+  Kotlin compiler warning
+    Expression is unused.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/editor/NoteEditorScreen.kt:349
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.InsertDriveFile: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.InsertDriveFile.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/editor/NoteEditorScreen.kt:905
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.NoteAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.NoteAdd.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/ink/FullScreenBar.kt:168
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val matrix: Matrix' is deprecated. Deprecated in Java.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/ink/InkDrawing.kt:127
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.NoteAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.NoteAdd.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/ink/InkEditorScreen.kt:929
+Problem found: Kotlin compiler: REDUNDANT_ELSE_IN_WHEN (id: kotlin:compiler:warning:REDUNDANT_ELSE_IN_WHEN)
+  Kotlin compiler warning
+    'when' is exhaustive so 'else' is redundant here.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/pdf/PdfAnnotationWriter.kt:147
+
+> Task :app:compileDebugKotlin
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.InsertDriveFile: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.InsertDriveFile.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/attachments/AttachmentUi.kt:251
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.InsertDriveFile: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.InsertDriveFile.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/attachments/AttachmentUi.kt:273
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'static field SERVICE_DISABLED: Int' is deprecated. Deprecated in Java.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/backup/DriveBackup.kt:77
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'static field SERVICE_VERSION_UPDATE_REQUIRED: Int' is deprecated. Deprecated in Java.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/backup/DriveBackup.kt:77
+Problem found: Kotlin compiler: CAST_NEVER_SUCCEEDS (id: kotlin:compiler:warning:CAST_NEVER_SUCCEEDS)
+  Kotlin compiler warning
+    This cast can never succeed.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/calendar/PlannerViewModel.kt:219
+Problem found: Kotlin compiler: UNUSED_EXPRESSION (id: kotlin:compiler:warning:UNUSED_EXPRESSION)
+  Kotlin compiler warning
+    Expression is unused.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/editor/NoteEditorScreen.kt:349
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.InsertDriveFile: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.InsertDriveFile.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/editor/NoteEditorScreen.kt:905
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val Icons.Outlined.NoteAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.NoteAdd.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/ink/FullScreenBar.kt:168
+Problem found: Kotlin compiler: DEPRECATION (id: kotlin:compiler:warning:DEPRECATION)
+  Kotlin compiler warning
+    'val matrix: Matrix' is deprecated. Deprecated in Java.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/ink/InkDrawing.kt:127
+Problem found: Kotlin compiler: REDUNDANT_ELSE_IN_WHEN (id: kotlin:compiler:warning:REDUNDANT_ELSE_IN_WHEN)
+  Kotlin compiler warning
+    'when' is exhaustive so 'else' is redundant here.
+    Location: /home/runner/work/Note/Note/app/src/main/kotlin/com/appname/notes/feature/pdf/PdfAnnotationWriter.kt:147
+
+> Task :app:processReleaseJavaRes
+> Task :app:processDebugJavaRes
+> Task :app:mergeDebugJavaResource
+> Task :app:mergeReleaseJavaResource
+> Task :app:compileReleaseJavaWithJavac
+> Task :app:compileDebugJavaWithJavac
+> Task :app:hiltCollectClassesRelease
+> Task :app:hiltCollectClassesDebug
+> Task :app:generateReleaseLintVitalReportModel
+> Task :app:generateDebugLintReportModel
+> Task :app:hiltAggregateDepsRelease FROM-CACHE
+> Task :app:hiltAggregateDepsDebug FROM-CACHE
+> Task :app:hiltJavaCompileDebug
+> Task :app:hiltJavaCompileRelease
+> Task :app:transformDebugClassesWithAsm
+> Task :app:transformReleaseClassesWithAsm
+> Task :app:lintVitalAnalyzeRelease
+> Task :app:lintAnalyzeDebug
+> Task :app:dexBuilderDebug
+> Task :app:expandReleaseArtProfileWildcards
+> Task :app:mergeReleaseGeneratedProguardFiles
+> Task :app:mergeProjectDexDebug
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+> Task :app:produceReleaseComposeMapping
+> Task :app:reportReleaseComposeMappingErrors
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:kspDebugUnitTestKotlin
+> Task :app:minifyReleaseWithR8
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:processDebugUnitTestJavaRes
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:hiltCollectClassesDebugUnitTest
+> Task :app:hiltAggregateDepsDebugUnitTest FROM-CACHE
+> Task :app:hiltJavaCompileDebugUnitTest NO-SOURCE
+> Task :app:transformDebugUnitTestClassesWithAsm
+> Task :app:testDebugUnitTest
+> Task :app:lintVitalReportRelease
+> Task :app:lintVitalRelease
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:lintAnalyzeDebugAndroidTest
+> Task :app:lintAnalyzeDebugUnitTest
+> Task :app:convertShrunkResourcesToBinaryRelease
+> Task :app:optimizeReleaseResources
+> Task :app:mergeReleaseComposeMapping
+> Task :app:compileReleaseArtProfile
+> Task :app:packageRelease
+> Task :app:assembleRelease
+> Task :app:createReleaseApkListingFileRedirect
+
+> Task :app:lintReportDebug
+Wrote HTML report to file:///home/runner/work/Note/Note/app/build/reports/lint-results-debug.html
+Wrote SARIF report to file:///home/runner/work/Note/Note/app/build/reports/lint-results-debug.sarif
+
+> Task :app:lintDebug
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/gradle-1793383089035.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/Note/Note/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 9m 12s
+374 actionable tasks: 231 executed, 143 from cache
+Configuration cache entry stored.
