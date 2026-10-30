@@ -73,7 +73,6 @@ class TopLevelNavigationTest {
     fun `current tab is found from the top of the stack`() {
         assertThat(listOf<NavKey>(HomeKey).currentTopLevel()).isEqualTo(TopLevelDestination.HOME)
         assertThat(listOf(HomeKey, CalendarKey).currentTopLevel()).isEqualTo(TopLevelDestination.CALENDAR)
-        assertThat(listOf(HomeKey, TasksKey).currentTopLevel()).isEqualTo(TopLevelDestination.CALENDAR)
         assertThat(listOf(HomeKey, TasksKey).currentTopLevel()).isEqualTo(TopLevelDestination.TODO)
         assertThat(emptyList<NavKey>().currentTopLevel()).isEqualTo(TopLevelDestination.HOME)
     }
