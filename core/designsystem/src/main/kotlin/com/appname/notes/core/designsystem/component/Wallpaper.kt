@@ -33,17 +33,20 @@ sealed interface WallpaperSpec {
 }
 
 /**
- * Draws the wallpaper under [content]. Built-in wallpapers are soft colour fields, adapted for dark theme; a photo
- * is blurred by the "Background blur" setting (Android 12+) and veiled so text over glass stays readable.
- * Screens that show it must have a transparent background.
+ * Draws the wallpaper under [content]. Even when [WallpaperSpec.None] is active, draws a subtle
+ * Liquid Glass ambient light field (cool porcelain-alabaster in Light theme like the reference UI,
+ * deep midnight-sapphire glow in Dark theme) so frosted glass cards and specular borders pop with depth.
  */
 @Composable
 fun AppBackground(wallpaper: WallpaperSpec, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val background = MaterialTheme.colorScheme.background
+    val primary = MaterialTheme.colorScheme.primary
     val dark = LocalDarkTheme.current
     Box(modifier.fillMaxSize().background(background)) {
         when (wallpaper) {
-            WallpaperSpec.None -> Unit
+            WallpaperSpec.None -> Canvas(Modifier.fillMaxSize()) {
+                drawAmbientGlassField(dark, background, primary)
+            }
             is WallpaperSpec.Preset -> Canvas(Modifier.fillMaxSize()) { drawPreset(wallpaper.preset, dark, background) }
             is WallpaperSpec.Photo -> {
                 val blur = LocalGlass.current.blurRadius
@@ -64,13 +67,63 @@ fun AppBackground(wallpaper: WallpaperSpec, modifier: Modifier = Modifier, conte
 @Composable
 fun WallpaperThumbnail(wallpaper: WallpaperSpec, modifier: Modifier = Modifier) {
     val background = MaterialTheme.colorScheme.background
+    val primary = MaterialTheme.colorScheme.primary
     val dark = LocalDarkTheme.current
     Box(modifier.background(background)) {
         when (wallpaper) {
-            WallpaperSpec.None -> Unit
+            WallpaperSpec.None -> Canvas(Modifier.fillMaxSize()) { drawAmbientGlassField(dark, background, primary) }
             is WallpaperSpec.Preset -> Canvas(Modifier.fillMaxSize()) { drawPreset(wallpaper.preset, dark, background) }
             is WallpaperSpec.Photo -> Image(wallpaper.bitmap, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
+    }
+}
+
+private fun DrawScope.drawAmbientGlassField(dark: Boolean, background: Color, primary: Color) {
+    val w = size.width.coerceAtLeast(1f)
+    val h = size.height.coerceAtLeast(1f)
+    val longSide = maxOf(w, h)
+    if (dark) {
+        val topGlow = lerp(background, primary, 0.16f)
+        val bottomGlow = lerp(background, Color(0xFF1E293B), 0.32f)
+        drawRect(
+            Brush.verticalGradient(
+                0f to topGlow.copy(alpha = 0.55f),
+                0.5f to background,
+                1f to bottomGlow.copy(alpha = 0.65f),
+            ),
+        )
+        drawCircle(
+            Brush.radialGradient(
+                0f to primary.copy(alpha = 0.12f),
+                0.65f to Color.Transparent,
+                center = Offset(w * 0.18f, h * 0.12f),
+                radius = longSide * 0.72f,
+            ),
+            radius = longSide * 0.72f,
+            center = Offset(w * 0.18f, h * 0.12f),
+        )
+    } else {
+        // Cool porcelain-alabaster ambient backdrop (matches reference image_1674d1.jpg) so white Liquid Glass cards pop
+        val topWash = Color(0xFFEEF3FA)
+        val midWash = lerp(background, Color(0xFFE6EEF8), 0.55f)
+        val bottomWash = Color(0xFFE2EBF6)
+        drawRect(
+            Brush.verticalGradient(
+                0f to topWash,
+                0.52f to midWash,
+                1f to bottomWash,
+            ),
+        )
+        drawCircle(
+            Brush.radialGradient(
+                0f to Color.White.copy(alpha = 0.75f),
+                0.7f to Color.Transparent,
+                center = Offset(w * 0.15f, h * 0.08f),
+                radius = longSide * 0.65f,
+            ),
+            radius = longSide * 0.65f,
+            center = Offset(w * 0.15f, h * 0.08f),
+        )
     }
 }
 

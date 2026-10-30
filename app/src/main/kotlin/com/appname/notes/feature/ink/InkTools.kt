@@ -1,6 +1,7 @@
 package com.appname.notes.feature.ink
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.Fullscreen
@@ -53,17 +54,17 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.Brush as BrushIcon
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -89,11 +90,13 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.withSave
 import com.appname.notes.R
+import com.appname.notes.core.designsystem.component.GlassSurface
 import com.appname.notes.core.designsystem.theme.LocalDarkTheme
 import com.appname.notes.core.ink.input.EditorTool
 import com.appname.notes.core.ink.input.EraserMode
@@ -138,6 +141,12 @@ object InkToolTags {
     const val FLOATING_BAR = "ink_floating_bar"
     const val BAR_ORIENTATION = "ink_bar_orientation"
     const val BAR_HANDLE = "ink_bar_handle"
+    const val FULL_SCREEN_ADD_PAGE = "ink_fullscreen_add_page"
+    const val FULL_SCREEN_PASTE = "ink_fullscreen_paste"
+    const val CLEAR_PAGE = "ink_clear_page"
+    const val SELECTION_TASK = "ink_selection_task"
+    const val CONVERT_TEXT = "ink_selection_convert_text"
+    const val LOCK_OBJECT = "ink_selection_lock"
     fun shape(k: com.appname.notes.core.ink.model.ShapeKind) = "ink_shape_${k.name.lowercase()}"
     fun laserStyle(s: LaserStyle) = "ink_laser_${s.name.lowercase()}"
 }
@@ -171,6 +180,10 @@ data class InkToolActions(
     /** Cuts the main subject out of the selected photos / puts their background back. */
     val onRemoveBackground: () -> Unit = {},
     val onRestoreBackground: () -> Unit = {},
+    val onClearPage: () -> Unit = {},
+    val onCreateTaskFromSelection: () -> Unit = {},
+    val onConvertSelectionToText: () -> Unit = {},
+    val onToggleLockSelection: () -> Unit = {},
 )
 
 /** The tools in the bar, in order (owner brief §13). Only tools that work are shown. */
@@ -220,12 +233,10 @@ fun InkToolbar(
             .padding(horizontal = 10.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
+        GlassSurface(
             shape = RoundedCornerShape(26.dp),
-            color = surfaceColor,
-            border = borderStroke,
-            tonalElevation = 2.dp,
-            shadowElevation = 6.dp,
+            tint = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLowest,
+            elevation = 5.dp,
             modifier = Modifier.widthIn(max = 680.dp).fillMaxWidth().testTag(InkTestTags.TOOLBAR),
         ) {
             Column(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
@@ -324,6 +335,134 @@ internal fun FullScreenButton(entering: Boolean, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Sleek, compact segmented pill group for tool sub-options (`Stroke | Area`, `Free | Box`, `Solid | Outline | Dot`).
+ * Visually renders a slim 30 dp capsule track with soft active pills while preserving 48 dp touch targets for accessibility.
+ */
+@Composable
+private fun CompactSegmentedGroup(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val isDark = LocalDarkTheme.current
+    val trackColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
+    }
+    Box(
+        modifier = modifier.height(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(vertical = 9.dp)
+                .clip(RoundedCornerShape(50))
+                .background(trackColor, RoundedCornerShape(50))
+                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), RoundedCornerShape(50)),
+        )
+        Row(
+            modifier = Modifier.selectableGroup().padding(horizontal = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun CompactSegmentOption(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    description: String? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    val pillColor = if (selected) colors.primaryContainer else Color.Transparent
+    val textColor = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .widthIn(min = 48.dp)
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = onClick,
+            )
+            .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .height(24.dp)
+                .clip(RoundedCornerShape(50))
+                .background(pillColor, RoundedCornerShape(50))
+                .padding(horizontal = 11.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = textColor,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
+ * Sleek, compact toggle pill for tool sub-options (`Fill / Gradient`, `Rainbow`), replacing bulky Material FilterChips.
+ * Visually renders a 28 dp rounded pill while maintaining a 48 dp touch target.
+ */
+@Composable
+private fun CompactOptionChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    val bgColor = if (selected) colors.secondaryContainer else colors.surfaceContainerHigh.copy(alpha = 0.75f)
+    val borderColor = if (selected) colors.primary.copy(alpha = 0.55f) else colors.outlineVariant.copy(alpha = 0.45f)
+    val contentColor = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .widthIn(min = 48.dp)
+            .selectable(
+                selected = selected,
+                role = Role.Checkbox,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            modifier = Modifier
+                .height(28.dp)
+                .clip(RoundedCornerShape(50))
+                .background(bgColor, RoundedCornerShape(50))
+                .border(0.75.dp, borderColor, RoundedCornerShape(50))
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            if (leading != null) leading()
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = contentColor,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 /** The chosen tool's options: sizes, colours, eraser mode, shape, laser, lasso actions … */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -358,24 +497,29 @@ internal fun ToolOptionsRow(ui: InkEditorUi, actions: InkToolActions, panelOpen:
                 MoreColorsButton(actions.onMoreColors)
             }
             tools.tool == EditorTool.ERASER -> {
-                SingleChoiceSegmentedButtonRow {
-                    EraserMode.entries.forEachIndexed { i, mode ->
+                CompactSegmentedGroup {
+                    EraserMode.entries.forEach { mode ->
                         val description = stringResource(
                             if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke_description else R.string.ink_eraser_area_description,
                         )
-                        SegmentedButton(
+                        CompactSegmentOption(
+                            text = stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area),
                             selected = tools.eraserMode == mode,
                             onClick = { actions.onEraserMode(mode) },
-                            shape = SegmentedButtonDefaults.itemShape(i, EraserMode.entries.size),
-                            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = description },
-                        ) {
-                            Text(stringResource(if (mode == EraserMode.STROKE) R.string.ink_eraser_stroke else R.string.ink_eraser_area), maxLines = 1)
-                        }
+                            description = description,
+                        )
                     }
                 }
-                Spacer(Modifier.width(8.dp))
+                OptionDivider()
                 EraserSizes.forEachIndexed { i, size ->
                     SizeDot((size / EraserSizes.last()).toFloat(), SizeNames[i], selected = tools.eraserSizeDp == size, onClick = { actions.onEraserSize(size) })
+                }
+                OptionDivider()
+                IconButton(
+                    onClick = actions.onClearPage,
+                    modifier = Modifier.size(48.dp).testTag(InkToolTags.CLEAR_PAGE),
+                ) {
+                    Icon(Icons.Outlined.DeleteSweep, stringResource(R.string.ink_clear_page))
                 }
             }
             tools.tool == EditorTool.LASER -> LaserControls(ui.laser, actions)
@@ -386,19 +530,25 @@ internal fun ToolOptionsRow(ui: InkEditorUi, actions: InkToolActions, panelOpen:
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
-            tools.tool == EditorTool.LASSO && !ui.hasSelection -> SingleChoiceSegmentedButtonRow {
-                listOf(false, true).forEachIndexed { i, box ->
-                    SegmentedButton(
+            tools.tool == EditorTool.LASSO && !ui.hasSelection -> CompactSegmentedGroup {
+                listOf(false, true).forEach { box ->
+                    CompactSegmentOption(
+                        text = stringResource(if (box) R.string.lasso_box else R.string.lasso_free),
                         selected = tools.lassoBox == box,
                         onClick = { actions.onLassoBox(box) },
-                        shape = SegmentedButtonDefaults.itemShape(i, 2),
-                        modifier = Modifier.heightIn(min = 48.dp).testTag(if (box) InkToolTags.LASSO_BOX else InkToolTags.LASSO_FREE),
-                    ) { Text(stringResource(if (box) R.string.lasso_box else R.string.lasso_free), maxLines = 1) }
+                        modifier = Modifier.testTag(if (box) InkToolTags.LASSO_BOX else InkToolTags.LASSO_FREE),
+                    )
                 }
             }
             tools.tool == EditorTool.LASSO -> if (ui.hasSelection) {
                 IconButton(onClick = actions.onDoneSelection) { Icon(Icons.Filled.Check, stringResource(R.string.ink_selection_done)) }
                 // Photos: remove the background (or put it back) — first, so it's seen right after pasting a photo.
+                if (ui.selectionStrokes > 0) {
+                    androidx.compose.material3.TextButton(onClick = actions.onConvertSelectionToText, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).testTag(InkToolTags.CONVERT_TEXT)) {
+                        Icon(Icons.Outlined.TextFields, null, Modifier.size(18.dp))
+                        Text(stringResource(R.string.ink_selection_convert_text), Modifier.padding(start = 6.dp), maxLines = 1)
+                    }
+                }
                 if (ui.selectionPhotos > 0) {
                     androidx.compose.material3.TextButton(onClick = actions.onRemoveBackground, modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.REMOVE_BG)) {
                         Icon(Icons.Outlined.AutoFixHigh, null, Modifier.size(18.dp))
@@ -414,6 +564,13 @@ internal fun ToolOptionsRow(ui: InkEditorUi, actions: InkToolActions, panelOpen:
                 IconButton(onClick = actions.onDeleteSelection) { Icon(Icons.Filled.Delete, stringResource(R.string.ink_selection_delete)) }
                 IconButton(onClick = actions.onCopySelection, modifier = Modifier.testTag(InkToolTags.COPY)) { Icon(Icons.Outlined.CopyAll, stringResource(R.string.ink_selection_copy)) }
                 IconButton(onClick = actions.onDuplicateSelection) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.ink_selection_duplicate)) }
+                IconButton(onClick = actions.onCreateTaskFromSelection, modifier = Modifier.size(48.dp).testTag(InkToolTags.SELECTION_TASK)) { Icon(Icons.Outlined.Checklist, stringResource(R.string.todo_create_from_note)) }
+                IconButton(onClick = actions.onToggleLockSelection, modifier = Modifier.size(48.dp).testTag(InkToolTags.LOCK_OBJECT)) {
+                    Icon(
+                        if (ui.selectionLocked) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
+                        stringResource(if (ui.selectionLocked) R.string.ink_selection_unlock else R.string.ink_selection_lock),
+                    )
+                }
                 IconButton(onClick = actions.onRotate, modifier = Modifier.testTag(InkToolTags.ROTATE)) { Icon(Icons.Outlined.Rotate90DegreesCw, stringResource(R.string.ink_selection_rotate)) }
                 IconButton(onClick = { actions.onFlip(true) }, modifier = Modifier.testTag(InkToolTags.FLIP_H)) { Icon(Icons.Outlined.Flip, stringResource(R.string.ink_selection_flip_h)) }
                 IconButton(onClick = { actions.onFlip(false) }, modifier = Modifier.testTag(InkToolTags.FLIP_V)) { Icon(Icons.Outlined.Flip, stringResource(R.string.ink_selection_flip_v), Modifier.rotate(90f)) }
@@ -622,7 +779,6 @@ private fun ShapeControls(shape: ShapeSettings, recent: List<Int>, actions: InkT
             Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .then(if (selected) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier)
                 .clickable(role = Role.RadioButton) { actions.onShape(shape.copy(kind = kind)) }
                 .semantics {
                     contentDescription = label
@@ -630,12 +786,23 @@ private fun ShapeControls(shape: ShapeSettings, recent: List<Int>, actions: InkT
                 }
                 .testTag(InkToolTags.shape(kind)),
             contentAlignment = Alignment.Center,
-        ) { ShapeGlyph(kind, MaterialTheme.colorScheme.onSurface) }
+        ) {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .then(if (selected) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                ShapeGlyph(kind, if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface)
+            }
+        }
     }
-    Spacer(Modifier.width(4.dp))
+    OptionDivider()
     // Fill: none → one colour → gradient → none.
     val filled = shape.fillArgb != null
-    FilterChip(
+    CompactOptionChip(
+        text = stringResource(if (filled && shape.gradient) R.string.shape_gradient else R.string.shape_fill),
         selected = filled,
         onClick = {
             actions.onShape(
@@ -646,14 +813,13 @@ private fun ShapeControls(shape: ShapeSettings, recent: List<Int>, actions: InkT
                 },
             )
         },
-        label = { Text(stringResource(if (filled && shape.gradient) R.string.shape_gradient else R.string.shape_fill)) },
-        modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.SHAPE_FILL),
+        modifier = Modifier.testTag(InkToolTags.SHAPE_FILL),
     )
-    Spacer(Modifier.width(4.dp))
+    OptionDivider()
     ShapeSizes.forEachIndexed { i, w ->
         SizeDot(w / ShapeSizes.last(), SizeNames[i], selected = shape.size == w, onClick = { actions.onShape(shape.copy(size = w)) })
     }
-    Spacer(Modifier.width(4.dp))
+    OptionDivider()
     (recent + QuickColors).map { it or OPAQUE }.distinct().take(QUICK_COLOURS).forEach { c ->
         ColorDot(c, selected = (shape.colorArgb and 0xFFFFFF) == (c and 0xFFFFFF), onClick = { actions.onShape(shape.withColor(c)) })
     }
@@ -668,7 +834,7 @@ private fun fillOf(c: Int) = (FILL_ALPHA shl 24) or (c and 0xFFFFFF)
 /** The shape drawn small, as the button's picture. */
 @Composable
 private fun ShapeGlyph(kind: com.appname.notes.core.ink.model.ShapeKind, color: Color) {
-    Canvas(Modifier.size(22.dp)) {
+    Canvas(Modifier.size(20.dp)) {
         val g = ShapeTool.geometry(
             kind,
             com.appname.notes.core.ink.geometry.Vec(size.width * 0.12, size.height * 0.2),
@@ -693,31 +859,31 @@ private fun ShapeGlyph(kind: com.appname.notes.core.ink.model.ShapeKind, color: 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LaserControls(laser: LaserSettings, actions: InkToolActions) {
-    SingleChoiceSegmentedButtonRow {
-        LaserStyle.entries.forEachIndexed { i, style ->
-            SegmentedButton(
+    CompactSegmentedGroup {
+        LaserStyle.entries.forEach { style ->
+            CompactSegmentOption(
+                text = stringResource(style.label()),
                 selected = laser.style == style,
                 onClick = { actions.onLaser(laser.copy(style = style)) },
-                shape = SegmentedButtonDefaults.itemShape(i, LaserStyle.entries.size),
-                modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.laserStyle(style)),
-            ) { Text(stringResource(style.label()), maxLines = 1) }
+                modifier = Modifier.testTag(InkToolTags.laserStyle(style)),
+            )
         }
     }
-    Spacer(Modifier.width(6.dp))
+    Spacer(Modifier.width(4.dp))
     val rainbowLabel = stringResource(R.string.laser_rainbow)
-    FilterChip(
+    CompactOptionChip(
+        text = rainbowLabel,
         selected = laser.rainbow,
         onClick = { actions.onLaser(laser.copy(rainbow = !laser.rainbow)) },
-        label = { Text(rainbowLabel) },
-        leadingIcon = { Box(Modifier.size(16.dp).clip(CircleShape).background(RainbowBrush)) },
-        modifier = Modifier.heightIn(min = 48.dp).testTag(InkToolTags.LASER_RAINBOW),
+        leading = { Box(Modifier.size(13.dp).clip(CircleShape).background(RainbowBrush)) },
+        modifier = Modifier.testTag(InkToolTags.LASER_RAINBOW),
     )
-    Spacer(Modifier.width(4.dp))
+    OptionDivider()
     LaserWidths.forEachIndexed { i, w ->
         SizeDot(w / LaserWidths.last(), SizeNames[i], selected = laser.widthDp == w, onClick = { actions.onLaser(laser.copy(widthDp = w)) })
     }
     if (!laser.rainbow) {
-        Spacer(Modifier.width(4.dp))
+        OptionDivider()
         LaserColors.forEach { c ->
             ColorDot(c, selected = (laser.colorArgb and 0xFFFFFF) == (c and 0xFFFFFF), onClick = { actions.onLaser(laser.copy(colorArgb = c)) })
         }

@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Unarchive
@@ -108,6 +109,11 @@ import com.appname.notes.ui.common.CardAction
 import com.appname.notes.ui.common.InkThumbnail
 import com.appname.notes.ui.common.MessageEffect
 import com.appname.notes.ui.common.MoveToNotebookSheet
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.ui.platform.LocalContext
+import com.appname.notes.feature.pro.NoteLockPromptDialog
+import com.appname.notes.feature.pro.NoteProStore
 import com.appname.notes.ui.common.NoteCard
 import com.appname.notes.ui.common.SheetAction
 import kotlinx.coroutines.delay
@@ -126,6 +132,8 @@ object LibraryTestTags {
     const val IMPORT_FILE = "action_import_file"
     const val COLLECTION_BUTTON = "collection_button"
     const val SEARCH = "action_search"
+    const val MORE = "action_more"
+    const val SETTINGS = "action_settings"
     const val GRID = "notes_grid"
     const val LOADING = "library_loading"
     const val IMPORTING_PDF = "importing_pdf"
@@ -163,6 +171,8 @@ fun LibraryRoute(
     onChooseTemplate: (notebookId: String?, tagId: String?) -> Unit = { _, _ -> },
     /** Opens the To-do List directly. */
     onOpenTodoList: (() -> Unit)? = null,
+    /** Opens Settings from the top bar. */
+    onOpenSettings: (() -> Unit)? = null,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -212,6 +222,7 @@ fun LibraryRoute(
         onManageNotebooks = onManageNotebooks,
         onManageTags = onManageTags,
         onOpenTodoList = onOpenTodoList,
+        onOpenSettings = onOpenSettings,
         actions = NoteActions(
             setPinned = viewModel::setPinned,
             setFavourite = viewModel::setFavourite,
@@ -291,6 +302,7 @@ fun LibraryScreen(
     cover: (suspend (String) -> Bitmap?)? = null,
     folders: FolderActions? = null,
     onOpenTodoList: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     val snackbar = remember { SnackbarHostState() }
     // Folders inside folders: new / actions / rename / move / delete.
@@ -314,6 +326,11 @@ fun LibraryScreen(
     var confirmDeleteSelected by remember { mutableStateOf(false) }
     var confirmEmptyTrash by rememberSaveable { mutableStateOf(false) }
     var selected by rememberSaveable(saver = SelectionSaver) { mutableStateOf(emptySet()) }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { NoteProStore.ensureInit(context) }
+    val lockedNotes by NoteProStore.lockedNotes.collectAsStateWithLifecycle()
+    var pendingUnlockOpen by remember { mutableStateOf<NoteSummary?>(null) }
+    var pendingToggleLock by remember { mutableStateOf<NoteSummary?>(null) }
 
     val all = remember(state.pinned, state.others) { state.pinned + state.others }
     val selecting = selected.isNotEmpty()
@@ -375,7 +392,13 @@ fun LibraryScreen(
                         topPadding = headerHeight,
                         selectedNoteId = selectedNoteId,
                         selected = selected,
-                        onClick = { note -> if (selecting) toggle(note) else onOpenNote(note.id, note.type) },
+                        onClick = { note ->
+                            when {
+                                selecting -> toggle(note)
+                                note.id.value in lockedNotes -> pendingUnlockOpen = note
+                                else -> onOpenNote(note.id, note.type)
+                            }
+                        },
                         onLongPress = ::toggle,
                         onMore = if (selecting) null else { note: NoteSummary -> actionsFor = note },
                         inkThumbnail = inkThumbnail,
@@ -386,6 +409,8 @@ fun LibraryScreen(
                         accessibilityActions = { note ->
                             noteActions(
                                 note, state.collection, actions,
+                                isLocked = note.id.value in lockedNotes,
+                                onToggleLock = { pendingToggleLock = it },
                                 onMove = { moveFor = it }, onDelete = { confirmDeleteFor = it },
                                 onRename = { renameFor = it }, onSelect = ::toggle,
                             ).map { CardAction(stringResourceLabel(it.label), it.onClick) }
@@ -445,7 +470,7 @@ fun LibraryScreen(
                             onManageNotebooks = onManageNotebooks,
                             onManageTags = onManageTags,
                             onNewFolder = if (folders != null && state.canCreate) { { newFolder = true } } else null,
-                            onOpenTodoList = onOpenTodoList,
+                            onOpenSettings = onOpenSettings,
                         )
                         if (parentFolder != null) {
                             // Inside a folder that is inside another: one tap back up.
@@ -461,7 +486,6 @@ fun LibraryScreen(
                             notebooks = FolderTree.children(state.notebooks, null),
                             onSelect = onSelectCollection,
                             modifier = Modifier.padding(bottom = 6.dp),
-                            onOpenTodoList = onOpenTodoList,
                         )
                     }
                 }
@@ -537,10 +561,34 @@ fun LibraryScreen(
             title = note.displayTitle(),
             actions = noteActions(
                 note, state.collection, actions,
+                isLocked = note.id.value in lockedNotes,
+                onToggleLock = { pendingToggleLock = it },
                 onMove = { moveFor = it }, onDelete = { confirmDeleteFor = it },
                 onRename = { renameFor = it }, onSelect = ::toggle,
             ).map { SheetAction(stringResource(it.label), it.icon, it.onClick) },
             onDismiss = { actionsFor = null },
+        )
+    }
+    pendingUnlockOpen?.let { note ->
+        NoteLockPromptDialog(
+            title = note.displayTitle(),
+            onAuthenticated = {
+                val target = note
+                pendingUnlockOpen = null
+                onOpenNote(target.id, target.type)
+            },
+            onDismiss = { pendingUnlockOpen = null },
+        )
+    }
+    pendingToggleLock?.let { note ->
+        val currentlyLocked = note.id.value in lockedNotes
+        NoteLockPromptDialog(
+            title = stringResource(if (currentlyLocked) R.string.note_unlock else R.string.note_lock),
+            onAuthenticated = {
+                NoteProStore.setNoteLocked(context, note.id.value, !currentlyLocked)
+                pendingToggleLock = null
+            },
+            onDismiss = { pendingToggleLock = null },
         )
     }
     renameFor?.let { note ->
@@ -606,7 +654,7 @@ private fun HomeTopRow(
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
     onNewFolder: (() -> Unit)? = null,
-    onOpenTodoList: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         val description = stringResource(R.string.collection_choose, title)
@@ -638,7 +686,7 @@ private fun HomeTopRow(
             Icon(Icons.Outlined.Search, stringResource(R.string.library_search))
         }
         SortMenu(sort, onSort, cardSize, onCardSize)
-        OverflowMenu(inTrash, onEmptyTrash, onManageNotebooks, onManageTags, onNewFolder, onOpenTodoList)
+        OverflowMenu(inTrash, onEmptyTrash, onManageNotebooks, onManageTags, onNewFolder, onOpenSettings)
     }
 }
 
@@ -757,6 +805,8 @@ private fun noteActions(
     note: NoteSummary,
     collection: NoteCollection,
     a: NoteActions,
+    isLocked: Boolean = false,
+    onToggleLock: (NoteSummary) -> Unit = {},
     onMove: (NoteSummary) -> Unit,
     onDelete: (NoteSummary) -> Unit,
     onRename: (NoteSummary) -> Unit,
@@ -777,6 +827,12 @@ private fun noteActions(
             ) { a.setFavourite(note.id, !note.isFavourite) },
         )
         add(ActionSpec(R.string.note_move, Icons.AutoMirrored.Outlined.DriveFileMove) { onMove(note) })
+        add(
+            ActionSpec(
+                if (isLocked) R.string.note_unlock else R.string.note_lock,
+                if (isLocked) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
+            ) { onToggleLock(note) },
+        )
         add(ActionSpec(R.string.note_duplicate, Icons.Outlined.ContentCopy) { a.duplicate(note.id) })
         add(
             if (note.isArchived) {
@@ -868,24 +924,22 @@ private fun OverflowMenu(
     onManageNotebooks: () -> Unit,
     onManageTags: () -> Unit,
     onNewFolder: (() -> Unit)?,
-    onOpenTodoList: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.action_more)) }
+        IconButton(
+            onClick = { open = true },
+            modifier = Modifier.testTag(LibraryTestTags.MORE),
+        ) {
+            Icon(Icons.Outlined.MoreVert, stringResource(R.string.action_more))
+        }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (inTrash) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.library_empty_trash)) },
                     leadingIcon = { Icon(Icons.Outlined.DeleteForever, null) },
                     onClick = { open = false; onEmptyTrash() },
-                )
-            }
-            if (onOpenTodoList != null) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.todo_title)) },
-                    leadingIcon = { Icon(Icons.Outlined.Checklist, null) },
-                    onClick = { open = false; onOpenTodoList() },
                 )
             }
             if (onNewFolder != null) {
@@ -906,6 +960,15 @@ private fun OverflowMenu(
                 leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Label, null) },
                 onClick = { open = false; onManageTags() },
             )
+            if (onOpenSettings != null) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.nav_settings)) },
+                    leadingIcon = { Icon(Icons.Outlined.Settings, null) },
+                    onClick = { open = false; onOpenSettings() },
+                    modifier = Modifier.testTag(LibraryTestTags.SETTINGS),
+                )
+            }
         }
     }
 }

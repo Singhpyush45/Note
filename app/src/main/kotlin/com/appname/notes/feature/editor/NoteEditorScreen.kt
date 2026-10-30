@@ -129,6 +129,13 @@ import com.appname.notes.core.domain.markdown.LostFeature
 import com.appname.notes.core.domain.model.NoteId
 import com.appname.notes.feature.library.ConfirmDialog
 import com.appname.notes.ui.common.MessageEffect
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.TextRange
+import com.appname.notes.feature.pro.FocusTimerChip
+import com.appname.notes.feature.pro.FocusTimerDialog
+import com.appname.notes.feature.pro.InDocumentFindBar
 import com.appname.notes.ui.common.MoveToNotebookSheet
 import kotlinx.coroutines.launch
 
@@ -355,6 +362,9 @@ fun NoteEditorRoute(
         if (uri != null && export != null) viewModel.writeExport(uri, export.text)
         pendingExport = null
     }
+    val pdfExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null) viewModel.writePdfExport(uri)
+    }
 
     fun startExport(export: ExportResult) {
         pendingExport = export
@@ -382,6 +392,7 @@ fun NoteEditorRoute(
                 if (export.lost.isEmpty()) startExport(export) else exportWarning = export
             }
         },
+        onExportPdf = { pdfExportLauncher.launch(viewModel.suggestedPdfFileName()) },
         onRemind = { reminderUi.add() },
         onCreateTask = viewModel::createTaskFromNote,
     )
@@ -484,6 +495,7 @@ data class EditorMenuActions(
     val onTags: () -> Unit,
     val onShare: () -> Unit,
     val onExport: () -> Unit,
+    val onExportPdf: () -> Unit = {},
     val onRemind: () -> Unit = {},
     val onCreateTask: () -> Unit = {},
 )
@@ -516,6 +528,13 @@ fun NoteEditorScreen(
     onClipLink: ((String) -> Unit)? = null,
 ) {
     val controller = (load as? EditorLoad.Ready)?.controller
+    var findOpen by rememberSaveable { mutableStateOf(false) }
+    var findQuery by rememberSaveable { mutableStateOf("") }
+    var findMatchIdx by rememberSaveable { mutableIntStateOf(0) }
+    var showFocusTimer by rememberSaveable { mutableStateOf(false) }
+    if (showFocusTimer) {
+        FocusTimerDialog(onDismiss = { showFocusTimer = false })
+    }
     Scaffold(
         modifier = Modifier.testTag(EditorTestTags.SCREEN),
         contentWindowInsets = WindowInsets(0),
@@ -532,6 +551,12 @@ fun NoteEditorScreen(
                     },
                     title = { if (readOnly == null && controller != null) SaveStatusLabel(saveStatus) },
                     actions = {
+                        if (controller != null) {
+                            FocusTimerChip(onClick = { showFocusTimer = true }, modifier = Modifier.padding(end = 2.dp))
+                            IconButton(onClick = { findOpen = !findOpen }) {
+                                Icon(Icons.Outlined.Search, stringResource(R.string.find_in_note))
+                            }
+                        }
                         if (controller != null && readOnly == null) {
                             IconButton(onClick = controller::undo, enabled = controller.canUndo) {
                                 Icon(Icons.AutoMirrored.Outlined.Undo, stringResource(R.string.editor_undo))
@@ -553,6 +578,47 @@ fun NoteEditorScreen(
                     },
                 )
                 recordingBar()
+                if (findOpen && controller != null) {
+                    val bodyText = controller.state.text
+                    val matchRanges = remember(findQuery, bodyText) {
+                        val q = findQuery.trim()
+                        if (q.isEmpty()) emptyList() else Regex(Regex.escape(q), RegexOption.IGNORE_CASE).findAll(bodyText).map { it.range }.toList()
+                    }
+                    val safeIdx = if (matchRanges.isEmpty()) 0 else findMatchIdx.coerceIn(0, matchRanges.lastIndex)
+                    fun jumpTo(idx: Int) {
+                        val r = matchRanges.getOrNull(idx) ?: return
+                        controller.onValueChange(controller.textFieldValue.copy(selection = TextRange(r.first, r.last + 1)))
+                    }
+                    InDocumentFindBar(
+                        query = findQuery,
+                        onQueryChange = { q ->
+                            findQuery = q
+                            findMatchIdx = 0
+                            val first = if (q.isBlank()) null else Regex(Regex.escape(q.trim()), RegexOption.IGNORE_CASE).find(bodyText)?.range
+                            if (first != null) {
+                                controller.onValueChange(controller.textFieldValue.copy(selection = TextRange(first.first, first.last + 1)))
+                            }
+                        },
+                        matchCount = matchRanges.size,
+                        currentMatchIndex = safeIdx,
+                        onPrevious = {
+                            if (matchRanges.isNotEmpty()) {
+                                val prev = (safeIdx - 1 + matchRanges.size) % matchRanges.size
+                                findMatchIdx = prev
+                                jumpTo(prev)
+                            }
+                        },
+                        onNext = {
+                            if (matchRanges.isNotEmpty()) {
+                                val next = (safeIdx + 1) % matchRanges.size
+                                findMatchIdx = next
+                                jumpTo(next)
+                            }
+                        },
+                        onClose = { findOpen = false; findQuery = "" },
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    )
+                }
             }
         },
         bottomBar = {
@@ -773,6 +839,7 @@ private fun EditorOverflowMenu(meta: NoteMeta, actions: EditorMenuActions) {
                 item(R.string.note_move, Icons.AutoMirrored.Outlined.DriveFileMove, actions.onMove)
                 item(R.string.note_duplicate, Icons.Outlined.ContentCopy, actions.onDuplicate)
                 item(R.string.note_share, Icons.Outlined.Share, actions.onShare)
+                item(R.string.ink_export_pdf, Icons.Outlined.PictureAsPdf, actions.onExportPdf)
                 item(R.string.note_export_markdown, Icons.Outlined.FileDownload, actions.onExport)
                 item(
                     if (meta.isArchived) R.string.note_unarchive else R.string.note_archive,

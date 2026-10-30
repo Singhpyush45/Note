@@ -1,6 +1,7 @@
 package com.appname.notes.feature.settings
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,12 +28,22 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.DashboardCustomize
+import androidx.compose.material.icons.outlined.Draw
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Shield
+import com.appname.notes.navigation.AppLaunchAnimationState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -112,14 +124,20 @@ data class AppearanceActions(
 
 /** Connects the screen to its ViewModel. Kept separate so [SettingsScreen] is easy to preview and test. */
 @Composable
-fun SettingsRoute(onManageTemplates: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsRoute(
+    onBack: (() -> Unit)? = null,
+    onManageTemplates: () -> Unit = {},
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val wallpaperPhoto by viewModel.wallpaperPhoto.collectAsStateWithLifecycle()
+    BackHandler(enabled = onBack != null) { onBack?.invoke() }
     SettingsScreen(
         uiState = uiState,
         onThemeModeSelected = viewModel::onThemeModeSelected,
         onDynamicColorChanged = viewModel::onDynamicColorChanged,
         onSaveErrorShown = viewModel::onSaveErrorShown,
+        onBack = onBack,
         onRebuildSearchIndex = viewModel::onRebuildSearchIndex,
         onIndexRebuiltShown = viewModel::onIndexRebuiltShown,
         onShapeCorrectionChanged = viewModel::onShapeCorrectionChanged,
@@ -155,6 +173,7 @@ fun SettingsScreen(
     onDynamicColorChanged: (Boolean) -> Unit,
     onSaveErrorShown: () -> Unit,
     modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
     onRebuildSearchIndex: () -> Unit = {},
     onIndexRebuiltShown: () -> Unit = {},
     onShapeCorrectionChanged: (Boolean) -> Unit = {},
@@ -206,6 +225,13 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineMedium) },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack, modifier = Modifier.testTag(SettingsTestTags.BACK)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
             )
         },
@@ -281,7 +307,7 @@ private fun SettingsList(
             .testTag(SettingsTestTags.LIST),
     ) {
         item {
-            SettingsCard(stringResource(R.string.settings_section_appearance)) {
+            SettingsCard(stringResource(R.string.settings_section_appearance), icon = Icons.Outlined.Palette) {
                 SettingsSegmentedRow(
                     title = stringResource(R.string.settings_theme),
                     options = THEME_ORDER.map { stringResource(it.shortLabelRes()) },
@@ -350,6 +376,12 @@ private fun SettingsList(
                     optionTag = { if (it == 0) SettingsTestTags.DENSITY_COMPACT else SettingsTestTags.DENSITY_COMFORTABLE },
                 )
                 SettingsActionRow(
+                    title = stringResource(R.string.settings_replay_launch_animation),
+                    summary = stringResource(R.string.settings_replay_launch_animation_summary),
+                    icon = Icons.Outlined.AutoAwesome,
+                    onClick = { AppLaunchAnimationState.triggerReplay() },
+                )
+                SettingsActionRow(
                     title = stringResource(R.string.settings_reset_appearance),
                     summary = stringResource(R.string.settings_reset_appearance_summary),
                     onClick = { confirmReset = true },
@@ -363,7 +395,7 @@ private fun SettingsList(
         }
 
         item {
-            SettingsCard(stringResource(R.string.settings_section_templates)) {
+            SettingsCard(stringResource(R.string.settings_section_templates), icon = Icons.Outlined.DashboardCustomize) {
                 SettingsLinkRow(
                     title = stringResource(R.string.templates_title_manage),
                     summary = stringResource(R.string.settings_templates_summary),
@@ -374,7 +406,7 @@ private fun SettingsList(
         }
 
         item {
-            SettingsCard(stringResource(R.string.settings_section_handwriting)) {
+            SettingsCard(stringResource(R.string.settings_section_handwriting), icon = Icons.Outlined.Draw) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.settings_shape_correction),
                     summary = stringResource(R.string.settings_shape_correction_summary),
@@ -434,7 +466,7 @@ private fun SettingsList(
         }
 
         item {
-            SettingsCard(stringResource(R.string.settings_section_privacy)) {
+            SettingsCard(stringResource(R.string.settings_section_privacy), icon = Icons.Outlined.Shield) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.settings_document_text),
                     summary = stringResource(R.string.settings_document_text_summary),
@@ -454,7 +486,7 @@ private fun SettingsList(
         item { backupCard() }
 
         item {
-            SettingsCard(stringResource(R.string.settings_section_maintenance)) {
+            SettingsCard(stringResource(R.string.settings_section_maintenance), icon = Icons.Outlined.Build) {
                 SettingsActionRow(
                     title = stringResource(R.string.settings_rebuild_index),
                     summary = stringResource(R.string.settings_rebuild_index_summary),
@@ -464,10 +496,10 @@ private fun SettingsList(
         }
 
         item {
-            SettingsCard(stringResource(R.string.settings_section_about)) {
+            SettingsCard(stringResource(R.string.settings_section_about), icon = Icons.Outlined.Info) {
                 SettingsInfoRow(title = stringResource(R.string.settings_version), value = BuildConfig.VERSION_NAME)
             }
-            Spacer(Modifier.height(AppTheme.spacing.xxl))
+            Spacer(Modifier.navigationBarsPadding().height(AppTheme.spacing.xxl))
         }
     }
 
@@ -739,6 +771,7 @@ private fun ThemeMode.shortLabelRes(): Int = when (this) {
 }
 
 object SettingsTestTags {
+    const val BACK = "settings_back"
     const val TEMPLATES = "settings_templates"
     const val DEFAULTS = "settings_note_defaults"
     const val DEFAULT_STYLE = "settings_default_style"

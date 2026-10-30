@@ -1,9 +1,21 @@
 package com.appname.notes.feature.calendar
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.outlined.Settings
+import com.appname.notes.core.designsystem.component.liquidGlassPill
+import com.appname.notes.core.designsystem.theme.LocalDarkTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +28,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -110,7 +123,19 @@ import com.appname.notes.core.domain.model.NoteSummary
 import com.appname.notes.core.domain.model.NoteType
 import com.appname.notes.core.domain.model.TaskFilter
 import com.appname.notes.core.domain.model.TodoTask
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.ui.platform.LocalContext
 import com.appname.notes.feature.library.ConfirmDialog
+import com.appname.notes.feature.pro.FocusTimerChip
+import com.appname.notes.feature.pro.FocusTimerDialog
+import com.appname.notes.feature.pro.NoteProStore
+import com.appname.notes.feature.pro.SubtaskItem
+import com.appname.notes.feature.pro.TaskPriority
+import com.appname.notes.feature.pro.TaskProMeta
+import com.appname.notes.feature.pro.TaskRecurrence
+import java.util.UUID
 import com.appname.notes.ui.common.MessageEffect
 import java.time.DayOfWeek
 import java.time.Instant
@@ -155,6 +180,8 @@ object PlannerTestTags {
 fun PlannerRoute(
     onOpenNote: (NoteId, NoteType) -> Unit,
     initialSection: PlannerSection? = null,
+    onSwitchTopLevel: ((PlannerSection) -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
     viewModel: PlannerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -163,7 +190,10 @@ fun PlannerRoute(
     }
     PlannerScreen(
         state = state,
-        onSectionChange = viewModel::setSection,
+        onSectionChange = { sec ->
+            viewModel.setSection(sec)
+            onSwitchTopLevel?.invoke(sec)
+        },
         onFilterChange = viewModel::setTaskFilter,
         onSelectDate = viewModel::selectDate,
         onPreviousMonth = viewModel::previousMonth,
@@ -175,6 +205,7 @@ fun PlannerRoute(
         onSaveEvent = viewModel::saveEvent,
         onDeleteEvent = viewModel::deleteEvent,
         onOpenNote = onOpenNote,
+        onOpenSettings = onOpenSettings,
         onMessageShown = viewModel::onMessageShown,
     )
 }
@@ -198,6 +229,7 @@ fun PlannerScreen(
         enableReminder: Boolean,
         sourceNoteId: NoteId?,
         sourceNoteTitle: String?,
+        proMeta: TaskProMeta?,
     ) -> Unit,
     onToggleTask: (TodoTask) -> Unit,
     onDeleteTask: (com.appname.notes.core.domain.model.TaskId) -> Unit,
@@ -213,6 +245,7 @@ fun PlannerScreen(
     ) -> Unit,
     onDeleteEvent: (com.appname.notes.core.domain.model.CalendarEventId) -> Unit,
     onOpenNote: (NoteId, NoteType) -> Unit,
+    onOpenSettings: (() -> Unit)? = null,
     onMessageShown: () -> Unit,
 ) {
     val snackbar = remember { SnackbarHostState() }
@@ -226,6 +259,12 @@ fun PlannerScreen(
     var showEventDialog by rememberSaveable { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<CalendarEvent?>(null) }
     var confirmDeleteEvent by remember { mutableStateOf<CalendarEvent?>(null) }
+    var showFocusTimer by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { NoteProStore.ensureInit(context) }
+    if (showFocusTimer) {
+        FocusTimerDialog(onDismiss = { showFocusTimer = false })
+    }
 
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(0.dp) }
@@ -317,10 +356,11 @@ fun PlannerScreen(
                 }
             }
 
-            // Floating Glass Header with Calendar | To-do List switcher
+            // Floating Liquid Glass Header with smooth sliding Calendar | To-do List switcher
+            val isDark = LocalDarkTheme.current
             GlassSurface(
                 shape = MaterialTheme.shapes.extraLarge,
-                elevation = 3.dp,
+                elevation = 4.dp,
                 backdrop = backdrop,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -333,35 +373,108 @@ fun PlannerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    SingleChoiceSegmentedButtonRow(Modifier.weight(1f)) {
-                        SegmentedButton(
-                            selected = state.section == PlannerSection.CALENDAR,
-                            onClick = { onSectionChange(PlannerSection.CALENDAR) },
-                            shape = SegmentedButtonDefaults.itemShape(0, 2),
-                            icon = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(18.dp)) },
-                            modifier = Modifier.testTag(PlannerTestTags.TAB_CALENDAR),
+                    val badge = if (state.pendingTaskCount > 0) " (${state.pendingTaskCount})" else ""
+                    val tabs = listOf(
+                        Triple(PlannerSection.CALENDAR, stringResource(R.string.nav_calendar), Icons.Outlined.CalendarMonth to PlannerTestTags.TAB_CALENDAR),
+                        Triple(PlannerSection.TASKS, stringResource(R.string.todo_title) + badge, Icons.Outlined.Checklist to PlannerTestTags.TAB_TASKS),
+                    )
+                    val selectedIndex = if (state.section == PlannerSection.TASKS) 1 else 0
+
+                    BoxWithConstraints(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(50))
+                            .liquidGlassPill(
+                                selected = false,
+                                dark = isDark,
+                                accentColor = MaterialTheme.colorScheme.primary,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                cornerRadius = 50.dp,
+                            )
+                            .padding(4.dp)
+                            .selectableGroup(),
+                    ) {
+                        val spacing = 4.dp
+                        val tabW = (maxWidth - spacing) / 2
+                        val targetX = (tabW + spacing) * selectedIndex
+                        val slideX by animateDpAsState(
+                            targetValue = targetX,
+                            animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
+                            label = "plannerHeaderSlide",
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .offset(x = slideX)
+                                .width(tabW)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(50))
+                                .liquidGlassPill(
+                                    selected = true,
+                                    dark = isDark,
+                                    accentColor = MaterialTheme.colorScheme.primary,
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    cornerRadius = 50.dp,
+                                ),
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(spacing),
                         ) {
-                            Text(stringResource(R.string.nav_calendar), maxLines = 1)
-                        }
-                        SegmentedButton(
-                            selected = state.section == PlannerSection.TASKS,
-                            onClick = { onSectionChange(PlannerSection.TASKS) },
-                            shape = SegmentedButtonDefaults.itemShape(1, 2),
-                            icon = { Icon(Icons.Outlined.Checklist, null, Modifier.size(18.dp)) },
-                            modifier = Modifier.testTag(PlannerTestTags.TAB_TASKS),
-                        ) {
-                            val badge = if (state.pendingTaskCount > 0) " (${state.pendingTaskCount})" else ""
-                            Text(stringResource(R.string.todo_title) + badge, maxLines = 1)
+                            tabs.forEach { (sec, label, iconAndTag) ->
+                                val selected = state.section == sec
+                                val contentColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    animationSpec = tween(180),
+                                    label = "plannerTabText",
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .selectable(
+                                            selected = selected,
+                                            role = Role.Tab,
+                                            onClick = { onSectionChange(sec) },
+                                        )
+                                        .padding(horizontal = 10.dp)
+                                        .testTag(iconAndTag.second),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                ) {
+                                    Icon(iconAndTag.first, contentDescription = null, tint = contentColor, modifier = Modifier.size(17.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                        color = contentColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                         }
                     }
+
+                    Spacer(Modifier.width(6.dp))
+                    FocusTimerChip(onClick = { showFocusTimer = true })
                     if (state.section == PlannerSection.CALENDAR && (state.selectedDate != state.today || state.currentMonth != YearMonth.from(state.today))) {
-                        Spacer(Modifier.width(8.dp))
-                        IconButton(onClick = onToday, modifier = Modifier.testTag(PlannerTestTags.TODAY_BUTTON)) {
-                            Icon(Icons.Outlined.Today, stringResource(R.string.calendar_today))
+                        IconButton(onClick = onToday, modifier = Modifier.size(36.dp).testTag(PlannerTestTags.TODAY_BUTTON)) {
+                            Icon(Icons.Outlined.Today, stringResource(R.string.calendar_today), modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (onOpenSettings != null) {
+                        IconButton(onClick = onOpenSettings, modifier = Modifier.size(36.dp).testTag("planner_settings_btn")) {
+                            Icon(Icons.Outlined.Settings, stringResource(R.string.nav_settings), modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -374,8 +487,8 @@ fun PlannerScreen(
             initial = editingTask,
             defaultDate = defaultTaskDate,
             notes = state.notes,
-            onSave = { title, desc, date, time, remind, noteId, noteTitle ->
-                onSaveTask(editingTask?.id, title, desc, date, time, remind, noteId, noteTitle)
+            onSave = { title, desc, date, time, remind, noteId, noteTitle, proMeta ->
+                onSaveTask(editingTask?.id, title, desc, date, time, remind, noteId, noteTitle, proMeta)
                 showTaskDialog = false
                 editingTask = null
                 defaultTaskDate = null
@@ -487,6 +600,7 @@ private fun CalendarContent(
         modifier = Modifier.fillMaxSize(),
     ) {
         item(key = "calendar_card") {
+            var weekMode by rememberSaveable { mutableStateOf(false) }
             GlassSurface(
                 shape = MaterialTheme.shapes.large,
                 elevation = 2.dp,
@@ -495,19 +609,30 @@ private fun CalendarContent(
                 Column(Modifier.padding(spacing.md)) {
                     MonthHeaderRow(
                         month = state.currentMonth,
+                        weekMode = weekMode,
+                        onToggleWeekMode = { weekMode = !weekMode },
                         onPreviousMonth = onPreviousMonth,
                         onNextMonth = onNextMonth,
                     )
                     Spacer(Modifier.height(8.dp))
                     WeekdayHeaderRow()
                     Spacer(Modifier.height(4.dp))
-                    MonthGrid(
-                        yearMonth = state.currentMonth,
-                        selectedDate = state.selectedDate,
-                        today = state.today,
-                        datesWithItems = activeDates,
-                        onSelectDate = onSelectDate,
-                    )
+                    if (weekMode) {
+                        WeekGrid(
+                            selectedDate = state.selectedDate,
+                            today = state.today,
+                            datesWithItems = activeDates,
+                            onSelectDate = onSelectDate,
+                        )
+                    } else {
+                        MonthGrid(
+                            yearMonth = state.currentMonth,
+                            selectedDate = state.selectedDate,
+                            today = state.today,
+                            datesWithItems = activeDates,
+                            onSelectDate = onSelectDate,
+                        )
+                    }
                 }
             }
         }
@@ -634,6 +759,8 @@ private fun CalendarContent(
 @Composable
 private fun MonthHeaderRow(
     month: YearMonth,
+    weekMode: Boolean = false,
+    onToggleWeekMode: () -> Unit = {},
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
 ) {
@@ -647,15 +774,52 @@ private fun MonthHeaderRow(
         IconButton(onClick = onPreviousMonth, modifier = Modifier.testTag(PlannerTestTags.PREV_MONTH)) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.calendar_prev_month))
         }
-        Text(
-            text = month.atDay(1).format(formatter),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.testTag(PlannerTestTags.MONTH_LABEL).semantics { heading() },
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = month.atDay(1).format(formatter),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.testTag(PlannerTestTags.MONTH_LABEL).semantics { heading() },
+            )
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
+                modifier = Modifier.padding(top = 2.dp).clip(CircleShape).clickable(onClick = onToggleWeekMode),
+            ) {
+                Text(
+                    text = stringResource(if (weekMode) R.string.calendar_view_week else R.string.calendar_view_month),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+                )
+            }
+        }
         IconButton(onClick = onNextMonth, modifier = Modifier.testTag(PlannerTestTags.NEXT_MONTH)) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.calendar_next_month))
+        }
+    }
+}
+
+@Composable
+private fun WeekGrid(
+    selectedDate: LocalDate,
+    today: LocalDate,
+    datesWithItems: Set<LocalDate>,
+    onSelectDate: (LocalDate) -> Unit,
+) {
+    val monday = selectedDate.minusDays((selectedDate.dayOfWeek.value - 1).toLong())
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (i in 0 until 7) {
+            val date = monday.plusDays(i.toLong())
+            DayCell(
+                date = date,
+                isSelected = date == selectedDate,
+                isToday = date == today,
+                hasItems = date in datesWithItems,
+                onClick = { onSelectDate(date) },
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -813,24 +977,43 @@ private fun TodoListContent(
                 modifier = Modifier.widthIn(max = 680.dp).fillMaxWidth().padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FilterChip(
-                    selected = state.taskFilter == TaskFilter.PENDING,
-                    onClick = { onFilterChange(TaskFilter.PENDING) },
-                    label = { Text(stringResource(R.string.todo_filter_pending, state.pendingTaskCount)) },
-                    modifier = Modifier.testTag(PlannerTestTags.FILTER_PENDING),
-                )
-                FilterChip(
-                    selected = state.taskFilter == TaskFilter.COMPLETED,
-                    onClick = { onFilterChange(TaskFilter.COMPLETED) },
-                    label = { Text(stringResource(R.string.todo_filter_completed, state.completedTaskCount)) },
-                    modifier = Modifier.testTag(PlannerTestTags.FILTER_COMPLETED),
-                )
-                FilterChip(
-                    selected = state.taskFilter == TaskFilter.ALL,
-                    onClick = { onFilterChange(TaskFilter.ALL) },
-                    label = { Text(stringResource(R.string.todo_filter_all, state.allTasks.size)) },
-                    modifier = Modifier.testTag(PlannerTestTags.FILTER_ALL),
-                )
+                listOf(
+                    Triple(TaskFilter.PENDING, stringResource(R.string.todo_filter_pending, state.pendingTaskCount), PlannerTestTags.FILTER_PENDING),
+                    Triple(TaskFilter.COMPLETED, stringResource(R.string.todo_filter_completed, state.completedTaskCount), PlannerTestTags.FILTER_COMPLETED),
+                    Triple(TaskFilter.ALL, stringResource(R.string.todo_filter_all, state.allTasks.size), PlannerTestTags.FILTER_ALL),
+                ).forEach { (filter, label, tag) ->
+                    val selected = state.taskFilter == filter
+                    Box(
+                        modifier = Modifier
+                            .heightIn(min = 36.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                                RoundedCornerShape(50),
+                            )
+                            .border(
+                                0.75.dp,
+                                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                RoundedCornerShape(50),
+                            )
+                            .selectable(
+                                selected = selected,
+                                role = Role.Tab,
+                                onClick = { onFilterChange(filter) },
+                            )
+                            .padding(horizontal = 14.dp, vertical = 7.dp)
+                            .testTag(tag),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
 
@@ -873,6 +1056,9 @@ private fun TaskCard(
     onDelete: () -> Unit,
     onOpenNote: (() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
+    val taskMetas by NoteProStore.taskMetas.collectAsStateWithLifecycle()
+    val proMeta = taskMetas[task.id.value] ?: TaskProMeta()
     val dateFormatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
     val timeFormatter = remember { DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT) }
     GlassSurface(
@@ -914,11 +1100,78 @@ private fun TaskCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (task.dueDate != null || task.reminderAt != null || task.sourceNoteId != null) {
+                if (proMeta.subtasks.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        proMeta.subtasks.forEach { st ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { NoteProStore.toggleSubtask(context, task.id.value, st.id) }
+                                    .padding(vertical = 2.dp, horizontal = 4.dp),
+                            ) {
+                                Icon(
+                                    imageVector = if (st.done) Icons.Outlined.CheckCircle else Icons.Outlined.Checklist,
+                                    contentDescription = null,
+                                    tint = if (st.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = st.title,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (st.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                                    textDecoration = if (st.done) TextDecoration.LineThrough else null,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+                if (task.dueDate != null || task.reminderAt != null || task.sourceNoteId != null || proMeta.priority != TaskPriority.NONE || proMeta.recurrence != TaskRecurrence.NONE) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
+                        if (proMeta.priority != TaskPriority.NONE) {
+                            val (pLabel, pColor) = when (proMeta.priority) {
+                                TaskPriority.HIGH -> stringResource(R.string.todo_priority_high) to Color(0xFFD93025)
+                                TaskPriority.MEDIUM -> stringResource(R.string.todo_priority_medium) to Color(0xFFE8710A)
+                                TaskPriority.LOW -> stringResource(R.string.todo_priority_low) to Color(0xFF1A73E8)
+                                TaskPriority.NONE -> "" to Color.Transparent
+                            }
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = pColor.copy(alpha = 0.15f),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Outlined.Flag, null, Modifier.size(12.dp), tint = pColor)
+                                    Text(
+                                        text = pLabel,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = pColor,
+                                        modifier = Modifier.padding(start = 4.dp),
+                                    )
+                                }
+                            }
+                        }
+                        if (proMeta.recurrence != TaskRecurrence.NONE) {
+                            val rLabel = when (proMeta.recurrence) {
+                                TaskRecurrence.DAILY -> stringResource(R.string.todo_recurrence_daily)
+                                TaskRecurrence.WEEKLY -> stringResource(R.string.todo_recurrence_weekly)
+                                TaskRecurrence.MONTHLY -> stringResource(R.string.todo_recurrence_monthly)
+                                TaskRecurrence.NONE -> ""
+                            }
+                            SmallBadge(icon = Icons.Outlined.Repeat, text = rLabel)
+                        }
                         task.dueDate?.let { date ->
                             val timeStr = task.dueTime?.format(timeFormatter)?.let { " · $it" }.orEmpty()
                             SmallBadge(
@@ -1104,6 +1357,7 @@ private fun TaskEditorDialog(
         enableReminder: Boolean,
         sourceNoteId: NoteId?,
         sourceNoteTitle: String?,
+        proMeta: TaskProMeta?,
     ) -> Unit,
     onDelete: (() -> Unit)?,
     onDismiss: () -> Unit,
@@ -1118,6 +1372,14 @@ private fun TaskEditorDialog(
     var showTimePicker by remember { mutableStateOf(false) }
     var showNotePicker by remember { mutableStateOf(false) }
     var titleError by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val initialMeta = remember(initial?.id) {
+        initial?.id?.value?.let { NoteProStore.getTaskMeta(context, it) } ?: TaskProMeta()
+    }
+    var priority by remember { mutableStateOf(initialMeta.priority) }
+    var recurrence by remember { mutableStateOf(initialMeta.recurrence) }
+    var subtasks by remember { mutableStateOf(initialMeta.subtasks) }
+    var newSubtaskTitle by rememberSaveable { mutableStateOf("") }
 
     val dateFormatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
     val timeFormatter = remember { DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT) }
@@ -1195,6 +1457,129 @@ private fun TaskEditorDialog(
                         Text(stringResource(R.string.todo_clear_due_date))
                     }
                 }
+                // Priority selector
+                Text(stringResource(R.string.todo_priority_label), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f))
+                        .padding(3.dp)
+                        .selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    listOf(
+                        TaskPriority.NONE to R.string.todo_priority_none,
+                        TaskPriority.LOW to R.string.todo_priority_low,
+                        TaskPriority.MEDIUM to R.string.todo_priority_medium,
+                        TaskPriority.HIGH to R.string.todo_priority_high,
+                    ).forEach { (p, labelRes) ->
+                        val selected = priority == p
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 32.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .selectable(selected = selected, role = Role.RadioButton, onClick = { priority = p })
+                                .padding(vertical = 5.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(labelRes),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+
+                // Recurrence selector
+                Text(stringResource(R.string.todo_recurrence_label), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f))
+                        .padding(3.dp)
+                        .selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    listOf(
+                        TaskRecurrence.NONE to R.string.todo_recurrence_none,
+                        TaskRecurrence.DAILY to R.string.todo_recurrence_daily,
+                        TaskRecurrence.WEEKLY to R.string.todo_recurrence_weekly,
+                        TaskRecurrence.MONTHLY to R.string.todo_recurrence_monthly,
+                    ).forEach { (r, labelRes) ->
+                        val selected = recurrence == r
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 32.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .selectable(selected = selected, role = Role.RadioButton, onClick = { recurrence = r })
+                                .padding(vertical = 5.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(labelRes),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+
+                // Subtasks / Steps builder
+                Text(stringResource(R.string.todo_subtasks_label), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                subtasks.forEach { st ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = st.done,
+                            onCheckedChange = { checked ->
+                                subtasks = subtasks.map { if (it.id == st.id) it.copy(done = checked) else it }
+                            },
+                        )
+                        Text(st.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { subtasks = subtasks.filterNot { it.id == st.id } }) {
+                            Icon(Icons.Outlined.DeleteOutline, contentDescription = stringResource(R.string.action_delete), modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    OutlinedTextField(
+                        value = newSubtaskTitle,
+                        onValueChange = { newSubtaskTitle = it },
+                        placeholder = { Text(stringResource(R.string.todo_subtask_add_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        enabled = newSubtaskTitle.isNotBlank(),
+                        onClick = {
+                            val clean = newSubtaskTitle.trim()
+                            if (clean.isNotEmpty()) {
+                                subtasks = subtasks + SubtaskItem(UUID.randomUUID().toString(), clean, false)
+                                newSubtaskTitle = ""
+                            }
+                        },
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = null)
+                    }
+                }
+
                 if (notes.isNotEmpty()) {
                     OutlinedButton(
                         onClick = { showNotePicker = true },
@@ -1222,6 +1607,12 @@ private fun TaskEditorDialog(
                     } else {
                         val noteTitle = linkedNote?.title?.ifBlank { linkedNote.preview.lineSequence().firstOrNull().orEmpty() }
                             ?: initial?.sourceNoteTitle
+                        val pendingSubtask = newSubtaskTitle.trim()
+                        val finalSubtasks = if (pendingSubtask.isNotEmpty()) {
+                            subtasks + SubtaskItem(UUID.randomUUID().toString(), pendingSubtask, false)
+                        } else {
+                            subtasks
+                        }
                         onSave(
                             title,
                             description,
@@ -1230,6 +1621,7 @@ private fun TaskEditorDialog(
                             enableReminder,
                             linkedNoteId?.let(::NoteId),
                             noteTitle,
+                            TaskProMeta(priority = priority, recurrence = recurrence, subtasks = finalSubtasks),
                         )
                     }
                 },

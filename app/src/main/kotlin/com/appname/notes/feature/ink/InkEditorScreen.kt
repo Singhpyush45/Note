@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -110,6 +111,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appname.notes.R
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.DeleteOutline
+import com.appname.notes.core.designsystem.component.GlassSurface
+import com.appname.notes.core.designsystem.component.liquidGlassPill
 import com.appname.notes.core.designsystem.component.EmptyState
 import com.appname.notes.core.designsystem.theme.LocalDarkTheme
 import com.appname.notes.core.ink.edit.InkSession
@@ -129,6 +134,26 @@ import com.appname.notes.feature.pdf.PdfPageRenderer
 import com.appname.notes.feature.reminders.ReminderMenuButton
 import com.appname.notes.feature.reminders.rememberReminderUi
 import com.appname.notes.ui.common.MessageEffect
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
+import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.Unarchive
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import com.appname.notes.feature.editor.TagsSheet
+import com.appname.notes.feature.pro.FocusTimerChip
+import com.appname.notes.feature.pro.FocusTimerDialog
+import com.appname.notes.feature.pro.InDocumentFindBar
+import com.appname.notes.ui.common.MoveToNotebookSheet
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -163,6 +188,8 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     val load by viewModel.load.collectAsStateWithLifecycle()
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val notebooks by viewModel.notebooks.collectAsStateWithLifecycle()
+    val allTags by viewModel.allTags.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     MessageEffect(message, snackbar, viewModel::onMessageShown)
@@ -171,6 +198,12 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     var confirmDeletePage by remember { mutableStateOf(false) }
     var showPages by rememberSaveable { mutableStateOf(false) }
     var pageSettings by rememberSaveable { mutableStateOf(false) }
+    var showMoveSheet by rememberSaveable { mutableStateOf(false) }
+    var showTagsSheet by rememberSaveable { mutableStateOf(false) }
+    var showFocusTimer by rememberSaveable { mutableStateOf(false) }
+    var findOpen by rememberSaveable { mutableStateOf(false) }
+    var findQuery by rememberSaveable { mutableStateOf("") }
+    var findMatchIdx by rememberSaveable { mutableIntStateOf(0) }
     // Tool variation panel and colour picker (owner brief §13–14).
     var panelOpen by rememberSaveable { mutableStateOf(false) }
     var colorPicker by rememberSaveable { mutableStateOf(false) }
@@ -203,6 +236,10 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
             onCopySelection = viewModel::copySelection,
             onRemoveBackground = viewModel::removeBackground,
             onRestoreBackground = viewModel::restoreBackground,
+            onClearPage = viewModel::clearCurrentPage,
+            onCreateTaskFromSelection = viewModel::createTaskFromNote,
+            onConvertSelectionToText = viewModel::convertSelectionToText,
+            onToggleLockSelection = viewModel::toggleSelectionLock,
         )
     }
     val context = LocalContext.current
@@ -296,6 +333,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         sticker = { stickerPicker = true },
         table = { tablePicker = true },
         equation = { equationDialog = true },
+        dateStamp = viewModel::insertDateStamp,
     )
     if (stickerPicker) StickerDialog(onPick = { viewModel.insertSticker(it); stickerPicker = false }, onDismiss = { stickerPicker = false })
     if (tablePicker) TableDialog(onInsert = { r, c -> viewModel.insertTable(r, c); tablePicker = false }, onDismiss = { tablePicker = false })
@@ -308,10 +346,13 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
     var canvasView by remember { mutableStateOf<InkCanvasView?>(null) }
     var transformTick by remember { mutableIntStateOf(0) }
     var scrollFraction by remember { mutableFloatStateOf(0f) }
+    var zoomPercent by remember { mutableIntStateOf(100) }
+    var fitToggleWidth by remember { mutableStateOf(true) }
     SideEffect {
         canvasView?.hiddenItemId = textEdit?.existing?.id
         canvasView?.onTransform = if (textEdit != null) { { transformTick++ } } else null
         canvasView?.onScrollChanged = { frac -> scrollFraction = frac }
+        canvasView?.onZoomChanged = { zp -> zoomPercent = zp }
     }
     val inserting by viewModel.inserting.collectAsStateWithLifecycle()
     // Reminders (FR-010).
@@ -332,6 +373,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 onRedo = viewModel::redo,
                 onRename = { renaming = true },
                 onAddPage = viewModel::addPage,
+                onDuplicatePage = viewModel::duplicateCurrentPage,
                 onDeletePage = { confirmDeletePage = true },
                 onPageSettings = { pageSettings = true },
                 onTrash = { scope.launch { if (viewModel.moveToTrash()) onClose() } },
@@ -341,6 +383,14 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 onFit = viewModel::fit,
                 onAddReminder = { reminderUi.add() },
                 onCreateTask = viewModel::createTaskFromNote,
+                onTogglePin = viewModel::togglePinned,
+                onToggleFavourite = viewModel::toggleFavourite,
+                onToggleArchive = viewModel::toggleArchived,
+                onOpenTags = { showTagsSheet = true },
+                onOpenMove = { showMoveSheet = true },
+                onToggleBookmark = viewModel::toggleCurrentPageBookmark,
+                onOpenFind = { findOpen = !findOpen },
+                onOpenFocusTimer = { showFocusTimer = true },
                 reminderButton = { ReminderMenuButton(reminders.orEmpty(), reminderUi, editable = load is InkLoad.Ready && ui.readOnly == null) },
                 insert = insertActions,
             )
@@ -370,8 +420,37 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                 )
                 is InkLoad.Ready -> {
                     InkCanvas(l.session, l.controller, l.pdf, ui, viewModel, onPaste = paste, onView = { canvasView = it })
-                    // Recording into this note, and the player for a chip that was tapped.
+                    // Find Bar, Recording into this note, and the player for a chip that was tapped.
                     Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp)) {
+                        if (findOpen) {
+                            val matchingPages = remember(findQuery, ui.version, ui.pageCount) { viewModel.findMatchingPages(findQuery) }
+                            val safeIdx = if (matchingPages.isEmpty()) 0 else findMatchIdx.coerceIn(0, matchingPages.lastIndex)
+                            InDocumentFindBar(
+                                query = findQuery,
+                                onQueryChange = { q ->
+                                    findQuery = q
+                                    findMatchIdx = 0
+                                    viewModel.findMatchingPages(q).firstOrNull()?.let { viewModel.goToPage(it) }
+                                },
+                                matchCount = matchingPages.size,
+                                currentMatchIndex = safeIdx,
+                                onPrevious = {
+                                    if (matchingPages.isNotEmpty()) {
+                                        val prev = (safeIdx - 1 + matchingPages.size) % matchingPages.size
+                                        findMatchIdx = prev
+                                        viewModel.goToPage(matchingPages[prev])
+                                    }
+                                },
+                                onNext = {
+                                    if (matchingPages.isNotEmpty()) {
+                                        val next = (safeIdx + 1) % matchingPages.size
+                                        findMatchIdx = next
+                                        viewModel.goToPage(matchingPages[next])
+                                    }
+                                },
+                                onClose = { findOpen = false; findQuery = "" },
+                            )
+                        }
                         RecordingBar(recordingState, viewModel.noteId, onAddMarker = {}, onStop = viewModel::stopRecording)
                         val playing = playbackState.attachmentId?.let { viewModel.playingAttachment() }
                         if (playing != null) {
@@ -435,6 +514,7 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                             onRedo = viewModel::redo,
                             onExit = { fullScreen = false },
                             insert = insertActions,
+                            onAddPage = viewModel::addPage,
                         )
                     }
                     if (panelOpen && ui.readOnly == null && ui.tools.tool.inkTool != null) {
@@ -480,53 +560,78 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
                             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp, top = 72.dp, bottom = 72.dp),
                         )
                     }
-                    if (ui.pageCount > 1) {
-                        // Smooth page navigation capsule + page indicator (SRS 7.1).
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        // Interactive Liquid Glass Zoom Percentage Pill (tap to cycle Fit Width / Fit Page)
+                        GlassSurface(
                             shape = CircleShape,
-                            border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                            shadowElevation = 4.dp,
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                            elevation = 3.dp,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable {
+                                    val mode = if (fitToggleWidth) FitMode.WIDTH else FitMode.PAGE
+                                    fitToggleWidth = !fitToggleWidth
+                                    viewModel.fit(mode)
+                                }
+                                .testTag("ink_zoom_pill"),
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            Text(
+                                text = "$zoomPercent%",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            )
+                        }
+                        if (ui.pageCount > 1) {
+                            // Smooth Liquid Glass page navigation capsule + page indicator (SRS 7.1).
+                            GlassSurface(
+                                shape = CircleShape,
+                                elevation = 3.dp,
                             ) {
-                                IconButton(
-                                    onClick = { if (ui.currentPage > 0) viewModel.goToPage(ui.currentPage - 1) },
-                                    enabled = ui.currentPage > 0,
-                                    modifier = Modifier.size(32.dp).testTag(InkTestTags.PAGE_PREV),
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                                 ) {
-                                    Icon(
-                                        Icons.Filled.KeyboardArrowUp,
-                                        contentDescription = "Previous page",
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable { showPages = true }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        .testTag(InkTestTags.PAGE_INDICATOR),
-                                ) {
-                                    Text(
-                                        stringResource(R.string.ink_page_indicator, ui.currentPage + 1, ui.pageCount),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { if (ui.currentPage + 1 < ui.pageCount) viewModel.goToPage(ui.currentPage + 1) },
-                                    enabled = ui.currentPage + 1 < ui.pageCount,
-                                    modifier = Modifier.size(32.dp).testTag(InkTestTags.PAGE_NEXT),
-                                ) {
-                                    Icon(
-                                        Icons.Filled.KeyboardArrowDown,
-                                        contentDescription = "Next page",
-                                        modifier = Modifier.size(18.dp),
-                                    )
+                                    IconButton(
+                                        onClick = { if (ui.currentPage > 0) viewModel.goToPage(ui.currentPage - 1) },
+                                        enabled = ui.currentPage > 0,
+                                        modifier = Modifier.size(32.dp).testTag(InkTestTags.PAGE_PREV),
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.KeyboardArrowUp,
+                                            contentDescription = stringResource(R.string.ink_page_prev),
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .clickable { showPages = true }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            .testTag(InkTestTags.PAGE_INDICATOR),
+                                    ) {
+                                        Text(
+                                            stringResource(R.string.ink_page_indicator, ui.currentPage + 1, ui.pageCount),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { if (ui.currentPage + 1 < ui.pageCount) viewModel.goToPage(ui.currentPage + 1) },
+                                        enabled = ui.currentPage + 1 < ui.pageCount,
+                                        modifier = Modifier.size(32.dp).testTag(InkTestTags.PAGE_NEXT),
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.KeyboardArrowDown,
+                                            contentDescription = stringResource(R.string.ink_page_next),
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -541,9 +646,30 @@ fun InkEditorRoute(viewModel: InkEditorViewModel, onClose: () -> Unit) {
         PagesDialog(
             pages = ready.session.pages,
             current = ui.currentPage,
+            bookmarkedIds = ui.bookmarkedPages,
             onPick = { viewModel.goToPage(it); showPages = false },
             onDismiss = { showPages = false },
         )
+    }
+    if (showMoveSheet) {
+        MoveToNotebookSheet(
+            notebooks = notebooks,
+            current = ui.notebookId,
+            onPick = viewModel::moveToNotebook,
+            onDismiss = { showMoveSheet = false },
+        )
+    }
+    if (showTagsSheet) {
+        TagsSheet(
+            allTags = allTags,
+            attached = ui.tags.map { it.id }.toSet(),
+            onToggle = viewModel::setTag,
+            onCreate = viewModel::createAndAttachTag,
+            onDismiss = { showTagsSheet = false },
+        )
+    }
+    if (showFocusTimer) {
+        FocusTimerDialog(onDismiss = { showFocusTimer = false })
     }
     if (renaming) {
         RenameDialog(
@@ -660,7 +786,14 @@ private fun InkCanvas(
                 }
             }
         },
-        onRelease = { view -> viewModel.viewState = view.viewState },
+        onRelease = { view ->
+            viewModel.viewState = view.viewState
+            view.listener = null
+            view.onTransform = null
+            view.onScrollChanged = null
+            view.onZoomChanged = null
+            canvasView = null
+        },
         update = { view ->
             view.fingerDraws = ui.fingerDraws
             view.backgroundArgb = background
@@ -705,6 +838,7 @@ private fun InkTopBar(
     onRedo: () -> Unit,
     onRename: () -> Unit,
     onAddPage: () -> Unit,
+    onDuplicatePage: () -> Unit = {},
     onDeletePage: () -> Unit,
     onPageSettings: () -> Unit,
     onTrash: () -> Unit,
@@ -714,135 +848,370 @@ private fun InkTopBar(
     onFit: (FitMode) -> Unit,
     onAddReminder: () -> Unit = {},
     onCreateTask: () -> Unit = {},
+    onTogglePin: () -> Unit = {},
+    onToggleFavourite: () -> Unit = {},
+    onToggleArchive: () -> Unit = {},
+    onOpenTags: () -> Unit = {},
+    onOpenMove: () -> Unit = {},
+    onToggleBookmark: () -> Unit = {},
+    onOpenFind: () -> Unit = {},
+    onOpenFocusTimer: () -> Unit = {},
     reminderButton: @Composable () -> Unit = {},
     insert: InsertActions? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     val editable = ready && ui.readOnly == null
     val isDark = LocalDarkTheme.current
-    val pillColor = if (isDark) Color(0xFF23252A).copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.95f)
-    val pillBorder = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.35f else 0.45f))
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color(if (isDark) DarkPaper.WORKSPACE_DARK else DarkPaper.WORKSPACE_LIGHT))
             .statusBarsPadding()
             .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        contentAlignment = Alignment.Center,
     ) {
-        // Left compact pill: Back + Note Title & Save Status.
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = pillColor,
-            border = pillBorder,
-            shadowElevation = 2.dp,
-            modifier = Modifier.weight(1f, fill = false),
+        // Unified Liquid Glass Top Bar: guarantees generous width for the Note Title on the left
+        // and only essential minimal actions (Insert, Add Page, More ⋮) on the right.
+        GlassSurface(
+            shape = RoundedCornerShape(26.dp),
+            tint = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLowest,
+            elevation = 4.dp,
+            modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth(),
         ) {
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 50.dp)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(end = 14.dp),
             ) {
-                IconButton(onClick = onBack) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(40.dp),
+                ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
                 }
+
+                // Title & Save status gets Modifier.weight(1f) so it never squishes or wraps vertically
                 Column(
                     modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable(enabled = editable, onClick = onRename)
-                        .padding(vertical = 4.dp),
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                 ) {
                     Text(
-                        ui.title.ifBlank { stringResource(R.string.ink_untitled) },
-                        style = MaterialTheme.typography.titleSmall,
+                        text = ui.title.ifBlank { stringResource(R.string.ink_untitled) },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (editable) SaveStatusLabel(ui.saveStatus)
                 }
-            }
-        }
 
-        Spacer(Modifier.width(8.dp))
-
-        // Right compact pill: Insert, Add Page, Reminder, More Options.
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = pillColor,
-            border = pillBorder,
-            shadowElevation = 2.dp,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 2.dp),
-            ) {
-                if (editable && insert != null) InsertButton(insert)
-                if (editable) {
-                    IconButton(onClick = onAddPage, modifier = Modifier.testTag("ink_add_page_direct")) {
-                        Icon(Icons.Outlined.NoteAdd, stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add))
+                // Minimal Right Action Cluster: Insert (+), Add Page, Active Reminder indicator, and More (⋮)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                ) {
+                    if (editable && insert != null) {
+                        InsertButton(insert)
                     }
-                }
-                reminderButton()
-                if (ready) {
-                    Box {
-                        IconButton(onClick = { menu = true }) {
-                            Icon(Icons.Filled.MoreVert, stringResource(R.string.ink_more_options))
+                    if (editable) {
+                        IconButton(
+                            onClick = onAddPage,
+                            modifier = Modifier.size(40.dp).testTag("ink_add_page_direct"),
+                        ) {
+                            Icon(
+                                Icons.Outlined.NoteAdd,
+                                stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add),
+                            )
                         }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            if (editable) {
-                                DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
-                                DropdownMenuItem(text = { Text(stringResource(R.string.reminder_add)) }, onClick = { menu = false; onAddReminder() })
-                                DropdownMenuItem(text = { Text(stringResource(R.string.todo_create_from_note)) }, onClick = { menu = false; onCreateTask() })
+                    }
+                    reminderButton()
+                    if (ready) {
+                        Box {
+                            IconButton(
+                                onClick = { menu = true },
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(Icons.Filled.MoreVert, stringResource(R.string.ink_more_options))
                             }
-                            if (ui.pageCount > 1) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.ink_go_to_page)) },
-                                    onClick = { menu = false; onGoToPage() },
-                                    modifier = Modifier.testTag(InkTestTags.GO_TO_PAGE),
-                                )
-                            }
-                            DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_width)) }, onClick = { menu = false; onFit(FitMode.WIDTH) })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.ink_fit_page)) }, onClick = { menu = false; onFit(FitMode.PAGE) })
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text(stringResource(if (ui.isPdf) R.string.pdf_export else R.string.ink_export_pdf)) },
-                                enabled = !ui.exporting && !ui.pdfFailed,
-                                onClick = { menu = false; onExportPdf() },
-                                modifier = Modifier.testTag(InkTestTags.EXPORT_PDF),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(if (ui.isPdf) R.string.pdf_share else R.string.ink_share_pdf)) },
-                                enabled = !ui.exporting && !ui.pdfFailed,
-                                onClick = { menu = false; onSharePdf() },
-                                modifier = Modifier.testTag(InkTestTags.SHARE_PDF),
-                            )
-                            if (editable) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add)) },
-                                    onClick = { menu = false; onAddPage() },
-                                )
-                                if (ui.pageCount > 1 && !ui.shownPageFromPdf) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.ink_page_delete)) },
-                                        onClick = { menu = false; onDeletePage() },
-                                    )
+                            DropdownMenu(
+                                expanded = menu,
+                                onDismissRequest = { menu = false },
+                                shape = RoundedCornerShape(22.dp),
+                                containerColor = if (isDark) Color(0xFF1A202C) else Color(0xFFF8FAFC),
+                                tonalElevation = 4.dp,
+                                shadowElevation = 10.dp,
+                                modifier = Modifier.width(276.dp),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    // 1. Top Quick-Action Icon Strip (Find, Pin, Favourite, Bookmark, Timer, Paste)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f))
+                                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceEvenly,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        IconButton(
+                                            onClick = { menu = false; onOpenFind() },
+                                            modifier = Modifier.size(36.dp),
+                                        ) {
+                                            Icon(Icons.Outlined.Search, stringResource(R.string.find_in_note), modifier = Modifier.size(19.dp))
+                                        }
+                                        if (editable) {
+                                            IconButton(
+                                                onClick = { menu = false; onTogglePin() },
+                                                modifier = Modifier.size(36.dp),
+                                            ) {
+                                                Icon(
+                                                    if (ui.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                                                    stringResource(if (ui.isPinned) R.string.note_unpin else R.string.note_pin),
+                                                    tint = if (ui.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(19.dp),
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { menu = false; onToggleFavourite() },
+                                                modifier = Modifier.size(36.dp),
+                                            ) {
+                                                Icon(
+                                                    if (ui.isFavourite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                                    stringResource(if (ui.isFavourite) R.string.note_unfavourite else R.string.note_favourite),
+                                                    tint = if (ui.isFavourite) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(19.dp),
+                                                )
+                                            }
+                                        }
+                                        IconButton(
+                                            onClick = { menu = false; onToggleBookmark() },
+                                            modifier = Modifier.size(36.dp).testTag("ink_bookmark_page_btn"),
+                                        ) {
+                                            Icon(
+                                                if (ui.currentPageBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                                                stringResource(if (ui.currentPageBookmarked) R.string.ink_unbookmark_page else R.string.ink_bookmark_page),
+                                                tint = if (ui.currentPageBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(19.dp),
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { menu = false; onOpenFocusTimer() },
+                                            modifier = Modifier.size(36.dp),
+                                        ) {
+                                            Icon(Icons.Outlined.Schedule, stringResource(R.string.focus_timer_title), modifier = Modifier.size(19.dp))
+                                        }
+                                        if (editable && insert != null) {
+                                            IconButton(
+                                                onClick = { menu = false; insert.paste() },
+                                                modifier = Modifier.size(36.dp).testTag("ink_paste_direct"),
+                                            ) {
+                                                Icon(Icons.Outlined.ContentPaste, stringResource(R.string.insert_paste), modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                    }
+
+                                    // 2. Compact 2-Column Page Actions (Add Page, Duplicate, Delete, Page Settings)
+                                    if (editable) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            CompactMenuTile(
+                                                label = stringResource(if (ui.isPdf) R.string.pdf_add_blank_page else R.string.ink_page_add),
+                                                onClick = { menu = false; onAddPage() },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            if (!ui.shownPageFromPdf) {
+                                                CompactMenuTile(
+                                                    label = stringResource(R.string.ink_page_duplicate),
+                                                    onClick = { menu = false; onDuplicatePage() },
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                            }
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            CompactMenuTile(
+                                                label = stringResource(R.string.page_settings_title),
+                                                onClick = { menu = false; onPageSettings() },
+                                                modifier = Modifier.weight(1f).testTag(InkTestTags.PAGE_SETTINGS),
+                                            )
+                                            if (ui.pageCount > 1 && !ui.shownPageFromPdf) {
+                                                CompactMenuTile(
+                                                    label = stringResource(R.string.ink_page_delete),
+                                                    onClick = { menu = false; onDeletePage() },
+                                                    modifier = Modifier.weight(1f),
+                                                    destructive = true,
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // 3. Compact View & Zoom Row (Fit Width, Fit Page, Go to Page)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        CompactMenuTile(
+                                            label = stringResource(R.string.ink_fit_width),
+                                            onClick = { menu = false; onFit(FitMode.WIDTH) },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        CompactMenuTile(
+                                            label = stringResource(R.string.ink_fit_page),
+                                            onClick = { menu = false; onFit(FitMode.PAGE) },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (ui.pageCount > 1) {
+                                            CompactMenuTile(
+                                                label = stringResource(R.string.ink_go_to_page),
+                                                onClick = { menu = false; onGoToPage() },
+                                                modifier = Modifier.weight(1f).testTag(InkTestTags.GO_TO_PAGE),
+                                            )
+                                        }
+                                    }
+
+                                    // 4. Compact Organize & Reminders (Tags, Move, Remind me, To-do)
+                                    if (editable) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            CompactMenuTile(
+                                                label = stringResource(R.string.note_tags),
+                                                onClick = { menu = false; onOpenTags() },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            CompactMenuTile(
+                                                label = stringResource(R.string.note_move),
+                                                onClick = { menu = false; onOpenMove() },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            CompactMenuTile(
+                                                label = stringResource(R.string.reminder_add),
+                                                onClick = { menu = false; onAddReminder() },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            CompactMenuTile(
+                                                label = stringResource(R.string.todo_create_from_note),
+                                                onClick = { menu = false; onCreateTask() },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                    }
+
+                                    // 5. Compact PDF Export & Share Row
+                                    val pdfReady = !ui.exporting && !ui.pdfFailed
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        CompactMenuTile(
+                                            label = stringResource(if (ui.isPdf) R.string.pdf_export else R.string.ink_export_pdf),
+                                            enabled = pdfReady,
+                                            onClick = { menu = false; onExportPdf() },
+                                            modifier = Modifier.weight(1f).testTag(InkTestTags.EXPORT_PDF),
+                                        )
+                                        CompactMenuTile(
+                                            label = stringResource(if (ui.isPdf) R.string.pdf_share else R.string.ink_share_pdf),
+                                            enabled = pdfReady,
+                                            onClick = { menu = false; onSharePdf() },
+                                            modifier = Modifier.weight(1f).testTag(InkTestTags.SHARE_PDF),
+                                        )
+                                    }
+
+                                    // 6. Compact Footer Row (Rename, Archive, Trash)
+                                    if (editable || ui.readOnly != ReadOnlyReason.IN_TRASH) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            if (editable) {
+                                                CompactMenuTile(
+                                                    label = stringResource(R.string.action_rename),
+                                                    onClick = { menu = false; onRename() },
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                                CompactMenuTile(
+                                                    label = stringResource(if (ui.isArchived) R.string.note_unarchive else R.string.note_archive),
+                                                    onClick = { menu = false; onToggleArchive() },
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                            }
+                                            if (ui.readOnly != ReadOnlyReason.IN_TRASH) {
+                                                CompactMenuTile(
+                                                    label = stringResource(R.string.note_trash),
+                                                    onClick = { menu = false; onTrash() },
+                                                    modifier = Modifier.weight(1f),
+                                                    destructive = true,
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.page_settings_title)) },
-                                    onClick = { menu = false; onPageSettings() },
-                                    modifier = Modifier.testTag(InkTestTags.PAGE_SETTINGS),
-                                )
-                            }
-                            if (editable || ui.isPdf) HorizontalDivider()
-                            if (ui.readOnly != ReadOnlyReason.IN_TRASH) {
-                                DropdownMenuItem(text = { Text(stringResource(R.string.note_trash)) }, onClick = { menu = false; onTrash() })
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CompactMenuTile(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    destructive: Boolean = false,
+) {
+    val isDark = LocalDarkTheme.current
+    val textColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        destructive -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Box(
+        modifier = modifier
+            .heightIn(min = 36.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .liquidGlassPill(
+                selected = false,
+                dark = isDark,
+                accentColor = MaterialTheme.colorScheme.primary,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                cornerRadius = 12.dp,
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -878,52 +1247,113 @@ internal fun PageTemplate.label(): Int = when (this) {
 
 /** Page navigation (SRS 7.1 "page rail"): every page at its shape, the current one marked, tap to go there. */
 @Composable
-private fun PagesDialog(pages: List<InkSession.Page>, current: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun PagesDialog(
+    pages: List<InkSession.Page>,
+    current: Int,
+    bookmarkedIds: Set<String> = emptySet(),
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var bookmarksOnly by rememberSaveable { mutableStateOf(false) }
+    val indexedPages = remember(pages, bookmarkedIds, bookmarksOnly) {
+        pages.mapIndexed { idx, p -> idx to p }.filter { (_, p) -> !bookmarksOnly || p.id in bookmarkedIds }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.ink_pages_title, pages.size)) },
         text = {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(76.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.heightIn(max = 420.dp).testTag(InkTestTags.PAGES_DIALOG),
-            ) {
-                itemsIndexed(pages, key = { _, p -> p.id }) { i, page ->
-                    val selected = i == current
-                    val hasInk = page.items.items.isNotEmpty()
-                    val label = stringResource(if (hasInk) R.string.ink_page_cell_ink else R.string.ink_page_cell, i + 1)
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(
-                            onClick = { onPick(i) },
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = Color(InkPaints.PAPER),
-                            border = BorderStroke(
-                                if (selected) 3.dp else 1.dp,
-                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio((page.width / page.height).coerceIn(0.4f, 2.5f))
-                                .testTag(InkTestTags.pageCell(i))
-                                .semantics {
-                                    contentDescription = label
-                                    this.selected = selected
-                                },
-                        ) {
-                            if (hasInk) {
-                                // Not by colour alone: the label says "has handwriting" too.
-                                Box(Modifier.padding(6.dp), contentAlignment = Alignment.TopEnd) {
-                                    Icon(InkIcons.Handwriting, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                                }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (bookmarkedIds.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f))
+                            .padding(3.dp)
+                            .selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        listOf(
+                            false to stringResource(R.string.ink_all_pages_tab, pages.size),
+                            true to stringResource(R.string.ink_bookmarks_only, pages.count { it.id in bookmarkedIds }),
+                        ).forEach { (only, label) ->
+                            val active = bookmarksOnly == only
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 32.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                    .selectable(selected = active, role = Role.Tab, onClick = { bookmarksOnly = only })
+                                    .padding(vertical = 5.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
-                        Text(
-                            "${i + 1}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 2.dp).clearAndSetSemantics { },
-                        )
+                    }
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(76.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.heightIn(max = 420.dp).testTag(InkTestTags.PAGES_DIALOG),
+                ) {
+                    itemsIndexed(indexedPages, key = { _, pair -> pair.second.id }) { _, (i, page) ->
+                        val selected = i == current
+                        val hasInk = page.items.items.isNotEmpty()
+                        val isBookmarked = page.id in bookmarkedIds
+                        val label = stringResource(if (hasInk) R.string.ink_page_cell_ink else R.string.ink_page_cell, i + 1)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(
+                                onClick = { onPick(i) },
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = Color(InkPaints.PAPER),
+                                border = BorderStroke(
+                                    if (selected) 3.dp else 1.dp,
+                                    if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio((page.width / page.height).coerceIn(0.4f, 2.5f))
+                                    .testTag(InkTestTags.pageCell(i))
+                                    .semantics {
+                                        contentDescription = label
+                                        this.selected = selected
+                                    },
+                            ) {
+                                Box(Modifier.fillMaxSize()) {
+                                    if (isBookmarked) {
+                                        Icon(
+                                            Icons.Filled.Bookmark,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.align(Alignment.TopStart).padding(4.dp).size(15.dp),
+                                        )
+                                    }
+                                    if (hasInk) {
+                                        // Not by colour alone: the label says "has handwriting" too.
+                                        Icon(
+                                            InkIcons.Handwriting,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(14.dp),
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                "${i + 1}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp).clearAndSetSemantics { },
+                            )
+                        }
                     }
                 }
             }

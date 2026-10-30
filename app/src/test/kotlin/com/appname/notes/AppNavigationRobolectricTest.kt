@@ -58,9 +58,10 @@ class AppNavigationRobolectricTest {
 
     @Test
     fun settingsTab_opensSettings_andBackReturnsHome() {
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.MORE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.SETTINGS).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithTag("nav_settings").assertIsSelected()
+        composeRule.onNodeWithTag(SettingsTestTags.BACK).assertIsDisplayed()
 
         pressBack()
 
@@ -77,14 +78,16 @@ class AppNavigationRobolectricTest {
 
     @Test
     fun backStack_survivesActivityRecreation() {
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.MORE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.SETTINGS).performClick()
         composeRule.activityRule.scenario.recreate()
         composeRule.onNodeWithTag(SettingsTestTags.SCREEN).assertIsDisplayed()
     }
 
     @Test
     fun themeChoice_persistsAcrossRecreation() {
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.MORE).performClick()
+        composeRule.onNodeWithTag(LibraryTestTags.SETTINGS).performClick()
         composeRule.onNodeWithText(string(R.string.settings_theme_dark)).performClick()
         // The radio reflects what was *saved*; the DataStore write finishes on a background thread.
         waitUntilSelected(string(R.string.settings_theme_dark))

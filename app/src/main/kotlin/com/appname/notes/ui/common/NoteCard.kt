@@ -5,6 +5,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.Lock
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.appname.notes.feature.pro.NoteProStore
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.draw.clip
@@ -87,6 +90,8 @@ fun NoteCard(
 ) {
     val spacing = AppTheme.spacing
     val context = LocalContext.current
+    val lockedSet by NoteProStore.lockedNotes.collectAsStateWithLifecycle()
+    val isNoteLocked = note.id.value in lockedSet
     // PDF notes are ink pages over the document's pages: same thumbnail, with the PDF page under the ink.
     val isInk = note.type == NoteType.INK || note.type == NoteType.PDF
     val firstLine = note.preview.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
@@ -191,6 +196,9 @@ fun NoteCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (isNoteLocked) {
+                    Icon(Icons.Outlined.Lock, stringResource(R.string.note_lock), Modifier.padding(top = spacing.sm, end = 4.dp).size(17.dp), tint = MaterialTheme.colorScheme.primary)
+                }
                 if (note.isFavourite) {
                     Icon(Icons.Filled.Star, stringResource(R.string.collection_favourites), Modifier.padding(top = spacing.sm).size(18.dp), tint = MaterialTheme.colorScheme.tertiary)
                 }
@@ -204,14 +212,14 @@ fun NoteCard(
                 }
             }
             Column(Modifier.padding(end = if (onMore != null) spacing.md else 0.dp), verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                if (isInk && inkThumbnail != null) {
+                if (!isNoteLocked && isInk && inkThumbnail != null) {
                     InkThumbnailView(note, inkThumbnail)
                 }
                 val coverFile = note.coverImage
-                if (!isInk && coverFile != null && cover != null) {
+                if (!isNoteLocked && !isInk && coverFile != null && cover != null) {
                     CoverPhoto(coverFile, cover)
                 }
-                if (body.isNotBlank()) {
+                if (!isNoteLocked && body.isNotBlank()) {
                     Text(
                         text = body,
                         style = MaterialTheme.typography.bodyMedium,

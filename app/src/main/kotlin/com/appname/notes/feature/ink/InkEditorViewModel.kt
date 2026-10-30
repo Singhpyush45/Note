@@ -7,6 +7,17 @@ import com.appname.notes.core.common.id.IdGenerator
 import com.appname.notes.core.common.result.AppResult
 import com.appname.notes.core.common.result.DomainError
 import com.appname.notes.core.domain.model.NoteId
+import com.appname.notes.core.domain.model.Notebook
+import com.appname.notes.core.domain.model.NotebookId
+import com.appname.notes.core.domain.model.Tag
+import com.appname.notes.core.domain.model.TagId
+import com.appname.notes.core.domain.repository.NotebookRepository
+import com.appname.notes.core.domain.repository.TagRepository
+import com.appname.notes.feature.pro.HandwritingOcrConverter
+import com.appname.notes.feature.pro.NoteProStore
+import com.appname.notes.feature.textindex.TextRecognizerEngine
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import com.appname.notes.core.domain.repository.InkPageInfo
 import com.appname.notes.core.domain.repository.InkRepository
 import com.appname.notes.core.domain.repository.NoteRepository
@@ -89,6 +100,15 @@ data class InkEditorUi(
     /** Photos in the selection that still have their background / that had it removed. */
     val selectionPhotos: Int = 0,
     val selectionCutouts: Int = 0,
+    val selectionStrokes: Int = 0,
+    val selectionLocked: Boolean = false,
+    val isPinned: Boolean = false,
+    val isFavourite: Boolean = false,
+    val isArchived: Boolean = false,
+    val notebookId: NotebookId? = null,
+    val tags: List<Tag> = emptyList(),
+    val bookmarkedPages: Set<String> = emptySet(),
+    val currentPageBookmarked: Boolean = false,
     val readOnly: ReadOnlyReason? = null,
     val saveStatus: SaveStatus = SaveStatus.SAVED,
     val fingerDraws: Boolean = true,
@@ -176,6 +196,9 @@ class InkEditorViewModel @AssistedInject constructor(
     private val attachmentRepo: com.appname.notes.core.domain.repository.AttachmentRepository,
     private val attachmentStore: com.appname.notes.feature.attachments.AttachmentFileStore,
     private val planner: com.appname.notes.core.domain.repository.PlannerRepository,
+    notebookRepository: NotebookRepository,
+    private val tagRepository: TagRepository,
+    private val textRecognizer: TextRecognizerEngine,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -198,6 +221,12 @@ class InkEditorViewModel @AssistedInject constructor(
 
     /** This note's reminders (FR-010). */
     val reminders = reminderFactory.create(noteId, viewModelScope) { _message.value = it }
+
+    val notebooks: StateFlow<List<Notebook>> =
+        notebookRepository.observeNotebooks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val allTags: StateFlow<List<Tag>> =
+        tagRepository.observeTags().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Where the canvas was looking (kept across rotation). */
     var viewState: InkViewState? = null
@@ -243,6 +272,11 @@ class InkEditorViewModel @AssistedInject constructor(
                 _ui.update {
                     it.copy(
                         title = note.title,
+                        isPinned = note.isPinned,
+                        isFavourite = note.isFavourite,
+                        isArchived = note.isArchived,
+                        notebookId = note.notebookId,
+                        tags = note.tags,
                         readOnly = when {
                             it.readOnly == ReadOnlyReason.NEWER_VERSION -> ReadOnlyReason.NEWER_VERSION
                             note.trashedAt != null -> ReadOnlyReason.IN_TRASH
@@ -296,6 +330,7 @@ class InkEditorViewModel @AssistedInject constructor(
         val controller = InkInputController(session, ids::newId).also {
             it.readOnly = readOnly != null
             it.tools = toolsFrom(inkSettings)
+            it.lockedIds = NoteProStore.getLockedItems(appContext, noteId.value)
         }
         session.onEdit = { edit ->
             enqueue(Op.Commit(edit))
@@ -337,7 +372,10 @@ class InkEditorViewModel @AssistedInject constructor(
                 if (c.tools.tool == EditorTool.LASSO) c.tools = c.tools.copy(tool = back)
             }
         }
-        val selectedPhotos = if (c.selection != null) c.selectedItems().filterIsInstance<com.appname.notes.core.ink.model.ImageItem>() else emptyList()
+        val selectedItems = if (c.selection != null) c.selectedItems() else emptyList()
+        val selectedPhotos = selectedItems.filterIsInstance<com.appname.notes.core.ink.model.ImageItem>()
+        val selectedStrokes = selectedItems.filterIsInstance<StrokeItem>()
+        val bookmarks = NoteProStore.getBookmarkedPages(appContext, noteId.value)
         _ui.update { ui ->
             val page = ui.currentPage.coerceIn(0, (s.pages.size - 1).coerceAtLeast(0))
             val shown = s.pages.getOrNull(page)
@@ -355,6 +393,10 @@ class InkEditorViewModel @AssistedInject constructor(
                 hasSelection = c.selection != null,
                 selectionPhotos = selectedPhotos.count { it.original == null },
                 selectionCutouts = selectedPhotos.count { it.original != null },
+                selectionStrokes = selectedStrokes.size,
+                selectionLocked = selectedItems.isNotEmpty() && selectedItems.all { it.id in c.lockedIds },
+                bookmarkedPages = bookmarks,
+                currentPageBookmarked = shown != null && shown.id in bookmarks,
                 fingerDraws = inkSettings.fingerDraws,
                 version = s.version,
             )
@@ -1336,8 +1378,18 @@ class InkEditorViewModel @AssistedInject constructor(
         if (items.isEmpty()) return
         InkClipboard.set(noteId.value, items)
         val text = items.filterIsInstance<com.appname.notes.core.ink.model.TextItem>().sortedBy { it.place.cy }.joinToString("\n") { it.text }
+        val image = items.filterIsInstance<com.appname.notes.core.ink.model.ImageItem>().firstOrNull()
         val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-        runCatching { cm?.setPrimaryClip(android.content.ClipData.newPlainText(InkClipboard.LABEL, text)) }
+        runCatching {
+            val clip = if (image != null && text.isEmpty()) {
+                val file = java.io.File(java.io.File(appContext.filesDir, com.appname.notes.feature.attachments.AttachmentFileStore.DIR), image.fileName)
+                val uri = androidx.core.content.FileProvider.getUriForFile(appContext, "${appContext.packageName}.files", file)
+                android.content.ClipData.newUri(appContext.contentResolver, InkClipboard.LABEL, uri)
+            } else {
+                android.content.ClipData.newPlainText(InkClipboard.LABEL, text)
+            }
+            cm?.setPrimaryClip(clip)
+        }
         _message.value = UserMessage(R.string.ink_copied)
     }
 
@@ -1351,6 +1403,7 @@ class InkEditorViewModel @AssistedInject constructor(
             clip.label == InkClipboard.LABEL && InkClipboard.items.isNotEmpty() -> pasteItems(pageId, at)
             clip.uris.isNotEmpty() -> insertFiles(clip.uris, pageId, at)
             clip.text != null -> insertPlainText(clip.text, pageId, at)
+            InkClipboard.items.isNotEmpty() -> pasteItems(pageId, at)
             else -> nothingToPaste()
         }
     }
@@ -1404,6 +1457,58 @@ class InkEditorViewModel @AssistedInject constructor(
         }
         c.select(pageId, itemIds)
         refresh()
+    }
+
+    fun clearCurrentPage() {
+        val s = session() ?: return
+        if (_ui.value.readOnly != null) return
+        val page = s.pages.getOrNull(_ui.value.currentPage) ?: return
+        if (page.items.items.isEmpty()) return
+        controller()?.clearSelection()
+        s.apply(page.id, com.appname.notes.core.ink.edit.InkEdit.remove(page.items.items))
+        _message.value = UserMessage(R.string.ink_page_cleared)
+        refresh()
+    }
+
+    fun duplicateCurrentPage() {
+        val s = session() ?: return
+        if (_ui.value.readOnly != null) return
+        val currentIndex = _ui.value.currentPage
+        val sourcePage = s.pages.getOrNull(currentIndex) ?: return
+        val targetIndex = currentIndex + 1
+        val template = if (sourcePage.pdfPageIndex != null) PageTemplate.BLANK else sourcePage.template
+        val layout = if (sourcePage.pdfPageIndex != null) null else sourcePage.layout
+        val result = CompletableDeferred<AppResult<InkPageInfo>>()
+        enqueue(Op.AddPage(targetIndex, template, layout, result))
+        viewModelScope.launch {
+            when (val r = result.await()) {
+                is AppResult.Success -> {
+                    val info = r.value
+                    s.insertPage(info.index, InkSession.Page(info.id, info.template, info.width, info.height, PageItems.EMPTY, layout = info.layout))
+                    if (sourcePage.items.items.isNotEmpty()) {
+                        val cloned = com.appname.notes.core.ink.edit.Lasso.duplicate(
+                            sourcePage.items.items,
+                            0.0,
+                            0.0,
+                            1L,
+                            ids::newId,
+                        ).added
+                        s.apply(info.id, com.appname.notes.core.ink.edit.InkEdit(emptyList(), cloned))
+                    }
+                    _ui.update { it.copy(scrollRequest = ScrollRequest(info.index)) }
+                    _message.value = UserMessage(R.string.ink_page_duplicated)
+                    refresh()
+                }
+                is AppResult.Failure -> Unit
+            }
+        }
+    }
+
+    fun insertDateStamp() {
+        if (!canInsert()) return
+        val stamp = java.time.LocalDateTime.now()
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy · hh:mm a", java.util.Locale.getDefault()))
+        insertPlainText(stamp)
     }
 
     fun deleteCurrentPage() {
@@ -1539,6 +1644,144 @@ class InkEditorViewModel @AssistedInject constructor(
 
     /** Moves the note to the trash; returns true when done so the screen can close. */
     suspend fun moveToTrash(): Boolean = notes.moveToTrash(setOf(noteId)) is AppResult.Success
+
+    fun togglePinned() {
+        val next = !_ui.value.isPinned
+        viewModelScope.launch {
+            val r = notes.setPinned(setOf(noteId), next)
+            if (r is AppResult.Success) {
+                _message.value = UserMessage(if (next) R.string.msg_pinned else R.string.msg_unpinned)
+            } else if (r is AppResult.Failure) {
+                _message.value = r.error.toUserMessage()
+            }
+        }
+    }
+
+    fun toggleFavourite() {
+        val next = !_ui.value.isFavourite
+        viewModelScope.launch {
+            val r = notes.setFavourite(setOf(noteId), next)
+            if (r is AppResult.Failure) _message.value = r.error.toUserMessage()
+        }
+    }
+
+    fun toggleArchived() {
+        val next = !_ui.value.isArchived
+        viewModelScope.launch {
+            val r = notes.setArchived(setOf(noteId), next)
+            if (r is AppResult.Success) {
+                _message.value = UserMessage(if (next) R.string.msg_archived else R.string.msg_unarchived)
+            } else if (r is AppResult.Failure) {
+                _message.value = r.error.toUserMessage()
+            }
+        }
+    }
+
+    fun moveToNotebook(notebookId: NotebookId?) {
+        viewModelScope.launch {
+            val r = notes.moveToNotebook(setOf(noteId), notebookId)
+            if (r is AppResult.Success) {
+                _message.value = UserMessage(R.string.msg_moved)
+            } else if (r is AppResult.Failure) {
+                _message.value = r.error.toUserMessage()
+            }
+        }
+    }
+
+    fun setTag(tag: Tag, attached: Boolean) {
+        val current = _ui.value.tags.map { it.id }.toSet()
+        val updated: Set<TagId> = if (attached) current + tag.id else current - tag.id
+        viewModelScope.launch {
+            val r = notes.setTags(noteId, updated)
+            if (r is AppResult.Failure) _message.value = r.error.toUserMessage()
+        }
+    }
+
+    fun createAndAttachTag(name: String) {
+        viewModelScope.launch {
+            when (val created = tagRepository.createOrGet(name)) {
+                is AppResult.Success -> setTag(created.value, true)
+                is AppResult.Failure -> _message.value = created.error.toUserMessage()
+            }
+        }
+    }
+
+    fun toggleCurrentPageBookmark() {
+        val s = session() ?: return
+        val page = s.pages.getOrNull(_ui.value.currentPage) ?: return
+        NoteProStore.togglePageBookmark(appContext, noteId.value, page.id)
+        refresh()
+    }
+
+    fun toggleSelectionLock() {
+        val c = controller() ?: return
+        val selected = c.selectedItems()
+        if (selected.isEmpty()) return
+        val ids = selected.map { it.id }.toSet()
+        val allLocked = ids.all { it in c.lockedIds }
+        val next = if (allLocked) c.lockedIds - ids else c.lockedIds + ids
+        c.lockedIds = next
+        NoteProStore.setLockedItems(appContext, noteId.value, next)
+        if (!allLocked) c.clearSelection()
+        _message.value = UserMessage(if (allLocked) R.string.ink_object_unlocked else R.string.ink_object_locked)
+        refresh()
+    }
+
+    /**
+     * Converts selected handwritten strokes into an editable TextItem using on-device ML Kit OCR.
+     */
+    fun convertSelectionToText() {
+        if (!canInsert()) return
+        val s = session() ?: return
+        val c = controller() ?: return
+        val sel = c.selection ?: return
+        val strokes = c.selectedItems().filterIsInstance<StrokeItem>()
+        if (strokes.isEmpty()) return
+        val page = s.page(sel.pageId) ?: return
+        viewModelScope.launch {
+            _inserting.value = true
+            try {
+                val recognized = withContext(dispatchers.io) {
+                    HandwritingOcrConverter.recognizeStrokes(strokes, textRecognizer)
+                }
+                if (recognized.isNullOrBlank()) {
+                    _message.value = UserMessage(R.string.ink_ocr_empty)
+                    return@launch
+                }
+                val box = strokes.map { it.bounds() }.reduce { a, b -> a.union(b) }
+                val style = textStyle.copy(
+                    colorArgb = strokes.first().brush.colorArgb or ALPHA_MASK,
+                )
+                val width = maxOf(box.width.toFloat() * 1.15f, TEXT_MIN_WIDTH).coerceAtMost(page.width * 0.9f)
+                val left = box.left.toFloat().coerceIn(0f, (page.width - width).coerceAtLeast(0f))
+                val top = box.top.toFloat().coerceIn(0f, (page.height - 24f).coerceAtLeast(0f))
+                val place = TextLayouts.place(recognized, style.font, style.bold, style.italic, style.align, style.size, width, left, top)
+                val textItem = style.item(ids.newId(), page.items.nextZ, recognized, place)
+                s.apply(page.id, InkEdit(strokes, listOf(textItem)))
+                selectInserted(page.id, setOf(textItem.id))
+                _message.value = UserMessage(R.string.ink_ocr_converted)
+            } finally {
+                _inserting.value = false
+            }
+        }
+    }
+
+    /**
+     * Finds pages whose text boxes match [query] (case-insensitive) for the In-Note Find Bar.
+     */
+    fun findMatchingPages(query: String): List<Int> {
+        val q = query.trim()
+        if (q.isEmpty()) return emptyList()
+        val s = session() ?: return emptyList()
+        val matches = ArrayList<Int>()
+        s.pages.forEachIndexed { index, page ->
+            val hasTextMatch = page.items.items.any { item ->
+                item is com.appname.notes.core.ink.model.TextItem && item.text.contains(q, ignoreCase = true)
+            }
+            if (hasTextMatch) matches += index
+        }
+        return matches
+    }
 
     // ---------------------------------------------------------------- settings
 

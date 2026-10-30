@@ -184,7 +184,10 @@ class RoomInkRepository(
         if (dao.pageCount(page.noteId) <= 1) {
             return AppResult.Failure(DomainError.Validation("page", "last page can't be deleted"))
         }
-        return storageCall(logger, "Delete page") { dao.deletePage(page, clock.now().toEpochMilli()) }
+        return storageCall(logger, "Delete page") {
+            dao.deletePage(page, clock.now().toEpochMilli())
+            syncIndexedText(page.noteId)
+        }
     }
 
     override suspend fun setTemplate(pageId: String, template: PageTemplate): AppResult<Unit> =
@@ -197,12 +200,31 @@ class RoomInkRepository(
         if (edit.isEmpty) return AppResult.Success(Unit)
         val page = dao.page(pageId) ?: return AppResult.Failure(DomainError.NotFound("Page", pageId))
         val added = edit.added.map { InkItemEntity(it.id, pageId, it.z, InkCodec.encode(it)) }
+        val touchesText = edit.added.any { it is com.appname.notes.core.ink.model.TextItem } ||
+            edit.removed.any { it is com.appname.notes.core.ink.model.TextItem }
         return when (val r = storageCall(logger, "Save handwriting") {
-            dao.commit(page, edit.removed.map { it.id }, added, clock.now().toEpochMilli())
+            val ok = dao.commit(page, edit.removed.map { it.id }, added, clock.now().toEpochMilli())
+            if (ok && touchesText) syncIndexedText(page.noteId)
+            ok
         }) {
             is AppResult.Failure -> r
             is AppResult.Success -> if (r.value) AppResult.Success(Unit) else AppResult.Failure(DomainError.NotFound("Note", page.noteId))
         }
+    }
+
+    private suspend fun syncIndexedText(noteId: String) {
+        val textLines = ArrayList<String>()
+        for (p in dao.pages(noteId)) {
+            for (row in dao.items(p.id)) {
+                val item = (InkCodec.decode(row.id, row.z, row.data) as? DecodeResult.Ok)?.item
+                if (item is com.appname.notes.core.ink.model.TextItem && item.text.isNotBlank()) {
+                    textLines += item.text.trim()
+                }
+            }
+        }
+        val plain = textLines.joinToString("\n")
+        val preview = plain.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(200)
+        dao.updateNoteIndexedText(noteId, plain, preview)
     }
 
     private fun InkPageEntity.toInfo() = InkPageInfo(

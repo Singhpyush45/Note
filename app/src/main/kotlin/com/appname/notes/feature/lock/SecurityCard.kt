@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +45,7 @@ fun SecurityCard() {
     var message by rememberSaveable { mutableStateOf<Int?>(null) }
     var notice by rememberSaveable { mutableStateOf(false) }
     val confirmTitle = stringResource(R.string.lock_confirm_title)
-    SettingsCard(stringResource(R.string.settings_section_security)) {
+    SettingsCard(stringResource(R.string.settings_section_security), icon = Icons.Outlined.Lock) {
         SettingsSwitchRow(
             title = stringResource(R.string.lock_app),
             summary = stringResource(R.string.lock_app_summary),

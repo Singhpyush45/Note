@@ -106,11 +106,23 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     /** Called whenever continuous scroll progress (0..1) along the document changes. */
     var onScrollChanged: ((Float) -> Unit)? = null
+    /** Called whenever zoom percentage (100 = fit width) changes. */
+    var onZoomChanged: ((Int) -> Unit)? = null
     private var lastDrawn: Viewport? = null
     private var lastReportedFraction: Float = -1f
+    private var lastReportedZoom: Int = -1
 
     /** Screen pixels per page unit at the current zoom. */
     val pxPerUnit: Float get() = viewport?.scale?.toFloat() ?: 1f
+
+    /** Current zoom percentage relative to the baseline fit scale (100 = 1.0x fit). */
+    val zoomPercent: Int
+        get() {
+            val v = viewport ?: return 100
+            if (width == 0 || height == 0 || stack.count == 0) return 100
+            val base = rules.fitScale(width.toDouble(), stack, height.toDouble()).coerceAtLeast(1e-6)
+            return ((v.scale / base) * 100.0).roundToInt().coerceIn(25, 800)
+        }
 
     /** Current continuous scroll progress (0..1) along the document. */
     val scrollFraction: Float
@@ -395,6 +407,11 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
             lastReportedFraction = frac
             onScrollChanged?.invoke(frac)
         }
+        val zp = zoomPercent
+        if (zp != lastReportedZoom) {
+            lastReportedZoom = zp
+            onZoomChanged?.invoke(zp)
+        }
     }
 
     // ---------------------------------------------------------------- coordinates
@@ -450,7 +467,6 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     private var pinchA = -1
     private var pinchB = -1
     private var lastSpan = 0.0
-    private var initialPinchSpan = 0.0
     private var lastFocusX = 0.0
     private var lastFocusY = 0.0
     private var lastPinchTime = 0L
@@ -624,9 +640,10 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
     private var longPressY = 0f
     private var longPressArmed = false
     private val longPressRunnable = Runnable {
-        if (!longPressArmed || mode != Mode.PAN) return@Runnable
+        if (!longPressArmed || (mode != Mode.PAN && !(mode == Mode.INK && controller?.tools?.tool == EditorTool.LASSO))) return@Runnable
         longPressArmed = false
         val at = pagePointAt(longPressX, longPressY) ?: return@Runnable
+        if (mode == Mode.INK) cancelGesture(null)
         mode = Mode.IGNORE
         textTapX = Float.NaN
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -791,7 +808,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         // Starting next to the ruler's edge (with a drawing tool): the stroke follows the edge.
         rulerEdge = activeRuler()?.takeIf { c.tools.tool.inkTool != null && source != PointerSource.STYLUS_ERASER }
             ?.edgeNear(Vec(e.getX(index).toDouble(), e.getY(index).toDouble()), RULER_SNAP_DP * density)
+        if (c.tools.tool == EditorTool.LASSO && !c.gestureActive) armLongPress(e, index)
         val response = c.down(s.pages[page].id, sampleAt(e, index, page, v), source, unitsPerDp(v))
+        if (c.tools.tool == EditorTool.LASSO && c.selection == null) armLongPress(e, index)
         handle(response, e)
         scheduleHold()
         listener?.onInteraction()
@@ -821,6 +840,9 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         val v = viewport ?: return
         val index = e.findPointerIndex(inkPointer)
         if (index < 0 || inkPage < 0) return
+        if (longPressArmed && hypot((e.getX(index) - longPressX).toDouble(), (e.getY(index) - longPressY).toDouble()) > ViewConfiguration.get(context).scaledTouchSlop) {
+            disarmLongPress()
+        }
         val samples = ArrayList<Sample>(e.historySize + 1)
         for (h in 0 until e.historySize) samples.add(sampleAt(e, index, inkPage, v, h))
         samples.add(sampleAt(e, index, inkPage, v))
@@ -998,7 +1020,6 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         pinchB = e.getPointerId(secondIndex)
         val (span, fx, fy) = pinchGeometry(e) ?: return
         lastSpan = span
-        initialPinchSpan = span
         lastFocusX = fx
         lastFocusY = fy
         lastPinchTime = e.eventTime
@@ -1031,9 +1052,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         val instVy = dfy * 1000.0 / dt
         pinchVelX = pinchVelX * 0.4 + instVx * 0.6
         pinchVelY = pinchVelY * 0.4 + instVy * 0.6
-        // Avoid accidental micro-zoom jitter during pure two-finger vertical scrolling unless span changes meaningfully.
-        val spanChanged = abs(span - initialPinchSpan) > 10.0 * density
-        if (lastSpan > 0 && span > 0 && spanChanged) {
+        if (lastSpan > 0 && span > 0) {
             next = rules.zoom(next, span / lastSpan, fx, fy, w, h, stack)
             lastSpan = span
         }
@@ -1079,6 +1098,8 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     override fun onDetachedFromWindow() {
         InkImages.removeListener(imagesReady)
+        longPressArmed = false
+        removeCallbacks(longPressRunnable)
         cancelGesture(null)
         super.onDetachedFromWindow()
     }
