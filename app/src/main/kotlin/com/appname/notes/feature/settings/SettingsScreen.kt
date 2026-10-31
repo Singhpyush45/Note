@@ -31,7 +31,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.DashboardCustomize
@@ -39,7 +38,6 @@ import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Shield
-import com.appname.notes.navigation.AppLaunchAnimationState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -374,12 +372,6 @@ private fun SettingsList(
                     selectedIndex = if (appearance.density == UiDensity.COMPACT) 0 else 1,
                     onSelect = { actions.onDensity(if (it == 0) UiDensity.COMPACT else UiDensity.COMFORTABLE) },
                     optionTag = { if (it == 0) SettingsTestTags.DENSITY_COMPACT else SettingsTestTags.DENSITY_COMFORTABLE },
-                )
-                SettingsActionRow(
-                    title = stringResource(R.string.settings_replay_launch_animation),
-                    summary = stringResource(R.string.settings_replay_launch_animation_summary),
-                    icon = Icons.Outlined.AutoAwesome,
-                    onClick = { AppLaunchAnimationState.triggerReplay() },
                 )
                 SettingsActionRow(
                     title = stringResource(R.string.settings_reset_appearance),
