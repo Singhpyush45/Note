@@ -1,11 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon version (Android 13+): the folded-paper "N" as one shape, inside the safe zone. -->
+<!-- Themed-icon version (Android 13+): Icon 06 spiral notebook with two rings and three ruled lines, inside the safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Notebook rounded cover with 3 cutouts for the ruled lines and 2 spiral rings on the left -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M36,74V40a6,6 0,0 1,10.5 -4L61,52V40a5.5,5.5 0,0 1,11 0V68a6,6 0,0 1,-10.5 4L47,56V74a5.5,5.5 0,0 1,-11 0z" />
+        android:fillType="evenOdd"
+        android:pathData="M39,26h31a9,9 0,0 1,9 9v38a9,9 0,0 1,-9 9H39a9,9 0,0 1,-9 -9V35a9,9 0,0 1,9 -9z
+        M44,41a2,2 0,0 0,0 4h25a2,2 0,0 0,0 -4H44z
+        M44,51a2,2 0,0 0,0 4h25a2,2 0,0 0,0 -4H44z
+        M44,61a2,2 0,0 0,0 4h16a2,2 0,0 0,0 -4H44z" />
+    <!-- Top spiral binder ring -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M28,37h8a3,3 0,0 1,0 6h-8a3,3 0,0 1,0 -6z" />
+    <!-- Bottom spiral binder ring -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M28,59h8a3,3 0,0 1,0 6h-8a3,3 0,0 1,0 -6z" />
 </vector>

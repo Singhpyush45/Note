@@ -466,6 +466,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
 
     private var pinchA = -1
     private var pinchB = -1
+    private var initialPinchSpan = 0.0
     private var lastSpan = 0.0
     private var lastFocusX = 0.0
     private var lastFocusY = 0.0
@@ -1019,6 +1020,7 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         pinchA = e.getPointerId(first)
         pinchB = e.getPointerId(secondIndex)
         val (span, fx, fy) = pinchGeometry(e) ?: return
+        initialPinchSpan = span
         lastSpan = span
         lastFocusX = fx
         lastFocusY = fy
@@ -1052,7 +1054,8 @@ class InkCanvasView(context: Context) : FrameLayout(context) {
         val instVy = dfy * 1000.0 / dt
         pinchVelX = pinchVelX * 0.4 + instVx * 0.6
         pinchVelY = pinchVelY * 0.4 + instVy * 0.6
-        if (lastSpan > 0 && span > 0) {
+        val spanChanged = abs(span - initialPinchSpan) > 10.0 * density
+        if (lastSpan > 0 && span > 0 && spanChanged) {
             next = rules.zoom(next, span / lastSpan, fx, fy, w, h, stack)
             lastSpan = span
         }
