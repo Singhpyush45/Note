@@ -1,0 +1,146 @@
+package com.appname.notes.core.ink.layout
+
+import com.appname.notes.core.ink.geometry.Rect
+import com.appname.notes.core.ink.geometry.Vec
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class PageStackTest {
+
+    private val stack = PageStack(listOf(794f to 1123f, 794f to 1123f, 500f to 700f), gap = 24.0)
+    private val actual = 160.0 / 96 * 2.75 // real size on a 2.75× density phone
+    private val rules = ViewportRules(actualSize = actual, margin = 16.0)
+
+    @Test
+    fun `pages stack with gaps and narrow pages are centred`() {
+        assertEquals(0.0, stack.top(0), 0.0)
+        assertEquals(1147.0, stack.top(1), 0.0)
+        assertEquals(2294.0, stack.top(2), 0.0)
+        assertEquals(2994.0, stack.height, 0.0)
+        assertEquals(147.0, stack.left(2), 0.0)
+        assertEquals(Vec(10.0, 20.0), stack.toPage(1, stack.toWorld(1, Vec(10.0, 20.0))))
+    }
+
+    @Test
+    fun `page lookup, gaps go to the nearer page, visible range`() {
+        assertEquals(0, stack.pageAt(-50.0))
+        assertEquals(0, stack.pageAt(1130.0)) // in the gap, closer to page 0
+        assertEquals(1, stack.pageAt(1140.0))
+        assertEquals(2, stack.pageAt(99999.0))
+        assertEquals(0..1, stack.visible(Rect(0.0, 1000.0, 794.0, 1200.0)))
+        assertEquals(2..2, stack.visible(Rect(0.0, 2400.0, 794.0, 2500.0)))
+        assertTrue(PageStack(emptyList()).visible(Rect(0.0, 0.0, 1.0, 1.0)).isEmpty())
+    }
+
+    @Test
+    fun `phone fits the page width, tablet stops at real size`() {
+        assertEquals((1080.0 - 32) / 794, rules.fitScale(1080.0, stack), 1e-9)
+        assertEquals(actual, rules.fitScale(5000.0, stack), 1e-9)
+        // Narrow content is centred horizontally.
+        val v = rules.initial(5000.0, 2000.0, stack)
+        assertEquals((5000 - 794 * actual) / 2, v.dx, 1e-6)
+    }
+
+    @Test
+    fun `zoom keeps the point under the fingers and respects limits`() {
+        val v0 = rules.initial(1080.0, 2000.0, stack)
+        val focus = Vec(500.0, 900.0)
+        val before = v0.toWorld(focus)
+        val after = rules.zoom(v0, 2.0, focus.x, focus.y, 1080.0, 2000.0, stack).toWorld(focus)
+        assertEquals(before.x, after.x, 1e-6)
+        assertEquals(before.y, after.y, 1e-6)
+        assertEquals(rules.minScale(1080.0, stack), rules.zoom(v0, 1e-4, 0.0, 0.0, 1080.0, 2000.0, stack).scale, 1e-9)
+        assertEquals(rules.maxScale(), rules.zoom(v0, 1e6, 0.0, 0.0, 1080.0, 2000.0, stack).scale, 1e-9)
+    }
+
+    @Test
+    fun `scrolling is clamped to the content`() {
+        val v0 = rules.initial(1080.0, 2000.0, stack)
+        assertEquals(16.0, v0.dy, 1e-9) // starts at the top margin
+        assertEquals(16.0, rules.pan(v0, 0.0, 5000.0, 1080.0, 2000.0, stack).dy, 1e-9)
+        val down = rules.pan(v0, 0.0, -1e9, 1080.0, 2000.0, stack)
+        assertEquals(2000.0 - 16 - stack.height * v0.scale, down.dy, 1e-6)
+        assertEquals(2, rules.currentPage(down, 2000.0, stack))
+        assertEquals(1, rules.currentPage(rules.scrollTo(v0, 1, 1080.0, 2000.0, stack), 2000.0, stack))
+    }
+
+    @Test
+    fun `continuous scrollFraction and scrollToFraction map smoothly across the document`() {
+        val w = 1080.0
+        val h = 2000.0
+        val v0 = rules.initial(w, h, stack)
+        assertEquals(0f, rules.scrollFraction(v0, w, h, stack), 1e-5f)
+        val vMid = rules.scrollToFraction(v0, 0.37f, w, h, stack)
+        assertEquals(0.37f, rules.scrollFraction(vMid, w, h, stack), 1e-5f)
+        val vEnd = rules.scrollToFraction(v0, 1f, w, h, stack)
+        assertEquals(1f, rules.scrollFraction(vEnd, w, h, stack), 1e-5f)
+        assertEquals(2, rules.currentPage(vEnd, h, stack, w))
+    }
+
+    @Test
+    fun `fit width fills the view with that page, even past real size`() {
+        // Tablet: the reading zoom stops at real size, fit width goes further.
+        val v = rules.fitWidth(2, 2560.0, 1600.0, stack)
+        assertEquals((2560.0 - 32) / 500, v.scale, 1e-9)
+        val page = v.toScreen(Vec(stack.left(2), stack.top(2)))
+        assertEquals(16.0, page.x, 1e-6) // left edge at the margin
+        assertEquals(16.0, page.y, 1e-6) // top of the page at the top
+    }
+
+    @Test
+    fun `fit page shows a whole tall page on a wide screen, centred`() {
+        val w = 2560.0
+        val h = 1000.0
+        val v = rules.fitPage(1, w, h, stack)
+        assertEquals((h - 32) / 1123, v.scale, 1e-9) // height-limited
+        assertTrue(v.scale >= rules.minScale(w, stack)) // reachable: not cut off by the zoom-out limit
+        val top = v.toScreen(Vec(0.0, stack.top(1))).y
+        val bottom = v.toScreen(Vec(0.0, stack.top(1) + 1123)).y
+        assertEquals(16.0, top, 1e-6)
+        assertEquals(h - 16, bottom, 1e-6)
+        assertEquals(1, rules.currentPage(v, h, stack))
+    }
+
+    // ------------------------------------------------------------ horizontal scrolling and infinite mode (§5)
+
+    private val across = PageStack(listOf(794f to 1123f, 1123f to 794f, 794f to 1123f), axis = ScrollAxis.HORIZONTAL, gap = 24.0)
+
+    @Test
+    fun `side by side pages go left to right and are centred top to bottom`() {
+        assertEquals(0.0, across.left(0), 0.0)
+        assertEquals(818.0, across.left(1), 0.0)
+        assertEquals(1965.0, across.left(2), 0.0)
+        assertEquals(1965.0 + 794, across.width, 0.0)
+        assertEquals(1123.0, across.height, 0.0)
+        assertEquals((1123.0 - 794) / 2, across.top(1), 0.0) // the landscape page sits in the middle
+        assertEquals(1, across.pageAt(Vec(1000.0, 0.0)))
+        assertEquals(0, across.pageAt(Vec(800.0, 500.0))) // gap, closer to page 0
+        assertEquals(2, across.pageAt(Vec(99999.0, 0.0)))
+        assertEquals(1..2, across.visible(Rect(900.0, 0.0, 2000.0, 100.0)))
+    }
+
+    @Test
+    fun `side by side a whole page fits the screen and the first page starts at the left`() {
+        val v = rules.initial(1080.0, 2000.0, across)
+        assertEquals(minOf((1080.0 - 32) / 1123, (2000.0 - 32) / 1123), v.scale, 1e-9)
+        assertEquals(16.0, v.dx, 1e-9)
+        // Centred vertically: the stack is shorter than the screen.
+        assertEquals((2000.0 - 1123 * v.scale) / 2, v.dy, 1e-6)
+        val second = rules.scrollTo(v, 1, 1080.0, 2000.0, across)
+        assertEquals(16.0, second.toScreen(Vec(across.left(1), 0.0)).x, 1e-6)
+        assertEquals(1, rules.currentPage(second, 2000.0, across, 1080.0))
+        // Scrolled to the very end, the last page is current.
+        val end = rules.pan(v, -1e6, 0.0, 1080.0, 2000.0, across)
+        assertEquals(2, rules.currentPage(end, 2000.0, across, 1080.0))
+    }
+
+    @Test
+    fun `infinite mode keeps a small gap between pages`() {
+        val arrangement = PageArrangement(PageMode.INFINITE, ScrollAxis.VERTICAL)
+        val joined = PageStack(listOf(794f to 1123f, 794f to 1123f), arrangement.axis, arrangement.gap)
+        assertEquals(1123.0 + PageStack.INFINITE_GAP, joined.top(1), 0.0)
+        assertEquals(2246.0 + PageStack.INFINITE_GAP, joined.height, 0.0)
+        assertEquals(PageStack.GAP, PageArrangement.DEFAULT.gap, 0.0)
+    }
+}

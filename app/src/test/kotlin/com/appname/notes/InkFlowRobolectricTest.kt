@@ -1,0 +1,550 @@
+package com.appname.notes
+
+import com.appname.notes.core.settings.LaserStyle
+import com.appname.notes.core.ink.model.InkTool
+import com.appname.notes.core.ink.model.BrushStyle
+import com.appname.notes.feature.ink.ColorPalettes
+import com.appname.notes.feature.ink.ColorPickerTags
+import com.appname.notes.feature.ink.InkToolTags
+import androidx.compose.ui.test.performScrollTo
+import com.appname.notes.core.ink.template.PageDesign
+import com.appname.notes.core.ink.template.SpacingPreset
+import com.appname.notes.core.ink.template.Ruling
+import com.appname.notes.core.ink.template.PageFormat
+import com.appname.notes.core.ink.layout.PageMode
+import com.appname.notes.core.ink.layout.ScrollAxis
+import com.appname.notes.feature.ink.PageSettingsTags
+import com.appname.notes.feature.templates.TemplatesTestTags
+import android.os.Looper
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.core.view.children
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.appname.notes.core.common.result.AppResult
+import com.appname.notes.core.domain.model.NoteCollection
+import com.appname.notes.core.domain.model.NoteId
+import com.appname.notes.core.domain.model.NoteSort
+import com.appname.notes.core.domain.model.NoteType
+import com.appname.notes.core.domain.repository.InkPageContent
+import com.appname.notes.core.ink.input.EditorTool
+import com.appname.notes.core.ink.model.PageTemplate
+import com.appname.notes.core.ink.model.InkItem
+import com.appname.notes.core.ink.model.ShapeItem
+import com.appname.notes.core.ink.model.ShapeKind
+import com.appname.notes.core.ink.model.StrokeItem
+import com.appname.notes.di.AppDataEntryPoint
+import com.appname.notes.feature.ink.InkCanvasView
+import com.appname.notes.feature.ink.InkEngine
+import com.appname.notes.feature.ink.InkTestTags
+import com.appname.notes.feature.library.LibraryTestTags
+import com.google.common.truth.Truth.assertThat
+import androidx.compose.ui.test.performTextInput
+import dagger.hilt.android.EntryPointAccessors
+import java.time.Duration
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Shadows
+import org.robolectric.annotation.Config
+
+/**
+ * Handwriting end to end through the real app (real database), with synthetic stylus/finger input on a
+ * simulated phone. Jetpack Ink's native code can't run on the JVM, so this also proves the fallback
+ * renderer works; Ink itself is exercised by the emulator tests.
+ */
+@OptIn(ExperimentalTestApi::class)
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [36], qualifiers = "w411dp-h891dp")
+class InkFlowRobolectricTest {
+
+    @get:Rule
+    val composeRule = createAndroidComposeRule<MainActivity>()
+
+    private val data by lazy { EntryPointAccessors.fromApplication(composeRule.activity.application, AppDataEntryPoint::class.java) }
+
+    private fun string(id: Int) = composeRule.activity.getString(id)
+
+    private fun waitAdvancing(condition: () -> Boolean) = composeRule.waitUntil(15_000) {
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(50))
+        condition()
+    }
+
+    private fun exists(matcher: SemanticsMatcher, unmerged: Boolean = false) =
+        composeRule.onAllNodes(matcher, useUnmergedTree = unmerged).fetchSemanticsNodes().isNotEmpty()
+
+    private fun waitFor(tag: String) = waitAdvancing { exists(hasTestTag(tag)) }
+
+    private fun allNotes() = runBlocking { data.notes().observeNotes(NoteCollection.All, NoteSort.MODIFIED).first() }
+
+    private fun inkNote(): NoteId = allNotes().single { it.type == NoteType.INK }.id
+
+    private fun pages(id: NoteId = inkNote()): List<InkPageContent> =
+        runBlocking { (data.ink().loadPages(id) as AppResult.Success).value }
+
+    private fun items(): List<InkItem> = pages().flatMap { it.items }
+
+    private fun pressBack() {
+        composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.waitForIdle()
+    }
+
+    private fun findCanvas(v: View): InkCanvasView? =
+        v as? InkCanvasView ?: (v as? ViewGroup)?.children?.firstNotNullOfOrNull { findCanvas(it) }
+
+    private fun canvas(): InkCanvasView = findCanvas(composeRule.activity.window.decorView)!!
+
+    private fun openNewInkNote() {
+        // + → Choose template → Lined (owner brief §3)
+        composeRule.onNodeWithTag(LibraryTestTags.CREATE).performClick()
+        waitFor(LibraryTestTags.CHOOSE_TEMPLATE)
+        composeRule.onNodeWithTag(LibraryTestTags.CHOOSE_TEMPLATE).performClick()
+        // The template screen: Lined → preview → Use template
+        waitFor(TemplatesTestTags.tile("basic.lined"))
+        composeRule.onNodeWithTag(TemplatesTestTags.tile("basic.lined")).performClick()
+        waitFor(TemplatesTestTags.USE)
+        composeRule.onNodeWithTag(TemplatesTestTags.USE).performClick()
+        waitFor(InkTestTags.CANVAS)
+        waitAdvancing { findCanvas(composeRule.activity.window.decorView)?.width ?: 0 > 0 }
+    }
+
+    /**
+     * Sends one pen (or finger) stroke through the view, like the touch screen would: DOWN, MOVEs 8 ms
+     * apart, optional samples at the last point while "holding", UP. Times use the system clock, as real
+     * events do.
+     */
+    private fun stroke(
+        points: List<Pair<Float, Float>>,
+        tool: Int = MotionEvent.TOOL_TYPE_STYLUS,
+        holdMillis: Long = 0,
+    ) {
+        composeRule.runOnUiThread {
+            val view = canvas()
+            val down = SystemClock.uptimeMillis()
+            var t = down
+            fun send(action: Int, p: Pair<Float, Float>) {
+                val props = MotionEvent.PointerProperties().apply { id = 0; toolType = tool }
+                val coords = MotionEvent.PointerCoords().apply { x = p.first; y = p.second; pressure = 0.6f }
+                val source = if (tool == MotionEvent.TOOL_TYPE_FINGER) InputDevice.SOURCE_TOUCHSCREEN else InputDevice.SOURCE_STYLUS
+                val e = MotionEvent.obtain(down, t, action, 1, arrayOf(props), arrayOf(coords), 0, 0, 1f, 1f, 0, 0, source, 0)
+                view.dispatchTouchEvent(e)
+                e.recycle()
+            }
+            send(MotionEvent.ACTION_DOWN, points.first())
+            for (p in points.drop(1)) {
+                t += 8
+                send(MotionEvent.ACTION_MOVE, p)
+            }
+            var held = 0L
+            while (held < holdMillis) {
+                t += 50
+                held += 50
+                send(MotionEvent.ACTION_MOVE, points.last())
+            }
+            t += 8
+            send(MotionEvent.ACTION_UP, points.last())
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun line(x0: Float, y0: Float, x1: Float, y1: Float, n: Int = 25) =
+        List(n) { i -> val f = i / (n - 1f); (x0 + (x1 - x0) * f) to (y0 + (y1 - y0) * f) }
+
+    private fun rectangle(x0: Float, y0: Float, x1: Float, y1: Float): List<Pair<Float, Float>> =
+        line(x0, y0, x1, y0) + line(x1, y0, x1, y1).drop(1) + line(x1, y1, x0, y1).drop(1) + line(x0, y1, x0, y0).drop(1)
+
+    @Test
+    fun penStrokesAreSavedAndShownAfterReopening() {
+        assertThat(InkEngine.available).isFalse() // JVM: the fallback renderer is in use, without crashing
+        openNewInkNote()
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+        val s = items().single() as StrokeItem
+        assertThat(s.points.size).isAtLeast(20)
+        assertThat(s.points.pressure).isNotNull() // stylus pressure is kept
+        waitAdvancing { exists(hasText(string(R.string.editor_saved))) }
+
+        pressBack()
+        waitFor(LibraryTestTags.SCREEN)
+        // The card merges its children for TalkBack, so the thumbnail is found in the unmerged tree.
+        waitAdvancing { exists(hasTestTag("ink_thumbnail_${inkNote().value}"), unmerged = true) }
+        composeRule.onNodeWithText(string(R.string.ink_untitled)).performClick()
+        waitFor(InkTestTags.CANVAS)
+        assertThat(items()).hasSize(1)
+    }
+
+    @Test
+    fun drawAndHoldMakesAShapeAndUndoBringsTheInkBack() {
+        openNewInkNote()
+        stroke(rectangle(80f, 200f, 330f, 360f), holdMillis = 700)
+        waitAdvancing { items().singleOrNull() is ShapeItem }
+        val shape = items().single() as ShapeItem
+        assertThat(shape.kind).isEqualTo(ShapeKind.RECTANGLE)
+        assertThat(shape.source).isNotNull()
+
+        composeRule.onNodeWithContentDescription(string(R.string.editor_undo)).performClick()
+        waitAdvancing { items().singleOrNull() is StrokeItem }
+    }
+
+    /** SRS 16.2: ink → correct shape → undo → redo → reopen → same geometry (also INK-SH-06). */
+    @Test
+    fun correctedShapeSurvivesUndoRedoAndReopening() {
+        openNewInkNote()
+        stroke(rectangle(80f, 200f, 330f, 360f), holdMillis = 700)
+        waitAdvancing { items().singleOrNull() is ShapeItem }
+        val shape = items().single() as ShapeItem
+        val undo = string(R.string.editor_undo)
+        val redo = string(R.string.editor_redo)
+        composeRule.onNodeWithContentDescription(undo).performClick()
+        waitAdvancing { items().singleOrNull() is StrokeItem }
+        composeRule.onNodeWithContentDescription(redo).performClick()
+        waitAdvancing { items().singleOrNull() == shape }
+
+        pressBack()
+        waitFor(LibraryTestTags.SCREEN)
+        composeRule.onNodeWithText(string(R.string.ink_untitled)).performClick()
+        waitFor(InkTestTags.CANVAS)
+        assertThat(items()).containsExactly(shape) // same geometry, style and position
+    }
+
+    /** Ink is stored in page units: after zooming in 2×, the same screen distance is half as long on the page. */
+    @Test
+    fun strokesAfterPinchZoomLandAtThePageScale() {
+        openNewInkNote()
+        stroke(line(60f, 200f, 340f, 200f))
+        waitAdvancing { items().size == 1 }
+        pinch(from = 50f, to = 100f, centerX = 200f, centerY = 400f)
+        stroke(line(60f, 600f, 340f, 600f))
+        waitAdvancing { items().size == 2 } // the pinch itself drew nothing
+        fun width(s: InkItem) = (s as StrokeItem).points.x.let { it.max() - it.min() }
+        val (before, after) = items().sortedBy { it.z }
+        assertThat(width(after) / width(before)).isWithin(0.03f).of(0.5f)
+    }
+
+    /** Two fingers moving apart from ±[from] to ±[to] px around the centre (a 2× zoom for 50 → 100). */
+    private fun pinch(from: Float, to: Float, centerX: Float, centerY: Float) {
+        composeRule.runOnUiThread {
+            val view = canvas()
+            val down = SystemClock.uptimeMillis()
+            var t = down
+            val props = Array(2) { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
+            fun send(action: Int, count: Int, half: Float) {
+                val coords = Array(count) { i -> MotionEvent.PointerCoords().apply { x = centerX + (if (i == 0) -half else half); y = centerY } }
+                val e = MotionEvent.obtain(down, t, action, count, props.copyOf(count).requireNoNulls(), coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+                view.dispatchTouchEvent(e)
+                e.recycle()
+            }
+            val second = 1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT
+            send(MotionEvent.ACTION_DOWN, 1, from)
+            t += 8; send(MotionEvent.ACTION_POINTER_DOWN or second, 2, from)
+            for (k in 1..10) { t += 8; send(MotionEvent.ACTION_MOVE, 2, from + (to - from) * k / 10) }
+            t += 8; send(MotionEvent.ACTION_POINTER_UP or second, 2, to)
+            t += 8; send(MotionEvent.ACTION_UP, 1, to)
+        }
+        composeRule.waitForIdle()
+    }
+
+    @Test
+    fun eraserRemovesStrokesAndUndoRestoresThem() {
+        openNewInkNote()
+        stroke(line(60f, 200f, 340f, 200f))
+        stroke(line(60f, 300f, 340f, 300f))
+        waitAdvancing { items().size == 2 }
+        tap(InkTestTags.tool(EditorTool.ERASER))
+        stroke(line(200f, 150f, 200f, 350f))
+        waitAdvancing { items().isEmpty() }
+        composeRule.onNodeWithContentDescription(string(R.string.editor_undo)).performClick()
+        waitAdvancing { items().size == 2 }
+    }
+
+    @Test
+    fun lassoMovesInk() {
+        openNewInkNote()
+        stroke(line(100f, 220f, 200f, 220f))
+        waitAdvancing { items().size == 1 }
+        val before = (items().single() as StrokeItem).points.y[0]
+        tap(InkTestTags.tool(EditorTool.LASSO))
+        stroke(listOf(80f to 190f, 230f to 190f, 230f to 250f, 80f to 250f, 80f to 192f))
+        waitAdvancing { exists(hasContentDescription(string(R.string.ink_selection_delete))) }
+        stroke(line(150f, 220f, 150f, 320f))
+        waitAdvancing { (items().single() as StrokeItem).points.y[0] > before + 50 }
+    }
+
+    @Test
+    fun fingersDrawUntilAStylusIsUsedThenScroll() {
+        openNewInkNote()
+        stroke(line(60f, 200f, 340f, 200f), tool = MotionEvent.TOOL_TYPE_FINGER)
+        waitAdvancing { items().size == 1 }
+        assertThat((items().single() as StrokeItem).points.pressure).isNull() // finger: no pressure
+        stroke(line(60f, 300f, 340f, 300f), tool = MotionEvent.TOOL_TYPE_STYLUS)
+        waitAdvancing { items().size == 2 }
+        waitAdvancing { exists(hasText(string(R.string.ink_stylus_detected), substring = true)) }
+        stroke(line(200f, 500f, 200f, 300f), tool = MotionEvent.TOOL_TYPE_FINGER)
+        composeRule.waitForIdle()
+        assertThat(items()).hasSize(2) // the finger scrolled instead of drawing
+    }
+
+    /** SRS 8.2: every toolbar control has a label for TalkBack and a touch target of at least 48 dp. */
+    @Test
+    fun toolbarControlsAreLabelledAndBigEnough() {
+        openNewInkNote()
+        val density = composeRule.activity.resources.displayMetrics.density
+        for (tool in EditorTool.entries) {
+            tap(InkTestTags.tool(tool))
+            if (tool == EditorTool.LASSO) { // selection actions appear only with a selection: write, then lasso it
+                tap(InkTestTags.tool(EditorTool.PEN))
+                stroke(line(100f, 220f, 200f, 220f), tool = MotionEvent.TOOL_TYPE_STYLUS)
+                tap(InkTestTags.tool(EditorTool.LASSO))
+                stroke(listOf(80f to 190f, 230f to 190f, 230f to 250f, 80f to 250f, 80f to 192f))
+                waitAdvancing { exists(hasContentDescription(string(R.string.ink_selection_delete))) }
+            }
+            val matcher = hasClickAction() and hasAnyAncestor(hasTestTag(InkTestTags.TOOLBAR))
+            val count = composeRule.onAllNodes(matcher).fetchSemanticsNodes().size
+            assertThat(count).isGreaterThan(0)
+            for (i in 0 until count) {
+                // Scrolled into view first: a control scrolled out of its row has no touch area to measure.
+                val handle = composeRule.onAllNodes(matcher)[i]
+                runCatching { handle.performScrollTo() }
+                val node = handle.fetchSemanticsNode()
+                val label = node.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+                    ?: node.config.getOrNull(SemanticsProperties.Text)?.joinToString()
+                    ?: node.children.firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() }
+                assertThat(label).isNotEmpty()
+                // Material expands small buttons' touch area to 48 dp around the visible shape (touch bounds);
+                // controls scrolled out of the toolbar have no visible touch area, so use their layout size.
+                val w = maxOf(node.touchBoundsInRoot.width, node.size.width.toFloat()) / density
+                val h = maxOf(node.touchBoundsInRoot.height, node.size.height.toFloat()) / density
+                assertThat(minOf(w, h)).isAtLeast(47.5f)
+            }
+        }
+    }
+
+    @Test
+    fun emptyHandwrittenNoteIsDiscardedWhenLeft() {
+        openNewInkNote()
+        pressBack()
+        waitFor(LibraryTestTags.SCREEN)
+        waitAdvancing { allNotes().isEmpty() }
+    }
+
+    @Test
+    fun inkSurvivesRotation() {
+        openNewInkNote()
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+        composeRule.activityRule.scenario.recreate()
+        waitFor(InkTestTags.CANVAS)
+        // Same editor, still editable: a second stroke is added to the same note.
+        waitAdvancing { findCanvas(composeRule.activity.window.decorView)?.width ?: 0 > 0 }
+        stroke(line(60f, 320f, 340f, 320f))
+        waitAdvancing { items().size == 2 }
+    }
+
+    @Test
+    fun pagesCanBeAddedAndDeleted() {
+        openNewInkNote()
+        composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
+        composeRule.onNodeWithText(string(R.string.ink_page_add)).performClick()
+        waitAdvancing { pages().size == 2 }
+        waitAdvancing { exists(hasText("2 / 2")) } // the new page is scrolled into view
+        composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
+        composeRule.onNodeWithText(string(R.string.ink_page_delete)).performClick()
+        composeRule.onNodeWithText(string(R.string.action_delete)).performClick()
+        waitAdvancing { pages().size == 1 }
+    }
+
+    // ------------------------------------------------------------ page settings (owner brief §5)
+
+    private fun openPageSettings() {
+        composeRule.onNodeWithContentDescription(string(R.string.ink_more_options)).performClick()
+        composeRule.onNodeWithTag(InkTestTags.PAGE_SETTINGS).performClick()
+        waitFor(PageSettingsTags.DIALOG)
+    }
+
+    private fun tapOption(tag: String) {
+        waitFor(tag)
+        composeRule.onNodeWithTag(tag).performScrollTo().performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Test
+    fun pageSettingsChangeTheNote() {
+        openNewInkNote()
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+        openPageSettings()
+        tapOption(PageSettingsTags.axis(ScrollAxis.HORIZONTAL))
+        tapOption(PageSettingsTags.format(PageFormat.A4_LANDSCAPE))
+        tapOption(PageSettingsTags.ruling(Ruling.GRID))
+        tapOption(PageSettingsTags.spacing(SpacingPreset.WIDE))
+        tapOption(PageSettingsTags.paper(1, 0))
+        tapOption(PageSettingsTags.DONE)
+
+        waitAdvancing { runBlocking { data.ink().arrangement(inkNote()) }.let { it is AppResult.Success && it.value.axis == ScrollAxis.HORIZONTAL } }
+        waitAdvancing { pages().single().info.width == 1123f }
+        waitAdvancing { pages().single().info.layout?.paperColor == PageDesign.PALETTES[1].colors[0] }
+        val page = pages().single()
+        assertThat(page.info.layout!!.paper).isEqualTo(PageDesign.paperFor(Ruling.GRID, SpacingPreset.WIDE))
+        assertThat(page.info.template).isEqualTo(PageTemplate.GRID)
+        assertThat(page.items).hasSize(1) // the writing is untouched
+    }
+
+    @Test
+    fun infiniteScrollAddsAPageWhenTheLastOneIsWrittenOn() {
+        openNewInkNote()
+        openPageSettings()
+        tapOption(PageSettingsTags.mode(PageMode.INFINITE))
+        tapOption(PageSettingsTags.DONE)
+        waitAdvancing { runBlocking { data.ink().arrangement(inkNote()) }.let { it is AppResult.Success && it.value.mode == PageMode.INFINITE } }
+        assertThat(pages()).hasSize(1) // an empty note stays one page
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { pages().size == 2 }
+        // The new page continues the design and size of the one before.
+        assertThat(pages()[1].info.width).isEqualTo(pages()[0].info.width)
+        assertThat(pages()[1].info.template).isEqualTo(pages()[0].info.template)
+        assertThat(pages()[1].items).isEmpty()
+    }
+
+    // ------------------------------------------------------------ tools, variants, colours, laser (Phase 7)
+
+    private fun tap(tag: String) {
+        waitFor(tag)
+        val node = composeRule.onNodeWithTag(tag)
+        // Rows that fit on screen have nothing to scroll.
+        runCatching { node.performScrollTo() }
+        node.performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Test
+    fun pencilVariantIsChosenInThePanelAndStoredWithTheStroke() {
+        openNewInkNote()
+        tap(InkTestTags.tool(EditorTool.PENCIL))
+        tap(InkTestTags.tool(EditorTool.PENCIL)) // the chosen tool again: its options
+        waitFor(InkToolTags.PANEL)
+        tap(InkToolTags.variant(BrushStyle.PENCIL_4B))
+        composeRule.onNodeWithTag(InkToolTags.PRESSURE).performClick() // pressure off
+        tap(InkToolTags.PANEL_CLOSE)
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+        val brush = (items().single() as StrokeItem).brush
+        assertThat(brush.tool).isEqualTo(InkTool.PENCIL)
+        assertThat(brush.effectiveStyle).isEqualTo(BrushStyle.PENCIL_4B)
+        assertThat(brush.size).isEqualTo(BrushStyle.PENCIL_4B.defaultSize)
+        assertThat(brush.pressure).isFalse()
+        // The set-up is remembered as recently used.
+        waitAdvancing { runBlocking { data.settings().ink.first() }.recentBrushes.firstOrNull()?.effectiveStyle == BrushStyle.PENCIL_4B }
+    }
+
+    @Test
+    fun colourPickerSetsTheToolColour() {
+        openNewInkNote()
+        tap(InkTestTags.tool(EditorTool.BRUSH))
+        tap(InkToolTags.MORE_COLORS)
+        waitFor(ColorPickerTags.DIALOG)
+        val neon = ColorPalettes.BASIC.colors[2] // fully on screen without scrolling
+        tap(ColorPickerTags.swatch(neon))
+        tap(ColorPickerTags.SAVE)
+        tap(ColorPickerTags.USE)
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+        val brush = (items().single() as StrokeItem).brush
+        assertThat(brush.colorArgb and 0xFFFFFF).isEqualTo(neon and 0xFFFFFF)
+        val ink = runBlocking { data.settings().ink.first() }
+        assertThat(ink.savedColors).contains(neon)
+        assertThat(ink.recentColors.first()).isEqualTo(neon)
+    }
+
+    @Test
+    fun laserPointerLeavesNothingInTheNote() {
+        openNewInkNote()
+        tap(InkTestTags.tool(EditorTool.LASER))
+        tap(InkToolTags.LASER_RAINBOW)
+        tap(InkToolTags.laserStyle(LaserStyle.OUTLINE))
+        waitAdvancing { runBlocking { data.settings().ink.first() }.laser.let { it.rainbow && it.style == LaserStyle.OUTLINE } }
+        stroke(line(60f, 200f, 340f, 260f))
+        stroke(line(60f, 300f, 340f, 360f), tool = MotionEvent.TOOL_TYPE_FINGER)
+        composeRule.waitForIdle()
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1500)) // the trail fades away
+        assertThat(items()).isEmpty()
+        // Switching back to the pen draws normally.
+        tap(InkTestTags.tool(EditorTool.PEN))
+        stroke(line(60f, 200f, 340f, 260f))
+        waitAdvancing { items().size == 1 }
+    }
+
+    // ------------------------------------------------------------ photos and text on the page (8a)
+
+    private fun pasteFromClipboard(clip: android.content.ClipData) {
+        composeRule.runOnUiThread {
+            val cm = composeRule.activity.getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(clip)
+        }
+        tap(com.appname.notes.feature.ink.InsertTags.BUTTON)
+        tap(com.appname.notes.feature.ink.InsertTags.PASTE)
+    }
+
+    @Test
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE) // real image decoding
+    fun pastedTextAndPhotoGoOnTheHandwrittenPage() {
+        openNewInkNote()
+        pasteFromClipboard(android.content.ClipData.newPlainText("t", "Lecture 5: waves"))
+        waitAdvancing { items().any { it is com.appname.notes.core.ink.model.TextItem } }
+        val text = items().filterIsInstance<com.appname.notes.core.ink.model.TextItem>().single()
+        assertThat(text.text).isEqualTo("Lecture 5: waves")
+        assertThat(text.place.height).isGreaterThan(0f)
+
+        // A picture (as a browser or gallery puts it on the clipboard: a link to the image).
+        // Robolectric reports no free space unless told otherwise.
+        org.robolectric.shadows.ShadowStatFs.registerStats(java.io.File(composeRule.activity.filesDir, "attachments"), 1_000_000, 1_000_000, 1_000_000)
+        val png = java.io.File(composeRule.activity.cacheDir, "pasted.png")
+        val bmp = android.graphics.Bitmap.createBitmap(400, 200, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
+        png.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        pasteFromClipboard(android.content.ClipData.newRawUri("p", android.net.Uri.fromFile(png)))
+        waitAdvancing { items().any { it is com.appname.notes.core.ink.model.ImageItem } }
+        val photo = items().filterIsInstance<com.appname.notes.core.ink.model.ImageItem>().single()
+        // Kept as the note's attachment, placed at its own shape (2:1).
+        assertThat(photo.place.width / photo.place.height).isWithin(0.01f).of(2f)
+        val attachments = runBlocking { (data.attachments().list(inkNote()) as AppResult.Success).value }
+        assertThat(attachments.map { it.fileName }).contains(photo.fileName)
+    }
+
+    @Test
+    fun fullScreenBarAndTypingStraightOnThePage() {
+        openNewInkNote()
+        // Full screen: the title bar and the tool bar go, a floating bar comes.
+        tap(com.appname.notes.feature.ink.InkToolTags.FULL_SCREEN)
+        waitFor(com.appname.notes.feature.ink.InkToolTags.FLOATING_BAR)
+        assertThat(exists(hasTestTag(InkTestTags.TOOLBAR))).isFalse()
+        // Text tool, tap the page: a text box opens right there; type into it and finish.
+        tap(InkTestTags.tool(com.appname.notes.core.ink.input.EditorTool.TEXT))
+        val c = canvas()
+        stroke(listOf(c.width * 0.4f to c.height * 0.4f), tool = MotionEvent.TOOL_TYPE_FINGER)
+        waitFor(com.appname.notes.feature.ink.InsertTags.TEXT_FIELD)
+        composeRule.onNodeWithTag(com.appname.notes.feature.ink.InsertTags.TEXT_FIELD).performTextInput("Typed on the page")
+        tap(com.appname.notes.feature.ink.InsertTags.TEXT_SAVE)
+        waitAdvancing { items().any { it is com.appname.notes.core.ink.model.TextItem } }
+        assertThat(items().filterIsInstance<com.appname.notes.core.ink.model.TextItem>().single().text).isEqualTo("Typed on the page")
+        // Back out of full screen.
+        tap(com.appname.notes.feature.ink.InkToolTags.EXIT_FULL_SCREEN)
+        waitFor(InkTestTags.TOOLBAR)
+    }
+}

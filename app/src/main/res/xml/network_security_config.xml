@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release hardening (SRS 13.1 "use TLS"): the app only talks HTTPS. Plain-http links are opened over HTTPS when
+     clipped; pages that only offer http can't be clipped. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

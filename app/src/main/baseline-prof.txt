@@ -1,0 +1,16 @@
+# ==============================================================================
+# NOTEflow / Papriva — ART Baseline Profile Rules
+# Pre-compiles cold-start, Library grid, Cover rendering, and Ink canvas paths
+# ==============================================================================
+HSPLcom/appname/notes/navigation/NotesAppKt;->**(**)**
+HSPLcom/appname/notes/feature/library/LibraryScreenKt;->**(**)**
+HSPLcom/appname/notes/ui/common/NoteCoverSystemKt;->**(**)**
+HSPLcom/appname/notes/ui/common/FolderCoverSystemKt;->**(**)**
+HSPLcom/appname/notes/ui/common/NoteCardKt;->**(**)**
+HSPLcom/appname/notes/feature/ink/InkToolsKt;->**(**)**
+HSPLcom/appname/notes/feature/ink/ToolGlyphsKt;->**(**)**
+HSPLcom/appname/notes/feature/ink/PalmRejectionFilter;->**(**)**
+HSPLcom/appname/notes/feature/editor/InteractiveNoteImageEditorKt;->**(**)**
+HSPLcom/appname/notes/data/metadata/AppMetadataSqliteStore;->**(**)**
+HSPLcom/appname/notes/core/performance/BitmapMemoryCache;->**(**)**
+HSPLcom/appname/notes/core/designsystem/component/GlassSnackbarKt;->**(**)**

@@ -1,0 +1,501 @@
+package com.appname.notes.core.designsystem.component
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.appname.notes.core.designsystem.theme.AppTheme
+import com.appname.notes.core.designsystem.theme.LocalDarkTheme
+
+/*
+ * Settings building blocks. The whole row is the touch target (≥48dp) and carries the accessibility
+ * role, so TalkBack reads "Dynamic colour, switch, on" instead of two separate items (SRS 8.2).
+ */
+
+@Composable
+fun SettingsSectionHeader(text: String, modifier: Modifier = Modifier) {
+    val spacing = AppTheme.spacing
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = spacing.lg, end = spacing.lg, top = spacing.xl, bottom = spacing.sm)
+            .semantics { heading() },
+    )
+}
+
+@Composable
+fun SettingsSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    enabled: Boolean = true,
+) {
+    val spacing = AppTheme.spacing
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = spacing.minTouchTarget + spacing.sm)
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .padding(horizontal = spacing.lg, vertical = spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.lg),
+    ) {
+        RowText(title = title, summary = summary, enabled = enabled, modifier = Modifier.weight(1f))
+        // onCheckedChange = null: the row handles clicks, so the switch isn't a second focus stop.
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+    }
+}
+
+/** A single-choice group. Wrap rows in [SettingsRadioGroup] so TalkBack announces "1 of 3". */
+@Composable
+fun SettingsRadioGroup(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Column(modifier = modifier.selectableGroup()) { content() }
+}
+
+@Composable
+fun SettingsRadioRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+) {
+    val spacing = AppTheme.spacing
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = spacing.minTouchTarget + spacing.sm)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = spacing.lg, vertical = spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.lg),
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        RowText(title = title, summary = summary, enabled = true, modifier = Modifier.weight(1f))
+    }
+}
+
+/** A row that performs an action when tapped (e.g. "Rebuild search index"). */
+@Composable
+fun SettingsActionRow(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    icon: ImageVector? = null,
+) {
+    val spacing = AppTheme.spacing
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = spacing.minTouchTarget + spacing.sm)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = spacing.lg, vertical = spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.md),
+    ) {
+        if (icon != null) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+            }
+        }
+        RowText(title = title, summary = summary, enabled = true, modifier = Modifier.weight(1f))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        )
+    }
+}
+
+/** Read-only label/value row, e.g. "Version — 0.1.0". */
+@Composable
+fun SettingsInfoRow(title: String, value: String, modifier: Modifier = Modifier) {
+    val spacing = AppTheme.spacing
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = spacing.minTouchTarget + spacing.sm)
+            .semantics(mergeDescendants = true) {}
+            .padding(horizontal = spacing.lg, vertical = spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RowText(title = title, summary = value, enabled = true, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun RowText(title: String, summary: String?, enabled: Boolean, modifier: Modifier) {
+    val alpha = if (enabled) 1f else DISABLED_ALPHA
+    Column(modifier = modifier) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+        )
+        if (summary != null) {
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+            )
+        }
+    }
+}
+
+private const val DISABLED_ALPHA = 0.38f
+
+/** A group of settings on a glass card (owner brief §19), with its heading and optional icon badge above. */
+@Composable
+fun SettingsCard(
+    title: String?,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val spacing = AppTheme.spacing
+    Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg)) {
+        if (title != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(start = spacing.xs, top = spacing.xl, bottom = spacing.sm),
+            ) {
+                if (icon != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
+        }
+        GlassSurface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, elevation = 2.dp) {
+            Column(Modifier.fillMaxWidth().padding(vertical = spacing.xs), content = content)
+        }
+    }
+}
+
+/**
+ * A slider with its title and current value ("60%"). The value is saved when the finger lifts
+ * ([onValueCommitted]); while dragging, the label follows the finger.
+ */
+@Composable
+fun SettingsSliderRow(
+    title: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    valueLabel: (Float) -> String,
+    onValueCommitted: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    steps: Int = 0,
+    summary: String? = null,
+    enabled: Boolean = true,
+) {
+    val spacing = AppTheme.spacing
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    val shown = dragging ?: value
+    Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.sm)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RowText(title = title, summary = summary, enabled = enabled, modifier = Modifier.weight(1f))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (enabled) 0.65f else 0.25f))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    valueLabel(shown),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
+                )
+            }
+        }
+        GlassSlider(
+            value = shown,
+            onValueChange = { dragging = it },
+            onValueChangeFinished = { dragging?.let(onValueCommitted); dragging = null },
+            valueRange = valueRange,
+            steps = steps,
+            enabled = enabled,
+            modifier = Modifier.semantics { contentDescription = title },
+        )
+    }
+}
+
+/**
+ * A calm slider in the glass style (owner brief §1): a slim rounded track filled with the accent up to the value,
+ * and a round white thumb with a soft shadow and a hairline edge — instead of Material's heavy default.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GlassSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    onValueChangeFinished: (() -> Unit)? = null,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+    enabled: Boolean = true,
+) {
+    val active = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else DISABLED_ALPHA)
+    val inactive = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val edge = MaterialTheme.colorScheme.outlineVariant
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        enabled = enabled,
+        onValueChangeFinished = onValueChangeFinished,
+        steps = steps,
+        valueRange = valueRange,
+        thumb = {
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .shadow(3.dp, CircleShape)
+                    .background(Color.White, CircleShape)
+                    .border(1.5.dp, if (enabled) active else edge, CircleShape),
+            )
+        },
+        track = { state ->
+            val range = state.valueRange
+            val fraction = if (range.endInclusive > range.start) {
+                ((state.value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            Canvas(Modifier.fillMaxWidth().height(6.dp)) {
+                val r = CornerRadius(size.height / 2, size.height / 2)
+                drawRoundRect(inactive, cornerRadius = r)
+                drawRoundRect(active, size = Size(size.width * fraction, size.height), cornerRadius = r)
+            }
+        },
+    )
+}
+
+/**
+ * Sleek capsule segmented control ("Light | Dark | System", "Compact | Comfortable") with a soft pill indicator
+ * instead of bulky Material SegmentedButtons with checkmarks and heavy borders.
+ */
+@Composable
+fun SettingsSegmentedRow(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    optionTag: (Int) -> String = { "segment_$it" },
+) {
+    val spacing = AppTheme.spacing
+    val isDark = LocalDarkTheme.current
+    val trackColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f)
+    }
+    val safeIndex = selectedIndex.coerceIn(0, (options.size - 1).coerceAtLeast(0))
+    val pillFill = if (isDark) Color.White.copy(alpha = 0.14f) else MaterialTheme.colorScheme.primaryContainer
+    val pillBorder = if (isDark) Color.White.copy(alpha = 0.24f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+
+    Column(modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.sm)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = spacing.sm)
+                .clip(RoundedCornerShape(50))
+                .background(trackColor, RoundedCornerShape(50))
+                .border(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f), RoundedCornerShape(50))
+                .padding(4.dp)
+                .selectableGroup(),
+        ) {
+            val count = options.size.coerceAtLeast(1)
+            val gap = 4.dp
+            val slotWidth = (maxWidth - gap * (count - 1)) / count
+            val targetOffset = (slotWidth + gap) * safeIndex
+            val slidingOffset by animateDpAsState(
+                targetValue = targetOffset,
+                animationSpec = spring(
+                    dampingRatio = 0.90f,
+                    stiffness = 560f,
+                ),
+                label = "settingsSlidingPill",
+            )
+
+            // 120Hz GPU-translated Liquid Glass sliding indicator
+            Box(
+                modifier = Modifier
+                    .graphicsLayer { translationX = slidingOffset.toPx() }
+                    .width(slotWidth)
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(pillFill, RoundedCornerShape(50))
+                    .border(0.8.dp, pillBorder, RoundedCornerShape(50)),
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                options.forEachIndexed { i, label ->
+                    val selected = i == safeIndex
+                    val textColor by animateColorAsState(
+                        targetValue = when {
+                            selected && isDark -> Color(0xFFF6F3EC)
+                            selected -> MaterialTheme.colorScheme.onPrimaryContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        animationSpec = tween(durationMillis = 120),
+                        label = "settingsSegmentText",
+                    )
+                    val interactionSource = remember { MutableInteractionSource() }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(50))
+                            .selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = { onSelect(i) },
+                            )
+                            .padding(horizontal = 8.dp)
+                            .testTag(optionTag(i)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A row that opens something, showing what's chosen on the right (e.g. the wallpaper's thumbnail). */
+@Composable
+fun SettingsLinkRow(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    trailing: @Composable () -> Unit = {},
+) {
+    val spacing = AppTheme.spacing
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = spacing.minTouchTarget + spacing.sm)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = spacing.lg, vertical = spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.md),
+    ) {
+        RowText(title = title, summary = summary, enabled = true, modifier = Modifier.weight(1f))
+        trailing()
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}

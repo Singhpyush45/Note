@@ -1,0 +1,17 @@
+*.iml
+.gradle/
+.kotlin/
+/local.properties
+.idea/
+.DS_Store
+build/
+/captures
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+*.jks
+# The test-build key is committed on purpose (not a secret, not the store key): see signing/README.md
+!signing/test-builds.jks
+*.log

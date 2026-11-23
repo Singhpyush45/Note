@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Section 10: Premium Text-Free Notebook, Layered Cream Pages, Botanical Leaf & Gold/Caramel Stylus Icon -->
+
+    <!-- Soft Ground Drop Shadow under Notebook (Safe Zone 26..82) -->
+    <path
+        android:fillColor="#0B1914"
+        android:fillAlpha="0.42"
+        android:pathData="M34,27 L71,27 C74.3,27 77,29.7 77,33 L77,77 C77,80.3 74.3,83 71,83 L34,83 C31.8,83 30,81.2 30,79 L30,31 C30,28.8 31.8,27 34,27 Z" />
+
+    <!-- Cream Paper Page Block Stack (Right & Bottom Edges of Notebook) -->
+    <path
+        android:fillColor="#EFE6D5"
+        android:pathData="M35,26 L71,26 C73.8,26 76,28.2 76,31 L76,76 C76,78.8 73.8,81 71,81 L35,81 Z" />
+    <path
+        android:fillColor="#FBF7EE"
+        android:pathData="M35,24.5 L69.5,24.5 C72.3,24.5 74.5,26.7 74.5,29.5 L74.5,74.5 C74.5,77.3 72.3,79.5 69.5,79.5 L35,79.5 Z" />
+
+    <!-- Warm Caramel & Saddle Brown Hardcover Notebook Front Board -->
+    <path
+        android:fillColor="#8C5630"
+        android:pathData="M32,25 L67,25 C70.3,25 73,27.7 73,31 L73,74 C73,77.3 70.3,80 67,80 L32,80 C30.3,80 29,78.7 29,77 L29,28 C29,26.3 30.3,25 32,25 Z" />
+
+    <!-- Subtle Warm Caramel Upper-Left Lighting Highlight on Cover -->
+    <path
+        android:fillColor="#A96E42"
+        android:fillAlpha="0.55"
+        android:pathData="M36,25 L67,25 C70.3,25 73,27.7 73,31 L73,52 Q52,60 36,48 Z" />
+
+    <!-- Deep Muted Espresso Brown Hardcover Left Spine & Binding Groove -->
+    <path
+        android:fillColor="#4E2E18"
+        android:pathData="M32,25 L37.5,25 L37.5,80 L32,80 C30.3,80 29,78.7 29,77 L29,28 C29,26.3 30.3,25 32,25 Z" />
+    <path
+        android:fillColor="#2D190C"
+        android:fillAlpha="0.65"
+        android:pathData="M37.2,25 L38.4,25 L38.4,80 L37.2,80 Z" />
+
+    <!-- Subtle Botanical Leaf Emblem Embossed on the Notebook Cover (Forest Green & Warm Cream) -->
+    <path
+        android:fillColor="#FBF7EE"
+        android:fillAlpha="0.88"
+        android:pathData="M54,36 C60,36 64,41 64,47 C64,53 58,58 51,58 C46,58 43,54 43,48 C43,41 48,36 54,36 Z" />
+    <path
+        android:fillColor="#1E3F32"
+        android:pathData="M55,39 C59.5,39 62,43 61,48 C60,52.5 55.5,55.5 50.5,55 C46.5,54.5 45,51 46,46.5 C47,42 50.5,39 55,39 Z" />
+    <!-- Delicate Cream Leaf Vein -->
+    <path
+        android:fillColor="#FBF7EE"
+        android:pathData="M48.5,53.5 L58.5,41.5 L59.6,42.5 L49.6,54.5 Z" />
+
+    <!-- Bookmark Ribbon Tail at Bottom of Notebook -->
+    <path
+        android:fillColor="#C88A4B"
+        android:pathData="M44,80 L49,80 L49,85.5 L46.5,83.5 L44,85.5 Z" />
+
+    <!-- Refined Diagonal Fountain Pen / Stylus in Warm Cream & Caramel Gold (Lower Right) -->
+    <!-- Pen Shadow -->
+    <path
+        android:fillColor="#10221B"
+        android:fillAlpha="0.45"
+        android:pathData="M56,68 L77,47 L82,52 L61,73 L52,76 Z" />
+    <!-- Pen Barrel (Deep Forest / Espresso with Warm Gold Band) -->
+    <path
+        android:fillColor="#FBF7EE"
+        android:pathData="M57,65 L76,46 C77.2,44.8 79.2,44.8 80.4,46 L82,47.6 C83.2,48.8 83.2,50.8 82,52 L63,71 Z" />
+    <path
+        android:fillColor="#C88A4B"
+        android:pathData="M59.5,62.5 L76,46 C77.2,44.8 79.2,44.8 80.4,46 L82,47.6 L65.5,64.1 Z" />
+    <!-- Gold Collar & Nib -->
+    <path
+        android:fillColor="#E5B869"
+        android:pathData="M57,65 L63,71 L53.5,74.5 L52.5,73.5 Z" />
+    <path
+        android:fillColor="#4E2E18"
+        android:pathData="M54.5,71.5 L56.5,73.5 L52.5,74.8 Z" />
+</vector>
