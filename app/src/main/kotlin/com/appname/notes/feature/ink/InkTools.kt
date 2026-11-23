@@ -343,8 +343,14 @@ fun InkToolbar(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     label = "inkToolbarContextRow",
-                ) { _ ->
-                    ToolOptionsRow(ui, actions, panelOpen, onPanel, Modifier.fillMaxWidth())
+                ) { activeTool ->
+                    ToolOptionsRow(
+                        ui = ui.copy(tools = ui.tools.copy(tool = activeTool)),
+                        actions = actions,
+                        panelOpen = panelOpen,
+                        onPanel = onPanel,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }

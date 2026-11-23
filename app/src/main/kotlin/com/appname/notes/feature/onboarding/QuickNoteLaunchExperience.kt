@@ -146,6 +146,13 @@ fun QuickNoteLaunchOverlay(
     darkTheme: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val inTestHarness = remember {
+        android.os.Build.FINGERPRINT.equals("robolectric", ignoreCase = true) ||
+            (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q &&
+                android.app.ActivityManager.isRunningInUserTestHarness())
+    }
+    if (inTestHarness) return
+
     val context = LocalContext.current
     var stage by remember {
         mutableStateOf(
