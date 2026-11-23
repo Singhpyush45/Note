@@ -71,3 +71,6 @@
     public static int d(...);
     public static int i(...);
 }
+
+# PDFBox-Android optional JPEG2000 (JP2) codec references not bundled
+-dontwarn com.gemalto.jp2.**
